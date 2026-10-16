@@ -248,7 +248,7 @@ export function readEhpInputs(snap: OptimizerSnapshot): EhpInputs {
     const cfUnlocked = (lab['CF-Dmg Reduction(unlock)'] ?? 0) >= 1;
     const cfReduction = cfUnlocked
         ? (labValue('CF-Reduction %', lab['CF-Reduction %'] ?? 0) / 100)
-            * calcCFUptime(snap.modBonuses, snap.uwData, snap.wsData, snap.labData, snap.cardData)
+            * calcCFUptime(snap.modBonuses, snap.uwData, snap.wsData, snap.labData, snap.cardData, snap.presetIdx)
         : 0;
 
     // Wall: an extra pool of health (a % of tower health) in front of the tower.

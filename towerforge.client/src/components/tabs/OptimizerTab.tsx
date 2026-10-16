@@ -533,7 +533,7 @@ export default function OptimizerTab() {
                         <p className="ttt-explainer">
                             TTT (Time-To-Tower) is how long an enemy takes to cross your tower's range.
                             Longer TTT means more UW activations for SM, DW, ILM, PS, BH, and GT.
-                            CF+ extends the effective path length (multiplier above) without affecting the 90% slow cap.
+                            While Chrono Field is up, its slow (capped at 90%), Slow Aura and Chrono Loop (CF+) multiply; the CF+ figure is the extra time Chrono Loop's spiral adds.
                         </p>
                     </div>
                 </div>

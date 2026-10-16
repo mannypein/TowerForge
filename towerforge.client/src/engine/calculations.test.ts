@@ -6,10 +6,11 @@ import { describe, expect, it } from 'vitest';
 import { calcCannonModuleMult, calcModuleDamageMult, primaryMainMult } from './towerDamage';
 import { activeLoadout, enhForPreset, masteredCardMult, uniqueTier } from './statHelpers';
 import { DEFAULT_RUN_RATES, runRatesFrom } from './runRates';
+import { calcCFSpeedReduction, calcCFUptime, calcEnemySpeedFactor, calcSlowAura } from './ttt';
 import { parseGameExport } from './gameExport';
 import { moduleMaxLevel } from '../constants/moduleRarities';
 import { UNIQUE_MODULES } from '../constants/moduleData';
-import type { Loadout, ModuleEntry, ModuleRarity, ModuleState, ModuleType } from '../types/gameTypes';
+import type { CardData, Loadout, ModBonuses, ModuleEntry, ModuleRarity, ModuleState, ModuleType, UWData } from '../types/gameTypes';
 import { battle, makeExport } from '../test/makeExport';
 
 const mod = (type: ModuleType, rarity: ModuleRarity, mainMult = 0): ModuleEntry =>
@@ -64,6 +65,50 @@ describe('module efficiency labs', () => {
         const base = calcCannonModuleMult(state);
         expect(base).toBeCloseTo(23.37, 2);
         expect(calcCannonModuleMult(state, { 'Primary-Cannon Mult': 10 })).toBeCloseTo(1 + (base - 1) * 1.1, 10);
+    });
+});
+
+describe('Chrono Field', () => {
+    // Wiki: Speed Reduction 20–75% (Lv 1–12), capped at 90% with substats;
+    // Duration 5–40s (+1s per CF-Duration lab level, +5s perk); Cooldown
+    // 180–60s; a new field doesn't stack, so uptime tops out at 100%.
+    const cf = (sv: [number, number, number], upLvl = -1): UWData => ({
+        stones: 0, data: { CF: { own: true, sv, upOwn: upLvl >= 0, upLvl: Math.max(0, upLvl) } },
+    });
+    const bonuses = (cfBonus: Record<string, number> = {}, cfExtraDur = 0) =>
+        ({ uwBonus: { CF: cfBonus }, perks: { cfExtraDur }, subs: {} }) as unknown as ModBonuses;
+    const noCards: CardData = { data: {}, slots: 1, presets: {} };
+
+    it('caps Speed Reduction at 90% with module substats', () => {
+        expect(calcCFSpeedReduction(bonuses(), cf([1, 12, 1]))).toBeCloseTo(0.75, 10);
+        expect(calcCFSpeedReduction(bonuses({ slow: 0.15 }), cf([1, 12, 1]))).toBeCloseTo(0.9, 10);
+        expect(calcCFSpeedReduction(bonuses({ slow: 0.15 }), cf([1, 11, 1]))).toBeCloseTo(0.85, 10);
+    });
+
+    it('adds the duration lab and perk, and tops uptime out at 100%', () => {
+        // Duration Lv 1 = 5s + 10 lab + 5 perk = 20s; Cooldown Lv 1 = 180s.
+        const up = calcCFUptime(bonuses({}, 5), cf([1, 1, 1]), [], { 'CF-Duration': 10 }, noCards);
+        expect(up).toBeCloseTo(20 / 180, 10);
+        expect(calcCFUptime(bonuses(), cf([36, 1, 13]), [], { 'CF-Duration': 30 }, noCards)).toBe(1);
+    });
+
+    it('multiplies Slow Aura on top of Chrono Field, past 90% combined', () => {
+        // 90% field × 31% aura → enemies keep 0.1 × 0.69 of their speed.
+        expect(calcEnemySpeedFactor(0.9, 1, 0.31, 0)).toBeCloseTo(0.069, 10);
+    });
+
+    it('only slows and spirals enemies while the field is up', () => {
+        // Half uptime: half the time at 0.2 × 0.69 × (1 − 0.2), half at 0.69.
+        expect(calcEnemySpeedFactor(0.8, 0.5, 0.31, 0.2)).toBeCloseTo(0.5 * 0.2 * 0.69 * 0.8 + 0.5 * 0.69, 10);
+        expect(calcEnemySpeedFactor(0.8, 0, 0.31, 0.65)).toBeCloseTo(0.69, 10);   // Chrono Loop needs the field
+    });
+
+    it('counts Slow Aura only when equipped, without its attack-speed mastery', () => {
+        const cards = (presets: string[], mu: boolean): CardData =>
+            ({ data: { 'Slow Aura': { s: 7, m: 9, mu } }, slots: 1, presets: { 0: presets } });
+        expect(calcSlowAura(cards(['Slow Aura'], false), 0)).toBeCloseTo(0.31, 10);
+        expect(calcSlowAura(cards(['Slow Aura'], true), 0)).toBeCloseTo(0.31, 10);
+        expect(calcSlowAura(cards([], false), 0)).toBe(0);
     });
 });
 

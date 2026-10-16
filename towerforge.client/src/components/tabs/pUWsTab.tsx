@@ -23,9 +23,10 @@ export default function PUWsTab() {
     const cardData = useGameStore(st => st.cardData);
     const perkData = useGameStore(st => st.perkData);
     const moduleState = useGameStore(st => st.moduleState);
+    const activePreset = useGameStore(st => st.activePreset);
 
     const modBonuses = readActiveModuleBonuses(moduleState, perkData, labData, cardData);
-    const results = calcPermanentUWs(uwData, modBonuses, wsData, labData, cardData);
+    const results = calcPermanentUWs(uwData, modBonuses, wsData, labData, cardData, activePreset);
     const gcVal = uniq(modBonuses, 'Galaxy Compressor');
 
     return (

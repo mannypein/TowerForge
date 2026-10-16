@@ -68,12 +68,12 @@ function durationAt(cfg: PermaCfg, level: number, modBonuses: ModBonuses, labDat
 // Effective cooldown at a Cooldown-stat level (raw − Galaxy Compressor).
 function effCooldownAt(
     cfg: PermaCfg, level: number,
-    modBonuses: ModBonuses, wsData: WSPreset[], labData: LabData, cardData: CardData,
+    modBonuses: ModBonuses, wsData: WSPreset[], labData: LabData, cardData: CardData, presetIdx: number,
 ): { rawCD: number; gcomp: number; effCD: number } {
     const rawCD = statVal(cfg.a, cfg.cdIdx, level) + (modBonuses.uwBonus[cfg.a]?.cd ?? 0);
     // Poison Swamp's cooldown is not reduced by Galaxy Compressor.
     const gcomp = cfg.gcompApplies
-        ? calcGCompCDReduction(rawCD, modBonuses, wsData, labData, cardData)
+        ? calcGCompCDReduction(rawCD, modBonuses, wsData, labData, cardData, presetIdx)
         : 0;
     const effCD = Math.max(1, rawCD - gcomp);
     return { rawCD, gcomp, effCD };
@@ -121,6 +121,7 @@ export function calcPermanentUWs(
     wsData: WSPreset[],
     labData: LabData,
     cardData: CardData,
+    presetIdx: number = 0,   // Galaxy Compressor's package chance depends on the preset
 ): UWPermaResult[] {
     return PERMA_UWS.map(cfg => {
         const meta = UWS.find(u => u.a === cfg.a)!;
@@ -133,11 +134,11 @@ export function calcPermanentUWs(
         const maxCdLv = UW_STAT_VALUES[cfg.a][cfg.cdIdx].length;
 
         const duration = durationAt(cfg, curDurLv, modBonuses, labData);
-        const { rawCD, gcomp, effCD } = effCooldownAt(cfg, curCdLv, modBonuses, wsData, labData, cardData);
+        const { rawCD, gcomp, effCD } = effCooldownAt(cfg, curCdLv, modBonuses, wsData, labData, cardData, presetIdx);
         const isPermanent = owned && duration >= effCD;
 
         const maxDuration = durationAt(cfg, maxDurLv, modBonuses, labData);
-        const minEffCD = effCooldownAt(cfg, maxCdLv, modBonuses, wsData, labData, cardData).effCD;
+        const minEffCD = effCooldownAt(cfg, maxCdLv, modBonuses, wsData, labData, cardData, presetIdx).effCD;
 
         let plan: UWPermaPlan | null = null;
         if (owned && !isPermanent) {
@@ -149,7 +150,7 @@ export function calcPermanentUWs(
             for (let d = curDurLv; d <= maxDurLv; d++) {
                 const dur = durationAt(cfg, d, modBonuses, labData);
                 for (let c = curCdLv; c <= maxCdLv; c++) {
-                    const eff = effCooldownAt(cfg, c, modBonuses, wsData, labData, cardData).effCD;
+                    const eff = effCooldownAt(cfg, c, modBonuses, wsData, labData, cardData, presetIdx).effCD;
                     if (dur >= eff) {
                         const durCost = upgradeCost(cfg.a, cfg.durIdx, curDurLv, d);
                         const cdCost = upgradeCost(cfg.a, cfg.cdIdx, curCdLv, c);

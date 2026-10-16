@@ -116,7 +116,7 @@ import {
 
 import { GC_SCORING } from '../constants/optimizerConfig';
 
-import { calcTTT, calcCFPlusMarginalTTT, calcCFUptime } from './ttt';
+import { calcTTT, calcCFUptime } from './ttt';
 import { calcTowerEDPS, calcSmiteWaveHPFraction } from './uwdps';
 import { readActiveModuleBonuses } from './modBonuses';
 import { coinRate } from './farming';
@@ -257,7 +257,7 @@ export function buildCandidates(
         // (CF is already permanently active, uptime = 100%). Stop recommending
         // CF Duration upgrades at that point.
         const cfAtFullUptime = calcCFUptime(
-            snap.modBonuses, snap.uwData, snap.wsData, snap.labData, snap.cardData,
+            snap.modBonuses, snap.uwData, snap.wsData, snap.labData, snap.cardData, snap.presetIdx,
         ) >= 1;
 
         for (const uw of UWS) {
@@ -356,40 +356,6 @@ export function buildCandidates(
             const cost = costs[curLv];
             if (cost == null) continue;
 
-            // CF+ is path length — use marginal TTT delta
-            if (uw.a === 'CF' && isEdps) {
-                const tttData = calcTTT(snap.presetIdx, snap.wsData, snap.labData, snap.cardData, snap.uwData, snap.modBonuses);
-                const deltaTTT = calcCFPlusMarginalTTT(
-                    curLv, curLv + 1,
-                    tttData.range,
-                    0,
-                    tttData.cappedSlow,
-                    0,
-                );
-                const newTTT = tttData.ttt + deltaTTT;
-                const afterEDPS = snap.edps
-                    ? edpsScore(snap, snap.edps, newTTT)
-                    : calcTowerEDPS(
-                        snap.uwData, snap.modBonuses, newTTT,
-                        snap.presetIdx, snap.wsData, snap.labData,
-                        snap.cardData, snap.moduleState,
-                        snap.relicData, snap.enhData,
-                        snap.botData,
-                    );
-                const delta = edpsDeltaPct(basEDPS, afterEDPS);
-                candidates.push({
-                    category: 'uwp',
-                    label: `${uw.n} — ${plusDef.name} Lv ${curLv + 2}`,
-                    subLabel: `${plusDef.vals[curLv + 1]} ${plusDef.unit}`,
-                    fromLv: curLv,
-                    toLv: curLv + 1,
-                    cost,
-                    costType: 'stones',
-                    scorePct: delta,
-                    scorePerCost: cost > 0 ? delta / cost : 0,
-                });
-                continue;
-            }
 
             const after = cloneSnapshot(snap);
             after.uwData.data[uw.a]!.upLvl = curLv + 1;
