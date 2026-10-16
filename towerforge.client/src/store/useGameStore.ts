@@ -701,8 +701,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
         const moduleState = get().moduleState;
         const assistData = { ...moduleState.assistData };
         const entry = assistData[type] ?? { rarity: 'locked', multEff: 0, subEff: 0 };
-        // Multiplier Efficiency reaches 130% with the T23 W500 lab (100% without);
-        // Substat Efficiency stays at 100%.
+        // Multiplier Efficiency: stones to 100% + 30% lab = 130%; Substat Efficiency
+        // stays at 100%.
         const cap = key === 'multEff' ? 130 : 100;
         const numericValue = Math.min(cap, Math.max(0, value));
         assistData[type] = { ...entry, [key]: numericValue };
