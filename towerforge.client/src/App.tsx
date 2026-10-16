@@ -9,6 +9,7 @@ import { useGameStore } from './store/useGameStore';
 import type { TabName } from './types/gameTypes';
 import { parseCloudSave } from './engine/saveParser';
 import { isGameExport, parseGameExport } from './engine/gameExport';
+import { trackEvent, trackTabView } from './analytics';
 import CurrencyBar from './components/common/CurrencyBar';
 
 // ── Tab Components (stubs for now — filled in one by one) ────
@@ -97,6 +98,7 @@ export default function App() {
             if (isGameExport(json)) {
                 const imp = parseGameExport(json);
                 applyGameImport(imp, json);
+                trackEvent('Import game data');
                 const lines = [
                     '✓ Imported from your game data:',
                     '• Currencies',
@@ -252,7 +254,7 @@ export default function App() {
                     <button
                         key={tab.id}
                         className={`tab-btn ${activeTab === tab.id ? 'active' : ''}`}
-                        onClick={() => setActiveTab(tab.id)}
+                        onClick={() => { setActiveTab(tab.id); trackTabView(tab.id); }}
                     >
                         {tab.id === 'account' && accountUsername ? `👤 ${accountUsername}` : tab.label}
                     </button>

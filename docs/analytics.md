@@ -1,0 +1,72 @@
+# Analytics — Umami (self-hosted)
+
+Visitor stats for towerforge.net come from [Umami](https://umami.is), running on
+the TowerForge VPS. It's cookieless (no consent banner) and the data stays on our
+server. Set up 2026-10-16 with Umami v3.4.0.
+
+## What's tracked
+
+- Every page load (towerforge.net and share links), with referrer, country,
+  device, browser and OS — Umami's standard, anonymous counts.
+- **Tab views**: tabs aren't URLs, so switching tabs is reported as a page view
+  of `/<tab>` (`/optimizer`, `/modules`…) — see `src/analytics.ts`.
+- **Event** `Import game data` when a game export imports successfully.
+- Only from `towerforge.net` / `www.towerforge.net` (`data-domains` on the tag in
+  `towerforge.client/index.html`), so dev and previews send nothing.
+- Website ID: `06a68bc5-23dd-40b8-9f3f-7fa542b9ceca` (public — it's in the page).
+- Session replays / heatmaps are off (`recorder_enabled = false`).
+
+## On the server
+
+| Piece | Where |
+|---|---|
+| Umami app | `/opt/umami/app` (user `umami`), git checkout of the release tag |
+| Settings | `/opt/umami/app/.env` (DATABASE_URL, `BASE_PATH=/analytics`, APP_SECRET) — 600, never committed |
+| Node 22 (Umami only) | `/opt/node22` — the system's Node 18 is too old for Umami 3 |
+| Database | PostgreSQL 16, database and user `umami` (password only in the .env files) |
+| Service | `umami.service` → `next start -H 127.0.0.1 -p 3000` |
+| nginx | `/etc/nginx/sites-enabled/towerforge`: `/analytics/script.js` and `/analytics/api/send` proxy to it; the rest of `/analytics` returns 404 (backup of the previous config: `/etc/nginx/towerforge.bak-analytics`) |
+
+Setup script: `ops/umami/setup.sh` (idempotent; run as `ubuntu`), nginx routes:
+`ops/umami/nginx_add_routes.py`.
+
+```bash
+ssh ubuntu@towerforge.net sudo systemctl status umami
+```
+
+```bash
+ssh ubuntu@towerforge.net sudo journalctl -u umami -n 50
+```
+
+## Opening the dashboard
+
+The dashboard isn't public yet — Umami creates a login **admin / umami** that
+must be changed first. Open it through an SSH tunnel:
+
+```bash
+ssh -L 3000:127.0.0.1:3000 ubuntu@towerforge.net
+```
+
+then browse to `http://localhost:3000/analytics`, log in, and change the
+password (Settings → Profile). After that, the `location /analytics { return 404; }`
+block in nginx can become a `proxy_pass http://127.0.0.1:3000;` like the others
+to open the dashboard at `https://towerforge.net/analytics`.
+
+## Updating Umami
+
+Pick a new release tag, then on the server:
+
+```bash
+cd /opt/umami/app && sudo -u umami git fetch --depth 1 origin tag <tag> && sudo -u umami git checkout <tag>
+```
+
+```bash
+sudo -u umami env HOME=/opt/umami PATH=/opt/node22/bin:/usr/bin:/bin bash -c 'cd /opt/umami/app && set -a && . ./.env && set +a && pnpm install --frozen-lockfile && pnpm build'
+```
+
+```bash
+sudo systemctl restart umami
+```
+
+Check the release's Node / pnpm requirements first (`package.json` engines and
+its dependencies' engines — Umami 3.4 needs Node ≥ 20.19 and pnpm 12.3.4).

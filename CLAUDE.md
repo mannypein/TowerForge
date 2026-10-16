@@ -14,6 +14,7 @@ suggests what to upgrade next.
   - `src/assets/{modules,bots}/` — game icons, looked up by slug in `constants/gameIcons.ts`.
 - `TowerForge.Server/` — ASP.NET Core 8 API (accounts, saves, share links). On the server its data lives in `/var/lib/towerforge` (SQLite), outside the deploy folder.
 - `docs/game-export-format.md` — field-by-field notes on the game's `tool_export.json` and how each mapping was confirmed. `docs/module-effects.md` — unique module formulas and assumptions.
+- `docs/analytics.md` — Umami visitor analytics (self-hosted on the VPS at /analytics): what's tracked, where it runs, how to open the dashboard and update it. Setup scripts in `ops/umami/`.
 - `docs/ultimate-weapons.md` — every UW and UW+ mechanic checked against the wiki (values, costs, labs, perks) and how the model uses it. `docs/optimizer.md` — how each build scores upgrades, calibration from battle reports, and the verified stone rules (card mastery, assist modules, primary module labs).
 
 ## Commands
