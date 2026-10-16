@@ -1,0 +1,98 @@
+// ============================================================
+//  TowerForge Companion — Share API
+//  Creates and loads read-only share snapshots on the server.
+//  Snapshots are copies: creating or opening one never writes
+//  to anyone else's saved data.
+// ============================================================
+
+import type { BotData, BotLoadouts, CardData, Loadout, ModuleEntry, SlotLevels, UWData } from '../types/gameTypes';
+import { apiRequest } from './http';
+
+// Keep in sync with SharesController.MaxPayloadBytes on the server.
+export const MAX_SHARE_BYTES = 512 * 1024;
+
+const API_BASE = '/api/shares';
+
+// Bots: medal levels plus which bots are active in each preset, so viewers
+// can flip through the sender's presets the same way the Cards tab does.
+export interface SharedBots {
+    current: BotData;
+    loadouts?: BotLoadouts;
+    presetCount?: number;
+}
+
+// Modules: loadouts are the module "presets"; the library is included so
+// viewers can resolve the module IDs stored in each loadout slot.
+export interface SharedModules {
+    loadouts: Loadout[];
+    library: ModuleEntry[];
+    slotLevels: SlotLevels;
+}
+
+export interface SharePayload {
+    uw?: UWData;
+    cards?: CardData;
+    bots?: SharedBots;
+    modules?: SharedModules;
+}
+
+// Anonymous shares come back with a claim token. We keep them on this
+// device so they can be attached to an account when the player signs up.
+const CLAIMS_KEY = 'tc_share_claims';
+
+export interface ShareClaim {
+    code: string;
+    token: string;
+}
+
+export function getShareClaims(): ShareClaim[] {
+    try {
+        const raw = localStorage.getItem(CLAIMS_KEY);
+        return raw ? JSON.parse(raw) : [];
+    } catch {
+        return [];
+    }
+}
+
+export function clearShareClaims(): void {
+    try { localStorage.removeItem(CLAIMS_KEY); } catch { /* storage unavailable */ }
+}
+
+function rememberShareClaim(claim: ShareClaim): void {
+    try {
+        localStorage.setItem(CLAIMS_KEY, JSON.stringify([...getShareClaims(), claim]));
+    } catch { /* storage unavailable — the share still works, it just can't be claimed */ }
+}
+
+// Uploads a snapshot and returns its short code. Signed-in players own the
+// share automatically; anonymous ones get a claim token stored locally.
+export async function createShare(payload: SharePayload): Promise<string> {
+    const body = JSON.stringify(payload);
+    if (new Blob([body]).size > MAX_SHARE_BYTES) {
+        throw new Error('This share is too large to upload.');
+    }
+
+    const json = await apiRequest<{ code: string; claimToken?: string }>(API_BASE, {
+        method: 'POST',
+        body,
+    }, 'Could not create the share link.');
+
+    if (json.claimToken) rememberShareClaim({ code: json.code, token: json.claimToken });
+    return json.code;
+}
+
+// Loads a snapshot by code. Throws with a user-facing message on failure.
+export function fetchShare(code: string): Promise<SharePayload> {
+    return apiRequest<SharePayload>(
+        `${API_BASE}/${encodeURIComponent(code.trim().toUpperCase())}`, {}, 'Share not found.');
+}
+
+// Deletes one of the signed-in player's shares before it expires.
+export function deleteShare(code: string): Promise<void> {
+    return apiRequest<void>(`${API_BASE}/${encodeURIComponent(code)}`, { method: 'DELETE' },
+        'Could not delete the share.');
+}
+
+export function shareUrl(code: string): string {
+    return `${window.location.origin}/?share=${code}`;
+}

@@ -1,0 +1,57 @@
+/* ============================================================
+   TowerForge Companion — Design Tokens
+   All CSS custom properties used throughout the application.
+   Import this file once in main.tsx and never touch it again
+   unless adding a new token.
+   ============================================================ */
+
+:root {
+    /* ── Core Palette ───────────────────────────────────────── */
+    --accent: #1D9E75;
+    --accent-dark: #0F6E56;
+    --accent-glow: rgba(29, 158, 117, 0.18);
+    --gold: #BA7517;
+    --gold-glow: rgba(186, 117, 23, 0.18);
+    --blue: #3B82F6;
+    --purple: #9333EA;
+    --red: #e05252;
+    /* ── Backgrounds ────────────────────────────────────────── */
+    --bg: #0d0f12; /* page background              */
+    --bg2: #13171c; /* card / panel background      */
+    --bg3: #1a1f26; /* section header / input bg    */
+    --bg4: #222831; /* badge / inset background     */
+    /* ── Borders ────────────────────────────────────────────── */
+    --border: #2a3040;
+    /* ── Text ───────────────────────────────────────────────── */
+    --text: #c8d0dc; /* default body text            */
+    --text-dim: #6b7585; /* labels, secondary info       */
+    --text-bright: #e8edf5; /* headings, values             */
+    --danger: #e05252;
+    /* ── Module Rarity Colors ───────────────────────────────── */
+    --rc: #8a9ab5; /* Common                       */
+    --rr: #4fc3f7; /* Rare                         */
+    --rrp: #29b6f6; /* Rare+                        */
+    --re: #e040fb; /* Epic                         */
+    --rep: #ce39e0; /* Epic+                        */
+    --rl: #ff9800; /* Legendary                    */
+    --rlp: #fb8c00; /* Legendary+                   */
+    --rm: #f44336; /* Mythic                       */
+    --rmp: #e53935; /* Mythic+                      */
+    --ra: #00e676; /* Ancestral (all tiers)        */
+    /* ── Typography ─────────────────────────────────────────── */
+    --font-ui: 'Rajdhani', sans-serif;
+    --font-mono: 'Share Tech Mono', monospace;
+    /* ── Spacing Scale ──────────────────────────────────────── */
+    --space-xs: 4px;
+    --space-sm: 8px;
+    --space-md: 14px;
+    --space-lg: 18px;
+    --space-xl: 24px;
+    /* ── Border Radius ──────────────────────────────────────── */
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
+    /* ── Transitions ────────────────────────────────────────── */
+    --transition-fast: 0.15s ease;
+    --transition-med: 0.25s ease;
+}

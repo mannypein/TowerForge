@@ -1,0 +1,412 @@
+/* ============================================================
+   TowerForge Companion — App Shell Styles
+   Header, tab bar, content wrapper.
+   ============================================================ */
+
+/* ── Shell Layout ────────────────────────────────────────────── */
+.app-shell {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+/* ── Header ──────────────────────────────────────────────────── */
+.app-header {
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 18px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+.app-logo {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: var(--accent);
+    text-transform: uppercase;
+}
+
+.logo-forge {
+    color: var(--gold);
+}
+
+.logo-sub {
+    font-size: 14px;
+    color: var(--text-dim);
+    font-weight: 400;
+}
+
+.app-version {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-dim);
+}
+
+.header-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    margin-left: auto;
+}
+
+/* ── Summary Bar ─────────────────────────────────────────────── */
+.summary-bar {
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+}
+
+.sum-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 1.1;
+}
+
+.sum-label {
+    font-size: 10px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: .5px;
+}
+
+.sum-val {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--text-bright);
+    font-weight: 600;
+}
+
+    .sum-val.green {
+        color: var(--accent);
+    }
+
+    .sum-val.gold {
+        color: var(--gold);
+    }
+
+/* ── Currency Bar ────────────────────────────────────────────── */
+.currency-bar {
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 6px 18px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+    flex-shrink: 0;
+}
+
+.cur-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: text;
+}
+
+.cur-icon {
+    font-size: 13px;
+    line-height: 1;
+}
+
+.cur-icon-img {
+    width: 14px;
+    height: 14px;
+}
+
+.cur-label {
+    font-size: 10px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: .5px;
+}
+
+.cur-input {
+    width: 78px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 2px 6px;
+    background: var(--bg3);
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm, 4px);
+    color: var(--text-bright);
+}
+
+    .cur-input:hover,
+    .cur-input:focus {
+        border-color: var(--border);
+        outline: none;
+    }
+
+/* ── Tab Bar ─────────────────────────────────────────────────── */
+.tab-bar {
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    overflow-x: auto;
+    flex-shrink: 0;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+}
+
+    .tab-bar::-webkit-scrollbar {
+        height: 3px;
+    }
+
+    .tab-bar::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .tab-bar::-webkit-scrollbar-thumb {
+        background: var(--border);
+        border-radius: 2px;
+    }
+
+.tab-btn {
+    padding: 8px 12px;
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .3px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color var(--transition-fast), border-color var(--transition-fast);
+    flex-shrink: 0;
+}
+
+    .tab-btn:hover {
+        color: var(--text);
+    }
+
+    .tab-btn.active {
+        color: var(--accent);
+        border-bottom-color: var(--accent);
+    }
+
+/* ── Content Area ────────────────────────────────────────────── */
+.tab-content {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 18px;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* ── Shared Component Styles ─────────────────────────────────── */
+
+/* Section cards */
+.section {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    margin-bottom: 14px;
+    overflow: hidden;
+}
+
+.section-head {
+    padding: 10px 14px;
+    background: var(--bg3);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    user-select: none;
+}
+
+    .section-head h3 {
+        font-size: 14px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .6px;
+        color: var(--text-bright);
+        flex: 1;
+    }
+
+.section-body {
+    padding: 14px;
+}
+
+.section.collapsed .section-body {
+    display: none;
+}
+
+.chevron {
+    font-size: 12px;
+    color: var(--text-dim);
+    transition: transform var(--transition-med);
+}
+
+.section.collapsed .chevron {
+    transform: rotate(-90deg);
+}
+
+/* Field rows */
+.field-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 5px 0;
+    border-bottom: 1px solid #1e2430;
+}
+
+    .field-row:last-child {
+        border-bottom: none;
+    }
+
+.field-label {
+    flex: 1;
+    font-size: 13px;
+    color: var(--text);
+}
+
+    .field-label.dim {
+        color: var(--text-dim);
+    }
+
+.field-sub {
+    font-size: 11px;
+    color: var(--text-dim);
+    display: block;
+}
+
+/* Buttons */
+.btn {
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    text-transform: uppercase;
+    letter-spacing: .4px;
+}
+
+.btn-accent {
+    background: var(--accent-glow);
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+    .btn-accent:hover {
+        background: var(--accent);
+        color: #fff;
+    }
+
+.btn-gold {
+    background: var(--gold-glow);
+    border-color: var(--gold);
+    color: var(--gold);
+}
+
+    .btn-gold:hover {
+        background: var(--gold);
+        color: #fff;
+    }
+
+.btn-cloud {
+    background: #0066cc33;
+    border-color: #0066cc;
+    color: #0066cc;
+}
+
+    .btn-cloud:hover {
+        background: #0066cc;
+        color: #fff;
+    }
+
+.btn-dim {
+    background: transparent;
+    border-color: var(--border);
+    color: var(--text-dim);
+}
+
+    .btn-dim:hover {
+        border-color: var(--text-dim);
+        color: var(--text);
+    }
+
+.btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+
+    .btn-primary:hover {
+        background: #00dd9955;
+        border-color: #00dd99;
+    }
+
+    .btn-primary:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+.btn-danger {
+    background: transparent;
+    border-color: var(--danger);
+    color: var(--danger);
+}
+
+    .btn-danger:hover {
+        background: var(--danger);
+        color: #fff;
+    }
+
+/* Progress bar */
+.pbar {
+    height: 4px;
+    background: var(--bg4);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.pbar-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width var(--transition-med);
+}
+
+    .pbar-fill.gold {
+        background: var(--gold);
+    }
+
+/* Utility */
+.flex-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.row-actions {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+}
+
+.divider {
+    height: 1px;
+    background: var(--border);
+    margin: 10px 0;
+}
+
+.num-sm {
+    width: 92px !important;
+}
+
+.num-wide {
+    width: 130px !important;
+}

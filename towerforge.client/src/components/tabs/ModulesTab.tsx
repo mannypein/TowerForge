@@ -1,0 +1,893 @@
+// ============================================================
+//  TowerForge Companion — Modules Tab
+//  Laid out like the game's Modules screen: preset tabs, the tower
+//  with its 4 primary and 4 assist slots around it (tap a slot to
+//  change its module, level or assist settings), and an inventory
+//  of every module to inspect, edit or equip.
+//  All module names and sub-effects are predefined from game data.
+// ============================================================
+
+import { useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useGameStore } from '../../store/useGameStore';
+import type { ModuleEntry, ModuleType, ModuleRarity, Loadout } from '../../types/gameTypes';
+import { MODULE_MAX_LEVEL } from '../../constants/gameData';
+import NumericInput from '../common/NumericInput';
+import ModuleBadge from '../common/ModuleBadge';
+import { RARITIES, moduleMaxLevel, rarityColor, rarityStars } from '../../constants/moduleRarities';
+import { SUB_RARITIES, UNIQUE_MODULES, SUB_EFFECTS, UNIQUE_EFFECT_MODEL } from '../../constants/moduleData';
+import type { SubRarity, RarityProgression, SubEffectDef } from '../../constants/moduleData';
+import { calcModuleDamageMult } from '../../engine/towerDamage';
+import { activeLoadout } from '../../engine/statHelpers';
+
+// ── Types ─────────────────────────────────────────────────────
+const MODULE_TYPES: ModuleType[] = ['cannon', 'armor', 'generator', 'core'];
+
+const TYPE_LABELS: Record<ModuleType, string> = {
+    cannon: 'Cannon',
+    armor: 'Armor',
+    generator: 'Generator',
+    core: 'Core',
+};
+
+// What each module type's main effect multiplies (the ×value on the card).
+const MAIN_EFFECT_LABELS: Record<ModuleType, string> = {
+    cannon: 'Tower Damage',
+    armor: 'Tower Health',
+    generator: 'Coin Bonus',
+    core: 'Ultimate Weapon Damage',
+};
+
+const MAX_PRESETS = 5;
+
+// ── Helpers ───────────────────────────────────────────────────
+function genId(): string {
+    return Math.random().toString(36).slice(2, 10);
+}
+
+function clearSlot(
+    slot: { main: string; assist: string },
+    id: string,
+): { main: string; assist: string } {
+    return {
+        main: slot.main === id ? '' : slot.main,
+        assist: slot.assist === id ? '' : slot.assist,
+    };
+}
+
+const emptySlots = (): Loadout['slots'] => ({
+    cannon: { main: '', assist: '' },
+    armor: { main: '', assist: '' },
+    generator: { main: '', assist: '' },
+    core: { main: '', assist: '' },
+});
+
+// Get the rarity index (0=Common, 1=Rare, 2=Epic, 3=Legendary, 4=Mythic, 5=Ancestral)
+function getSubRarityIdx(rar: SubRarity): number {
+    return SUB_RARITIES.indexOf(rar);
+}
+
+// Get value for a sub-effect at a given rarity
+function getSubEffectValue(
+    type: ModuleType,
+    effect: string,
+    rar: SubRarity,
+): string | null {
+    const def = SUB_EFFECTS[type]?.find(([name]) => name === effect);
+    if (!def) return null;
+    const idx = getSubRarityIdx(rar);
+    const val = def[2][idx];
+    if (val === null || val === undefined) return null;
+    return `${val}${def[1]}`;
+}
+
+// Get available sub-effects for a type at a given rarity
+function getAvailableSubEffects(type: ModuleType, rar: SubRarity): SubEffectDef[] {
+    const idx = getSubRarityIdx(rar);
+    return SUB_EFFECTS[type]?.filter(def => def[2][idx] !== null) ?? [];
+}
+
+// Map module rarity codes to the unique-effect tier they run at.
+const RARITY_TIER: Record<ModuleRarity, keyof RarityProgression> = {
+    C: 'Epic', R: 'Epic', Rp: 'Epic',
+    E: 'Epic', Ep: 'Epic', L: 'Legendary', Lp: 'Legendary', M: 'Mythic', Mp: 'Mythic',
+    A: 'Ancestral', A1: 'Ancestral', A2: 'Ancestral', A3: 'Ancestral', A4: 'Ancestral', A5: 'Ancestral',
+};
+
+// Get unique effect value at module rarity
+function getUniqueEffectValue(type: ModuleType, name: string, rar: ModuleRarity): string | null {
+    const def = UNIQUE_MODULES[type]?.find(([n]) => n === name);
+    if (!def) return null;
+    const val = def[2][RARITY_TIER[rar] ?? 'Epic'];
+    if (val === null || val === undefined) return null;
+    return `${val}${def[3]}`;
+}
+
+// The unique effect's description with its value filled in.
+function uniqueDescription(type: ModuleType, name: string, rar: ModuleRarity): string | null {
+    const def = UNIQUE_MODULES[type]?.find(([n]) => n === name);
+    if (!def) return null;
+    const val = def[2][RARITY_TIER[rar] ?? 'Epic'];
+    return def[1].replace('[x]', val == null ? '?' : String(val));
+}
+
+const rarityLabel = (r: ModuleRarity) => RARITIES.find(x => x.k === r)?.label ?? r;
+const fmtMult = (v: number) => (v >= 10 ? v.toFixed(2) : v.toFixed(3));
+
+// ── Modal State ───────────────────────────────────────────────
+interface SubSlotState {
+    effect: string;
+    rar: SubRarity;
+}
+
+interface ModalState {
+    open: boolean;
+    editId: string | null;
+    type: ModuleType;
+    name: string;
+    rarity: ModuleRarity;
+    mainMult: number;
+    subs: SubSlotState[];
+}
+
+const defaultSubs = (): SubSlotState[] =>
+    Array(8).fill(null).map(() => ({ effect: '', rar: 'Epic' }));
+
+const defaultModal = (): ModalState => ({
+    open: false,
+    editId: null,
+    type: 'cannon',
+    name: UNIQUE_MODULES.cannon[0][0],
+    rarity: 'E',
+    mainMult: 0,
+    subs: defaultSubs(),
+});
+
+// Assist modules unlock at Tier 19 Wave 40 — until then, each loadout
+// slot only supports a single (main) module with no assist sub-slot.
+const ASSIST_UNLOCK_TIER = 19;
+const ASSIST_UNLOCK_WAVE = 40;
+
+type SlotKey = 'main' | 'assist';
+
+// Board layout like the game: cannon top-left, armor bottom-left,
+// generator top-right, core bottom-right; assists on the outside.
+const BOARD: [ModuleType, SlotKey][][] = [
+    [['cannon', 'assist'], ['cannon', 'main']],
+    [['generator', 'main'], ['generator', 'assist']],
+    [['armor', 'assist'], ['armor', 'main']],
+    [['core', 'main'], ['core', 'assist']],
+];
+
+// Neon tower drawn in the middle of the board (decoration).
+function TowerArt() {
+    return (
+        <svg viewBox="0 0 120 190" className="modg-tower" aria-hidden="true">
+            <g fill="none" strokeWidth="3" strokeLinejoin="round">
+                <g stroke="#7fb4ff">
+                    <path d="M38 22 L82 22 L88 34 L88 62 L32 62 L32 34 Z" />
+                    <path d="M12 34 L32 34 L32 48 L12 48 Z" />
+                    <path d="M44 62 L76 62 L78 76 L42 76 Z" />
+                    <path d="M42 76 L78 76 L96 150 L24 150 Z" />
+                </g>
+                <g stroke="#ff4fa3">
+                    <path d="M48 32 L72 32 L72 52 L48 52 Z" />
+                    <path d="M54 88 L66 88 L72 140 L48 140 Z" />
+                    <path d="M24 150 L32 178 L48 178 L52 150 M68 150 L72 178 L88 178 L96 150" />
+                </g>
+            </g>
+        </svg>
+    );
+}
+
+export default function ModulesTab() {
+    const [search, setSearch] = useState('');
+    const [typeFilter, setTypeFilter] = useState<ModuleType | ''>('');
+    const [rarityFilter, setRarityFilter] = useState<'' | 'E' | 'L' | 'M' | 'A'>('');
+    const [modal, setModal] = useState<ModalState>(defaultModal());
+    const [viewId, setViewId] = useState<string | null>(null);
+    const [inspectId, setInspectId] = useState<string | null>(null);
+    const [slotEdit, setSlotEdit] = useState<{ type: ModuleType; slot: SlotKey } | null>(null);
+
+    const profile = useGameStore(s => s.profile);
+    const tierWaves = useGameStore(s => s.tierWaves);
+    const moduleState = useGameStore(s => s.moduleState);
+    const setModuleState = useGameStore(s => s.setModuleState);
+    const setSlotLevel = useGameStore(s => s.setSlotLevel);
+    const updateAssist = useGameStore(s => s.updateAssist);
+    const updateAssistRarity = useGameStore(s => s.updateAssistRarity);
+
+    const { library, loadouts, assistData, slotLevels } = moduleState;
+    const equipped = activeLoadout(moduleState);
+    const viewed = loadouts.find(l => l.id === viewId) ?? equipped;
+
+    // Same unlock convention used in Labs/Cards tabs — fully completed
+    // tier, or current tier with sufficient wave progress.
+    const highestTier = profile.highestTier || 0;
+    const completedTier = profile.completedTier || 0;
+    const assistUnlocked = (() => {
+        if (highestTier < ASSIST_UNLOCK_TIER) return false;
+        if (completedTier >= ASSIST_UNLOCK_TIER) return true;
+        const waveReached = tierWaves[ASSIST_UNLOCK_TIER] ?? 0;
+        return waveReached >= ASSIST_UNLOCK_WAVE;
+    })();
+
+    const modById = (id: string | undefined) => (id ? library.find(m => m.id === id) ?? null : null);
+
+    // Where a module sits in the equipped loadout, if anywhere.
+    function equippedAs(id: string): SlotKey | null {
+        if (!equipped) return null;
+        for (const t of MODULE_TYPES) {
+            if (equipped.slots[t].main === id) return 'main';
+            if (equipped.slots[t].assist === id) return 'assist';
+        }
+        return null;
+    }
+
+    // ── Library helpers ───────────────────────────────────────
+    function openAdd() {
+        const firstType = typeFilter || 'cannon';
+        setModal({
+            open: true,
+            editId: null,
+            type: firstType,
+            name: UNIQUE_MODULES[firstType][0][0],
+            rarity: 'E',
+            mainMult: 0,
+            subs: defaultSubs(),
+        });
+    }
+
+    function openEdit(m: ModuleEntry) {
+        setInspectId(null);
+        setModal({
+            open: true,
+            editId: m.id,
+            type: m.type,
+            name: m.name,
+            rarity: m.rarity,
+            mainMult: m.mainMult ?? 0,
+            subs: Array(8).fill(null).map((_, i) => ({
+                effect: m.subs?.[i]?.effect ?? '',
+                rar: (m.subs?.[i]?.rar as SubRarity) ?? 'Epic',
+            })),
+        });
+    }
+
+    function saveModule() {
+        if (!modal.name) return;
+        const subs = modal.subs.map(s => ({
+            effect: s.effect,
+            rar: s.rar,
+            val: s.effect ? (getSubEffectValue(modal.type, s.effect, s.rar) ?? '') : '',
+        }));
+
+        if (modal.editId) {
+            setModuleState({
+                library: library.map(m =>
+                    m.id === modal.editId
+                        ? { ...m, name: modal.name, type: modal.type, rarity: modal.rarity, mainMult: modal.mainMult, subs }
+                        : m,
+                ),
+            });
+        } else {
+            if (library.find(m => m.name === modal.name)) {
+                alert(`"${modal.name}" is already in your library.`);
+                return;
+            }
+            const newMod: ModuleEntry = {
+                id: genId(), name: modal.name, type: modal.type,
+                rarity: modal.rarity, mainMult: modal.mainMult, subs,
+            };
+            setModuleState({ library: [...library, newMod] });
+        }
+        setModal(defaultModal());
+    }
+
+    function deleteModule(id: string) {
+        if (!confirm('Delete this module?')) return;
+        setInspectId(null);
+        setModuleState({
+            library: library.filter(m => m.id !== id),
+            loadouts: loadouts.map(lo => ({
+                ...lo,
+                slots: {
+                    cannon: clearSlot(lo.slots.cannon, id),
+                    armor: clearSlot(lo.slots.armor, id),
+                    generator: clearSlot(lo.slots.generator, id),
+                    core: clearSlot(lo.slots.core, id),
+                },
+            })),
+        });
+    }
+
+    // ── Modal helpers ─────────────────────────────────────────
+    function onModalTypeChange(type: ModuleType) {
+        setModal(m => ({
+            ...m,
+            type,
+            name: UNIQUE_MODULES[type][0][0],
+            subs: defaultSubs(),
+        }));
+    }
+
+    function onModalSubEffectChange(slotIdx: number, effect: string) {
+        setModal(m => {
+            const subs = [...m.subs];
+            subs[slotIdx] = { ...subs[slotIdx], effect };
+            return { ...m, subs };
+        });
+    }
+
+    function onModalSubRarityChange(slotIdx: number, rar: SubRarity) {
+        setModal(m => {
+            const subs = [...m.subs];
+            subs[slotIdx] = { ...subs[slotIdx], rar };
+            return { ...m, subs };
+        });
+    }
+
+    // ── Preset helpers ────────────────────────────────────────
+    function addPreset() {
+        const lo: Loadout = { id: genId(), name: `Preset ${loadouts.length + 1}`, slots: emptySlots() };
+        setModuleState({
+            loadouts: [...loadouts, lo],
+            ...(loadouts.length === 0 ? { activeLoadout: lo.id } : {}),
+        });
+        setViewId(lo.id);
+    }
+
+    function deletePreset(id: string) {
+        if (!confirm('Delete this preset?')) return;
+        const rest = loadouts.filter(l => l.id !== id);
+        setModuleState({
+            loadouts: rest,
+            ...(moduleState.activeLoadout === id ? { activeLoadout: rest[0]?.id } : {}),
+        });
+        setViewId(null);
+    }
+
+    function renamePreset(id: string, name: string) {
+        setModuleState({ loadouts: loadouts.map(l => (l.id === id ? { ...l, name } : l)) });
+    }
+
+    // Put a module in a slot of the viewed preset ('' empties it). A module
+    // can't sit in both slots of its type.
+    function setSlot(type: ModuleType, slot: SlotKey, modId: string) {
+        if (!viewed) return;
+        setModuleState({
+            loadouts: loadouts.map(lo => {
+                if (lo.id !== viewed.id) return lo;
+                const cur = lo.slots[type];
+                const other: SlotKey = slot === 'main' ? 'assist' : 'main';
+                const next = { ...cur, [slot]: modId };
+                if (modId && cur[other] === modId) next[other] = '';
+                return { ...lo, slots: { ...lo.slots, [type]: next } };
+            }),
+        });
+    }
+
+    // ── Inventory ─────────────────────────────────────────────
+    const q = search.toLowerCase();
+    const inventory = library
+        .filter(m => !typeFilter || m.type === typeFilter)
+        .filter(m => !rarityFilter || m.rarity.startsWith(rarityFilter))
+        .filter(m => !q || m.name.toLowerCase().includes(q))
+        .sort((a, b) => MODULE_TYPES.indexOf(a.type) - MODULE_TYPES.indexOf(b.type)
+            || RARITIES.findIndex(r => r.k === b.rarity) - RARITIES.findIndex(r => r.k === a.rarity)
+            || a.name.localeCompare(b.name));
+
+    const inspected = modById(inspectId ?? undefined);
+    const slotEditMod = slotEdit && viewed ? modById(viewed.slots[slotEdit.type][slotEdit.slot]) : null;
+
+    // Current unique effect value for modal preview
+    const uniqueEffectVal = modal.name
+        ? getUniqueEffectValue(modal.type, modal.name, modal.rarity)
+        : null;
+
+    // ── Board slot ────────────────────────────────────────────
+    function renderSlot(type: ModuleType, slot: SlotKey) {
+        const isAssist = slot === 'assist';
+        if (isAssist && !assistUnlocked) return <span key={`${type}-${slot}`} className="modg-slot small" />;
+        const mod = viewed ? modById(viewed.slots[type][slot]) : null;
+        const slotLv = slotLevels?.[type]?.[slot] ?? 0;
+        const cap = mod ? moduleMaxLevel(mod.rarity) : Infinity;
+        const capped = slotLv > cap;
+        return (
+            <button
+                key={`${type}-${slot}`}
+                className={`modg-slot ${isAssist ? 'small' : 'big'}`}
+                onClick={() => setSlotEdit({ type, slot })}
+                title={`${TYPE_LABELS[type]} ${isAssist ? 'assist' : 'primary'}${mod ? ` — ${mod.name}` : ' — empty'}`}
+            >
+                <ModuleBadge type={type} module={mod} size={isAssist ? 'var(--slot-small)' : 'var(--slot-big)'} />
+                <span className={`modg-slot-lv ${capped ? 'capped' : ''}`}>
+                    Lv.{capped ? cap : slotLv}
+                </span>
+            </button>
+        );
+    }
+
+    return (
+        <div>
+            {/* ══════════════════════════════════════
+          LOADOUT BOARD
+      ══════════════════════════════════════ */}
+            <div className="modg-panel">
+                <div className="modg-presets">
+                    {loadouts.map(lo => (
+                        <button
+                            key={lo.id}
+                            className={`modg-preset ${viewed?.id === lo.id ? 'viewing' : ''} ${equipped?.id === lo.id ? 'equipped' : ''}`}
+                            onClick={() => setViewId(lo.id)}
+                            title={equipped?.id === lo.id ? 'Equipped — the calculations use this preset' : 'Tap to view'}
+                        >
+                            {lo.name || 'Preset'}
+                        </button>
+                    ))}
+                    {loadouts.length < MAX_PRESETS && (
+                        <button className="modg-preset add" onClick={addPreset} title="New preset">+</button>
+                    )}
+                </div>
+
+                {viewed ? (
+                    <>
+                        <div className="modg-preset-bar">
+                            <input
+                                className="modg-preset-name"
+                                value={viewed.name}
+                                onChange={e => renamePreset(viewed.id, e.target.value)}
+                                placeholder="Preset name"
+                            />
+                            {equipped?.id === viewed.id ? (
+                                <span className="modg-equipped-tag">✓ Equipped</span>
+                            ) : (
+                                <button className="btn btn-accent" style={{ fontSize: '11px', padding: '3px 10px' }}
+                                    onClick={() => setModuleState({ activeLoadout: viewed.id })}>
+                                    Equip
+                                </button>
+                            )}
+                            <button className="btn btn-danger" style={{ fontSize: '10px', padding: '3px 8px' }}
+                                onClick={() => deletePreset(viewed.id)}>✕</button>
+                        </div>
+
+                        <div className="modg-board">
+                            <div className="modg-side">
+                                <div className="modg-pair">{BOARD[0].map(([t, s]) => renderSlot(t, s))}</div>
+                                <div className="modg-pair">{BOARD[2].map(([t, s]) => renderSlot(t, s))}</div>
+                            </div>
+                            <TowerArt />
+                            <div className="modg-side">
+                                <div className="modg-pair">{BOARD[1].map(([t, s]) => renderSlot(t, s))}</div>
+                                <div className="modg-pair">{BOARD[3].map(([t, s]) => renderSlot(t, s))}</div>
+                            </div>
+                        </div>
+                        <p className="modg-hint">
+                            Tap a slot to change its module or level{assistUnlocked ? ', or the assist settings' : ''}.
+                            Slot levels are shared by every preset, like in game.
+                            {!assistUnlocked && ` Assist slots unlock at Tier ${ASSIST_UNLOCK_TIER} Wave ${ASSIST_UNLOCK_WAVE}.`}
+                        </p>
+                    </>
+                ) : (
+                    <div className="empty-state" style={{ padding: '20px' }}>
+                        <h3>No presets yet</h3>
+                        <p>Tap + to make one, or use Import Game Data.</p>
+                    </div>
+                )}
+            </div>
+
+            {/* ══════════════════════════════════════
+          INVENTORY
+      ══════════════════════════════════════ */}
+            <div className="modg-panel">
+                <div className="modg-inv-head">
+                    <span className="modg-inv-title">Inventory</span>
+                    <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>{library.length} modules</span>
+                    <span style={{ flex: 1 }} />
+                    <button className="btn btn-accent" onClick={openAdd}>+ Add Module</button>
+                </div>
+                <div className="modg-filters">
+                    <select value={typeFilter} onChange={e => setTypeFilter(e.target.value as ModuleType | '')}>
+                        <option value="">All Types</option>
+                        {MODULE_TYPES.map(t => <option key={t} value={t}>{TYPE_LABELS[t]}</option>)}
+                    </select>
+                    <select value={rarityFilter} onChange={e => setRarityFilter(e.target.value as typeof rarityFilter)}>
+                        <option value="">All Rarities</option>
+                        <option value="E">Epic</option>
+                        <option value="L">Legendary</option>
+                        <option value="M">Mythic</option>
+                        <option value="A">Ancestral</option>
+                    </select>
+                    <input
+                        type="text"
+                        className="search-bar"
+                        style={{ margin: 0, flex: 1, minWidth: '120px' }}
+                        placeholder="🔍  Search..."
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                    />
+                </div>
+
+                {library.length === 0 ? (
+                    <div className="empty-state">
+                        <div className="icon">📦</div>
+                        <h3>No modules yet</h3>
+                        <p>Use Import Game Data, or “+ Add Module” to build your inventory.</p>
+                    </div>
+                ) : (
+                    <div className="modg-inv-grid">
+                        {inventory.map(m => {
+                            const where = equippedAs(m.id);
+                            const stars = rarityStars(m.rarity);
+                            return (
+                                <button key={m.id} className="modg-inv-item" onClick={() => setInspectId(m.id)}
+                                    title={`${m.name} — ${rarityLabel(m.rarity)}`}>
+                                    <ModuleBadge type={m.type} module={m} size="var(--inv-badge)" />
+                                    {where && <span className={`modg-inv-tag ${where}`}>{where === 'main' ? 'P' : 'A'}</span>}
+                                    {stars > 0 && <span className="modg-inv-stars">{'★'.repeat(stars)}</span>}
+                                </button>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
+
+            {/* ══════════════════════════════════════
+          INSPECT — the module's card, like in game
+      ══════════════════════════════════════ */}
+            {inspected && createPortal(
+                <div className="modal-overlay" onClick={() => setInspectId(null)}>
+                    <div className="modal-box modg-card" onClick={e => e.stopPropagation()}>
+                        {(() => {
+                            const m = inspected;
+                            const where = equippedAs(m.id);
+                            const lvl = slotLevels?.[m.type]?.[where ?? 'main'] ?? 0;
+                            const cap = moduleMaxLevel(m.rarity);
+                            const color = rarityColor(m.rarity);
+                            const stars = rarityStars(m.rarity);
+                            const desc = uniqueDescription(m.type, m.name, m.rarity);
+                            const model = UNIQUE_EFFECT_MODEL[m.name];
+                            return (
+                                <>
+                                    <div className="modg-card-top">
+                                        <ModuleBadge type={m.type} module={m} size={120} />
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div className="modg-card-rarity" style={{ color }}>
+                                                {rarityLabel(m.rarity).replace(/ [IV]+$/, '').toUpperCase()}
+                                            </div>
+                                            {stars > 0 && <div className="modg-card-stars" style={{ color }}>{'★'.repeat(stars)}</div>}
+                                            <div className="modg-card-name">{m.name}</div>
+                                            <div className="modg-card-main">
+                                                <strong style={{ color: '#5ad6ff' }}>×{fmtMult(calcModuleDamageMult(m, lvl))}</strong>
+                                                {' '}{MAIN_EFFECT_LABELS[m.type]}
+                                            </div>
+                                            <div className="modg-card-sub">
+                                                {where ? `Equipped: ${where === 'main' ? 'Primary' : 'Assist'}` : 'Not equipped'}
+                                                {' · '}Lv. {Math.min(lvl, cap)} /{cap}
+                                            </div>
+                                        </div>
+                                        <button className="btn btn-dim" style={{ fontSize: '10px', alignSelf: 'flex-start' }}
+                                            onClick={() => setInspectId(null)}>✕</button>
+                                    </div>
+
+                                    {desc && (
+                                        <div className="modg-card-unique">
+                                            <div className="modg-card-section">Unique Effect</div>
+                                            <div className="modg-card-unique-text">{desc}</div>
+                                            {model && (
+                                                <div className="modg-card-model">
+                                                    <strong>{model.counted}</strong> — {model.how}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    <div className="modg-card-section">Effects</div>
+                                    <div className="modg-card-effects">
+                                        {(m.subs ?? []).filter(s => s.effect).map((s, i) => {
+                                            const rc = rarityColor((s.rar === 'Common' ? 'C' : s.rar === 'Rare' ? 'R' : s.rar[0]) as ModuleRarity);
+                                            const val = getSubEffectValue(m.type, s.effect, s.rar as SubRarity) ?? s.val;
+                                            return (
+                                                <div key={i} className="modg-effect-row">
+                                                    <span className="modg-effect-rar" style={{ color: rc, borderColor: rc }}>{s.rar}</span>
+                                                    <span className="modg-effect-text" style={{ color: rc }}>
+                                                        {val ? `+${val} ` : ''}{s.effect}
+                                                    </span>
+                                                </div>
+                                            );
+                                        })}
+                                        {!(m.subs ?? []).some(s => s.effect) && (
+                                            <div style={{ fontSize: '12px', color: 'var(--text-dim)' }}>No effects entered.</div>
+                                        )}
+                                    </div>
+
+                                    <div className="modal-actions" style={{ flexWrap: 'wrap' }}>
+                                        <button className="btn btn-danger" onClick={() => deleteModule(m.id)}>Delete</button>
+                                        <span style={{ flex: 1 }} />
+                                        {viewed && (
+                                            <>
+                                                <button className="btn btn-dim" onClick={() => { setSlot(m.type, 'main', m.id); setInspectId(null); }}>
+                                                    Equip as Primary
+                                                </button>
+                                                {assistUnlocked && (
+                                                    <button className="btn btn-dim" onClick={() => { setSlot(m.type, 'assist', m.id); setInspectId(null); }}>
+                                                        Equip as Assist
+                                                    </button>
+                                                )}
+                                            </>
+                                        )}
+                                        <button className="btn btn-accent" onClick={() => openEdit(m)}>Edit</button>
+                                    </div>
+                                </>
+                            );
+                        })()}
+                    </div>
+                </div>,
+                document.body,
+            )}
+
+            {/* ══════════════════════════════════════
+          SLOT EDITOR — module, level, assist settings
+      ══════════════════════════════════════ */}
+            {slotEdit && viewed && createPortal(
+                <div className="modal-overlay" onClick={() => setSlotEdit(null)}>
+                    <div className="modal-box" onClick={e => e.stopPropagation()}>
+                        {(() => {
+                            const { type, slot } = slotEdit;
+                            const isAssist = slot === 'assist';
+                            const other: SlotKey = isAssist ? 'main' : 'assist';
+                            const otherId = viewed.slots[type][other];
+                            const lv = slotLevels?.[type]?.[slot] ?? 0;
+                            const ad = assistData[type] ?? { rarity: 'locked', multEff: 0, subEff: 0 };
+                            const cap = slotEditMod ? moduleMaxLevel(slotEditMod.rarity) : null;
+                            return (
+                                <>
+                                    <div className="modal-head">
+                                        <span className="modal-title">
+                                            {TYPE_LABELS[type]} — {isAssist ? 'Assist' : 'Primary'} slot · {viewed.name}
+                                        </span>
+                                        <button className="btn btn-dim" style={{ fontSize: '10px' }}
+                                            onClick={() => setSlotEdit(null)}>✕</button>
+                                    </div>
+                                    <div className="modal-body">
+                                        <div className="field-row">
+                                            <label className="field-label">
+                                                Slot level
+                                                <span className="field-sub">shared by every preset</span>
+                                            </label>
+                                            <NumericInput value={lv} min={0} max={MODULE_MAX_LEVEL} className="num-sm"
+                                                onChange={v => setSlotLevel(type, slot, v)} />
+                                            {cap !== null && lv > cap && (
+                                                <span style={{ fontSize: '11px', color: 'var(--gold)' }}>
+                                                    {slotEditMod!.name} caps at {cap}
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        {isAssist && (
+                                            <div className="modg-assist-box">
+                                                <div className="field-row">
+                                                    <label className="field-label">Unique effect tier</label>
+                                                    <select value={ad.rarity}
+                                                        onChange={e => updateAssistRarity(type, e.target.value as typeof ad.rarity)}>
+                                                        <option value="locked">Locked</option>
+                                                        <option value="Epic">Epic</option>
+                                                        <option value="Legendary">Legendary</option>
+                                                        <option value="Mythic">Mythic</option>
+                                                        <option value="Ancestral">Ancestral</option>
+                                                    </select>
+                                                </div>
+                                                {ad.rarity !== 'locked' && (
+                                                    <>
+                                                        <div className="field-row">
+                                                            <label className="field-label">Main effect<span className="field-sub">1–130%</span></label>
+                                                            <NumericInput value={ad.multEff ?? 0} min={0} max={130} className="num-sm"
+                                                                onChange={v => updateAssist(type, 'multEff', v)} />
+                                                            <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>%</span>
+                                                        </div>
+                                                        <div className="field-row">
+                                                            <label className="field-label">Substats<span className="field-sub">1–100%</span></label>
+                                                            <NumericInput value={ad.subEff ?? 0} min={0} max={100} className="num-sm"
+                                                                onChange={v => updateAssist(type, 'subEff', v)} />
+                                                            <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>%</span>
+                                                        </div>
+                                                    </>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        <div className="modg-card-section" style={{ marginTop: '10px' }}>Module</div>
+                                        <div className="modg-pick-list">
+                                            <button className={`modg-pick ${!viewed.slots[type][slot] ? 'on' : ''}`}
+                                                onClick={() => setSlot(type, slot, '')}>
+                                                <ModuleBadge type={type} module={null} size={44} />
+                                                <span>Empty</span>
+                                            </button>
+                                            {library.filter(m => m.type === type).map(m => (
+                                                <button key={m.id}
+                                                    className={`modg-pick ${viewed.slots[type][slot] === m.id ? 'on' : ''}`}
+                                                    onClick={() => setSlot(type, slot, m.id)}
+                                                    title={m.id === otherId ? `In the ${other === 'main' ? 'primary' : 'assist'} slot — picking it moves it here` : undefined}>
+                                                    <ModuleBadge type={type} module={m} size={44} />
+                                                    <span style={{ flex: 1, textAlign: 'left' }}>{m.name}</span>
+                                                    <span style={{ fontSize: '12px', color: rarityColor(m.rarity) }}>{rarityLabel(m.rarity)}</span>
+                                                    {m.id === otherId && <span className="modg-inv-tag static">{other === 'main' ? 'P' : 'A'}</span>}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </>
+                            );
+                        })()}
+                    </div>
+                </div>,
+                document.body,
+            )}
+
+            {/* ══════════════════════════════════════
+          ADD / EDIT MODAL — rendered via Portal
+          to escape parent stacking context
+      ══════════════════════════════════════ */}
+            {modal.open && createPortal(
+                <div className="modal-overlay" onClick={() => setModal(defaultModal())}>
+                    <div className="modal-box modal-box-lg" onClick={e => e.stopPropagation()}>
+                        <div className="modal-head">
+                            <span className="modal-title">
+                                {modal.editId ? 'Edit Module' : 'Add Module'}
+                            </span>
+                            <button className="btn btn-dim" style={{ fontSize: '10px' }}
+                                onClick={() => setModal(defaultModal())}>✕</button>
+                        </div>
+                        <div className="modal-body">
+
+                            {/* ── Module config ── */}
+                            <div className="modal-grid">
+                                <div>
+                                    <label className="modal-label">Type</label>
+                                    <select value={modal.type}
+                                        onChange={e => onModalTypeChange(e.target.value as ModuleType)}
+                                        style={{ width: '100%' }}>
+                                        {MODULE_TYPES.map(t => (
+                                            <option key={t} value={t}>{TYPE_LABELS[t]}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="modal-label">Module Name</label>
+                                    <select value={modal.name}
+                                        onChange={e => setModal(m => ({ ...m, name: e.target.value }))}
+                                        style={{ width: '100%' }}>
+                                        {UNIQUE_MODULES[modal.type].map(([name]) => (
+                                            <option key={name} value={name}>{name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="modal-label">Rarity</label>
+                                    <select value={modal.rarity}
+                                        onChange={e => setModal(m => ({
+                                            ...m,
+                                            rarity: e.target.value as ModuleRarity,
+                                        }))}
+                                        style={{ width: '100%' }}>
+                                        {RARITIES.map(r => (
+                                            <option key={r.k} value={r.k}>{r.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* ── Main-effect ×value read off the module card ── */}
+                            <div style={{ marginBottom: '14px' }}>
+                                <label className="modal-label">
+                                    Main effect — ×{MAIN_EFFECT_LABELS[modal.type]}
+                                </label>
+                                <input
+                                    type="number"
+                                    min={0}
+                                    step={0.01}
+                                    value={modal.mainMult || ''}
+                                    placeholder="auto"
+                                    onChange={e => setModal(m => ({ ...m, mainMult: parseFloat(e.target.value) || 0 }))}
+                                    style={{ width: '140px' }}
+                                />
+                                <div style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '4px' }}>
+                                    Optional — the number on the module card (e.g. ×16.24). Leave blank to calculate it
+                                    from the rarity and the slot level.
+                                </div>
+                            </div>
+
+                            {/* ── Unique effect preview ── */}
+                            {uniqueEffectVal && (
+                                <div className="mod-unique-effect" style={{ marginBottom: '14px' }}>
+                                    <span style={{ color: 'var(--purple)', fontWeight: 700 }}>
+                                        ✦ {modal.name}
+                                    </span>
+                                    <span style={{
+                                        fontFamily: 'var(--font-mono)', fontSize: '14px',
+                                        color: rarityColor(modal.rarity), fontWeight: 700,
+                                        marginLeft: '8px',
+                                    }}>
+                                        {uniqueEffectVal}
+                                    </span>
+                                    <div style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '4px' }}>
+                                        {UNIQUE_MODULES[modal.type].find(([n]) => n === modal.name)?.[1]}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* ── Sub-effect slots ── */}
+                            <div style={{
+                                fontSize: '11px', fontWeight: 700, textTransform: 'uppercase',
+                                letterSpacing: '.5px', color: 'var(--text-dim)', marginBottom: '8px',
+                            }}>
+                                Sub-Effect Slots (8)
+                            </div>
+
+                            <div className="sub-slots-grid">
+                                {modal.subs.map((sub, si) => {
+                                    const available = getAvailableSubEffects(modal.type, sub.rar);
+                                    const curVal = sub.effect
+                                        ? getSubEffectValue(modal.type, sub.effect, sub.rar)
+                                        : null;
+                                    const rarColor = sub.rar === 'Common' ? '#8a9ab5'
+                                        : sub.rar === 'Rare' ? '#4fc3f7'
+                                            : sub.rar === 'Epic' ? '#e040fb'
+                                                : sub.rar === 'Legendary' ? '#ff9800'
+                                                    : sub.rar === 'Mythic' ? '#f44336'
+                                                        : '#00e676';
+
+                                    return (
+                                        <div key={si} className="sub-slot-card">
+                                            <div className="sub-slot-header">
+                                                <span className="sub-slot-num">Slot {si + 1}</span>
+                                                {curVal && (
+                                                    <span style={{
+                                                        fontFamily: 'var(--font-mono)', fontSize: '11px',
+                                                        color: rarColor, fontWeight: 700,
+                                                    }}>
+                                                        {curVal}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <select value={sub.rar}
+                                                onChange={e => onModalSubRarityChange(si, e.target.value as SubRarity)}
+                                                style={{
+                                                    width: '100%', fontSize: '11px', marginBottom: '4px',
+                                                    borderColor: rarColor, color: rarColor,
+                                                }}>
+                                                {SUB_RARITIES.map(r => (
+                                                    <option key={r} value={r}>{r}</option>
+                                                ))}
+                                            </select>
+                                            <select value={sub.effect}
+                                                onChange={e => onModalSubEffectChange(si, e.target.value)}
+                                                style={{ width: '100%', fontSize: '11px' }}>
+                                                <option value="">— No effect —</option>
+                                                {available.map(([name]) => (
+                                                    <option key={name} value={name}>{name}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            <div className="modal-actions">
+                                <button className="btn btn-dim"
+                                    onClick={() => setModal(defaultModal())}>Cancel</button>
+                                <button className="btn btn-accent" onClick={saveModule}
+                                    disabled={!modal.name}>
+                                    {modal.editId ? 'Save Changes' : 'Add Module'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>,
+                document.body,
+            )}
+        </div>
+    );
+}

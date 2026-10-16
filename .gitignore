@@ -1,0 +1,28 @@
+# Build output
+publish/
+**/bin/
+**/obj/
+towerforge.client/dist/
+
+# Dependencies
+node_modules/
+
+# Visual Studio / editor per-user files
+.vs/
+*.user
+*.suo
+
+# Local secrets and settings (never commit)
+.env
+.env.*
+!.env.example
+*.local
+.claude/settings.local.json
+
+# Player data — game exports, cloud saves, test exports
+tool_export*.json
+**/__test_export*
+*.db
+
+# Logs
+*.log

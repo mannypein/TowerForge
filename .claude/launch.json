@@ -1,0 +1,19 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "towerforge-client",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "towerforge.client",
+      "port": 58132
+    },
+    {
+      "name": "towerforge-preview",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["http-server", "dist", "-p", "4174", "-c-1"],
+      "cwd": "towerforge.client",
+      "port": 4174
+    }
+  ]
+}

@@ -1,0 +1,173 @@
+/* ============================================================
+   TowerForge Companion — Global Styles
+   Base resets and element defaults only.
+   No component styles live here.
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap');
+@import './variables.css';
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: 15px;
+    line-height: 1.4;
+}
+
+body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+#root {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+/* ── Form Element Defaults ───────────────────────────────── */
+input[type='number'],
+input[type='text'],
+select,
+textarea {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-bright);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    padding: 4px 8px;
+    outline: none;
+    transition: border-color var(--transition-fast);
+}
+
+    input[type='number']:focus,
+    input[type='text']:focus,
+    select:focus,
+    textarea:focus {
+        border-color: var(--accent);
+    }
+
+input[type='number'] {
+    width: 80px;
+    text-align: right;
+}
+
+input[type='text'] {
+    width: 180px;
+}
+
+select {
+    cursor: pointer;
+}
+
+input[type='checkbox'] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
+/* ── Numeric Stepper ─────────────────────────────────────── */
+.num-input {
+    display: inline-flex;
+    align-items: stretch;
+    width: 110px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    transition: border-color var(--transition-fast);
+}
+
+.num-input:focus-within {
+    border-color: var(--accent);
+}
+
+.num-input input[type='number'] {
+    flex: 1;
+    min-width: 0;
+    width: auto !important;
+    background: transparent;
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 4px 2px;
+    text-align: center;
+    color: var(--text-bright);
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+.num-input input[type='number']:focus {
+    border-color: transparent !important;
+    outline: none;
+}
+
+.num-input input[type='number']::-webkit-inner-spin-button,
+.num-input input[type='number']::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.num-btn {
+    background: var(--bg4);
+    border: none;
+    border-radius: 0;
+    color: var(--text-dim);
+    font-size: 15px;
+    line-height: 1;
+    padding: 0 8px;
+    cursor: pointer;
+    transition: background var(--transition-fast), color var(--transition-fast);
+    user-select: none;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.num-btn:hover:not(:disabled) {
+    background: var(--accent-glow);
+    color: var(--accent);
+}
+
+.num-btn:active:not(:disabled) {
+    background: var(--accent);
+    color: #fff;
+}
+
+.num-btn:disabled {
+    opacity: 0.25;
+    cursor: not-allowed;
+}
+
+/* ── Scrollbar ───────────────────────────────────────────── */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 3px;
+}
+
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+}

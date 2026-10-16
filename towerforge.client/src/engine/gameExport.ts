@@ -1,0 +1,539 @@
+// ============================================================
+//  TowerForge Companion — Game Export Import
+//  Reads the official data export from The Tower (TTG's
+//  tool_export.json). Field-by-field notes: docs/game-export-format.md
+//
+//  Imported: currencies, tier progress, username, battle history, and
+//  the numbered arrays whose index → stat mapping was confirmed against
+//  a real account (workshop presets, enhancements, ultimate weapons,
+//  cards, perk bans, most labs — tables in constants/gameExportMaps).
+//  Bots, modules, relics and unconfirmed labs keep what players entered.
+//
+//  Pure functions — no store imports.
+// ============================================================
+
+import type { BattleReport } from './battleReport';
+import { WS_STATS, WS_ENH, UWS, LABS } from '../constants/gameData';
+import {
+    GAME_CARDS, MASTERY_LAB_START, MASTERY_LAB_CARDS, CARD_PRESET_SLOTS, GAME_PERKS, GAME_LABS, GAME_LAB_GROUPS,
+    GAME_MODULES, GAME_MODULE_RARITY, GAME_MODULE_EFFECT_RUNS, MODULE_EFFECT_SLOT_UNLOCK, isUniqueModule,
+    GAME_LEAGUES,
+} from '../constants/gameExportMaps';
+import { SUB_EFFECTS, SUB_RARITIES } from '../constants/moduleData';
+import type { SubRarity } from '../constants/moduleData';
+import type {
+    Currencies, TierWaves, WSPreset, WSCategory, EnhData, EnhCategoryData, UWData,
+    CardData, CardEntry, LabData, ModuleState, ModuleEntry, ModuleType, ModuleRarity,
+    SubSlot, Loadout, LoadoutSlots, AssistData, League,
+} from '../types/gameTypes';
+
+type Raw = Record<string, unknown>;
+
+export interface GameImport {
+    gameVersion: number;
+    dataVersion: number;
+    currencies: Currencies;
+    tierWaves: TierWaves;      // tier number → highest wave
+    highestTier: number;       // highest tier unlocked (from progress)
+    completedTier: number;     // highest tier whose unlock requirement is met
+    userName: string;
+    battles: BattleReport[];   // oldest → newest, as stored by the game
+    workshop: WSPreset[] | null;       // app preset i ← the game's global preset i
+    enhancements: EnhData | null;      // levels per app preset, ownership account-wide
+    uws: UWData['data'] | null;
+    cardSlots: number;                 // 0 when the file has no slot count
+    fivePresets: boolean;              // workshop presets 3–5 hold upgrades (Harmony unlocked)
+    cards: Pick<CardData, 'data' | 'presets'> | null;   // only cards whose game number is known
+    bannedPerks: string[] | null;      // site perk ids
+    labs: LabData | null;              // only labs whose game number is known
+    modules: ModuleImport | null;
+    league: League;                    // highest league reached ('' = unknown)
+    wallUnlocked: boolean;             // a workshop preset has Wall Health
+    presetNames: string[];             // per app preset ('' = keep the default name)
+}
+
+export interface ModuleImport {
+    state: ModuleState;                // library = unique modules the import can name
+    unnamed: UnnamedModule[];          // unique modules whose game number isn't confirmed yet
+}
+
+export interface UnnamedModule {
+    infoIndex: number;
+    type: ModuleType;
+    rarity: ModuleRarity | null;
+    effects: string[];                 // visible effects, e.g. "Ancestral Super Crit Chance"
+}
+
+const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+const isObj = (v: unknown): v is Raw => !!v && typeof v === 'object';
+
+const CATS: WSCategory[] = ['attack', 'defense', 'utility'];
+const APP_PRESETS = 5;
+const GAME_PRESET_STRIDE = 20;   // Preset* arrays hold 20 slots per workshop preset
+
+// Live (currently loaded) and per-preset array names for each category.
+const WS_FIELDS: Record<WSCategory, { live: string; preset: string }> = {
+    attack: { live: 'UpgradeWorkshopLevel', preset: 'PresetUpgradeWorkshopLevel' },
+    defense: { live: 'UpgradeWorkshopDefenseLevel', preset: 'PresetUpgradeWorkshopDefenseLevel' },
+    utility: { live: 'UpgradeWorkshopUtilityLevel', preset: 'PresetUpgradeWorkshopUtilityLevel' },
+};
+const ENH_FIELDS: Record<WSCategory, { live: string; preset: string; unlocked: string }> = {
+    attack: { live: 'EnhancementLevel', preset: 'PresetEnhancementLevel', unlocked: 'EnhancementTierUnlocked' },
+    defense: { live: 'EnhancementDefenseLevel', preset: 'PresetEnhancementDefenseLevel', unlocked: 'EnhancementDefenseTierUnlocked' },
+    utility: { live: 'EnhancementUtilityLevel', preset: 'PresetEnhancementUtilityLevel', unlocked: 'EnhancementUtilityTierUnlocked' },
+};
+
+// Workshop stats are stored in the same order as WS_STATS. Enhancements are
+// not: ENH_GAME_ORDER[cat][gameIdx] is the WS_ENH index of the game's
+// enhancement at that position (the game lists them in the wiki's order).
+const ENH_GAME_ORDER: Record<WSCategory, number[]> = {
+    attack: [0, 5, 1, 2, 3, 4],    // Damage, Rend Armor, Crit Factor, Damage/Meter, Super Crit Multi, Attack Speed
+    defense: [0, 1, 4, 3, 2, 5],   // Health, Health Regen, Wall Health, Land Mine Damage, Defense Absolute, Orb Size
+    utility: [0, 1, 2, 3, 4, 5],
+};
+
+// The game's workshop preset behind each app preset: app presets bundle
+// workshop + cards + bots the way the game's global presets do.
+function workshopIndexFor(raw: Raw, appPreset: number): number {
+    const g = arr(raw.GlobalPresets)[appPreset];
+    return isObj(g) && typeof g.WorkshopIndex === 'number' ? g.WorkshopIndex : appPreset;
+}
+
+// One category's levels for a game workshop preset. The loaded preset is read
+// from the live array (it can have changes not yet saved to its preset slot).
+function presetLevels(raw: Raw, fields: { live: string; preset: string }, wsPreset: number): number[] {
+    if (wsPreset === num(raw.CurrentWorkshopPreset)) return arr(raw[fields.live]).map(num);
+    const start = wsPreset * GAME_PRESET_STRIDE;
+    return arr(raw[fields.preset]).slice(start, start + GAME_PRESET_STRIDE).map(num);
+}
+
+function parseWorkshop(raw: Raw): WSPreset[] | null {
+    if (CATS.every(cat => arr(raw[WS_FIELDS[cat].live]).length === 0)) return null;
+    return Array.from({ length: APP_PRESETS }, (_, appPreset) => {
+        const ws = workshopIndexFor(raw, appPreset);
+        const preset: WSPreset = { attack: [], defense: [], utility: [] };
+        for (const cat of CATS) {
+            const lv = presetLevels(raw, WS_FIELDS[cat], ws);
+            preset[cat] = WS_STATS[cat].map(([, max], i) => clamp(lv[i] ?? 0, 0, max));
+        }
+        return preset;
+    });
+}
+
+// Any workshop preset past the first two holds upgrades → 5 presets unlocked.
+function usesFivePresets(raw: Raw): boolean {
+    for (let ws = 2; ws < APP_PRESETS; ws++) {
+        if (CATS.some(cat => presetLevels(raw, WS_FIELDS[cat], ws).some(v => v > 0))) return true;
+    }
+    return false;
+}
+
+function parseEnhancements(raw: Raw): EnhData | null {
+    if (CATS.every(cat => arr(raw[ENH_FIELDS[cat].live]).length === 0)) return null;
+
+    const levelsFor = (ws: number): EnhCategoryData => {
+        const out: EnhCategoryData = {};
+        for (const cat of CATS) {
+            const lv = presetLevels(raw, ENH_FIELDS[cat], ws);
+            const appLv = WS_ENH[cat].map(() => 0);
+            ENH_GAME_ORDER[cat].forEach((appIdx, gameIdx) => {
+                appLv[appIdx] = clamp(lv[gameIdx] ?? 0, 0, WS_ENH[cat][appIdx][1]);
+            });
+            out[cat] = appLv;
+        }
+        return out;
+    };
+
+    const p: { [presetIdx: number]: EnhCategoryData } = {};
+    for (let appPreset = 0; appPreset < APP_PRESETS; appPreset++) {
+        p[appPreset] = levelsFor(workshopIndexFor(raw, appPreset));
+    }
+
+    // The first enhancement in each category is free; TierUnlocked[k] means
+    // the game's enhancement k + 1 has been bought. Any levels also prove ownership.
+    const u: EnhData['u'] = {};
+    for (const cat of CATS) {
+        const unlocked = arr(raw[ENH_FIELDS[cat].unlocked]);
+        const owned = WS_ENH[cat].map(() => false);
+        ENH_GAME_ORDER[cat].forEach((appIdx, gameIdx) => {
+            owned[appIdx] = gameIdx === 0 || unlocked[gameIdx - 1] === true
+                || Object.values(p).some(levels => (levels[cat]?.[appIdx] ?? 0) > 0);
+        });
+        u[cat] = owned;
+    }
+
+    return { d: levelsFor(num(raw.CurrentWorkshopPreset)), u, p };
+}
+
+// UltimateWeaponLevel holds 3 stats per UW in UWS order, 0-based (app levels start at 1).
+function parseUWs(raw: Raw): UWData['data'] | null {
+    const owned = arr(raw.UltimateWeaponUnlocked);
+    if (owned.length === 0) return null;
+    const levels = arr(raw.UltimateWeaponLevel).map(num);
+    const plusOwned = arr(raw.UltimateWeaponPlusUnlocked);
+    const plusLevels = arr(raw.UltimateWeaponPlusLevel).map(num);
+
+    const data: UWData['data'] = {};
+    UWS.forEach((uw, i) => {
+        const own = owned[i] === true;
+        data[uw.a] = {
+            own,
+            sv: uw.s.map(([, max], j) => clamp((levels[i * 3 + j] ?? 0) + 1, 1, max)) as [number, number, number],
+            upOwn: own && plusOwned[i] === true,
+            upLvl: clamp(plusLevels[i] ?? 0, 0, uw.upMax),
+        };
+    });
+    return data;
+}
+
+// Card stars (CardLevel is the star count), mastery (unlock flag + its lab's
+// level) and the card presets behind each app preset (via GlobalPresets).
+function parseCards(raw: Raw): Pick<CardData, 'data' | 'presets'> | null {
+    const levels = arr(raw.CardLevel).map(num);
+    if (levels.length === 0) return null;
+    const unlocked = arr(raw.CardUnlocked);
+    const masteryOn = arr(raw.CardMasteryUnlocked);
+    const research = arr(raw.ResearchLevel).map(num);
+
+    const data: CardData['data'] = {};
+    for (const [n, name] of Object.entries(GAME_CARDS)) {
+        const idx = Number(n);
+        const stars = unlocked[idx] === true ? clamp(levels[idx] ?? 0, 1, 7) : 0;
+        const labIdx = MASTERY_LAB_CARDS.indexOf(name);
+        const entry: CardEntry = {
+            s: stars,
+            m: labIdx >= 0 ? clamp(research[MASTERY_LAB_START + labIdx] ?? 0, 0, 9) : 0,
+            mu: stars >= 7 && masteryOn[idx] === true,
+        };
+        data[name] = entry;
+    }
+
+    // The loaded card preset is read from CardActive (it can have unsaved changes).
+    const slots = arr(raw.SlotPresetCardInt).map(num);
+    const assigned = arr(raw.SlotPresetCardAssignedBool);
+    const active = arr(raw.CardActive);
+    const cardsIn = (preset: number): string[] => {
+        const nums = preset === num(raw.CurrentPreset)
+            ? active.flatMap((on, i) => (on === true ? [i] : []))
+            : slots.slice(preset * CARD_PRESET_SLOTS, (preset + 1) * CARD_PRESET_SLOTS)
+                .filter((_, s) => assigned[preset * CARD_PRESET_SLOTS + s] === true);
+        return nums.flatMap(c => (GAME_CARDS[c] ? [GAME_CARDS[c]] : []));
+    };
+    const presets: CardData['presets'] = {};
+    for (let appPreset = 0; appPreset < APP_PRESETS; appPreset++) {
+        const g = arr(raw.GlobalPresets)[appPreset];
+        presets[appPreset] = cardsIn(isObj(g) && typeof g.CardsIndex === 'number' ? g.CardsIndex : appPreset);
+    }
+    return { data, presets };
+}
+
+function parseBannedPerks(raw: Raw): string[] | null {
+    if (!Array.isArray(raw.BannedPerksIndex)) return null;
+    return raw.BannedPerksIndex.map(num)
+        .flatMap(i => (i >= 0 && GAME_PERKS[i] ? [GAME_PERKS[i] as string] : []));
+}
+
+const LAB_MAX: Record<string, number> = Object.fromEntries(
+    LABS.flatMap(cat => cat.l.map(([name, max]) => [name, max] as const)),
+);
+
+function parseLabs(raw: Raw): LabData | null {
+    const levels = arr(raw.ResearchLevel).map(num);
+    if (levels.length === 0) return null;
+    const labs: LabData = {};
+    for (const [n, name] of Object.entries(GAME_LABS)) {
+        labs[name] = clamp(levels[Number(n)] ?? 0, 0, LAB_MAX[name] ?? Infinity);
+    }
+    for (const group of GAME_LAB_GROUPS) {
+        const lv = group.numbers.map(n => levels[n] ?? 0);
+        if (lv.some(v => v !== lv[0])) continue;
+        for (const name of group.labs) labs[name] = clamp(lv[0], 0, LAB_MAX[name] ?? Infinity);
+    }
+    return labs;
+}
+
+// ── Modules ───────────────────────────────────────────────────
+
+const MODULE_TYPES: ModuleType[] = ['cannon', 'armor', 'generator', 'core'];
+const TYPE_LABEL: Record<ModuleType, string> = { cannon: 'Cannon', armor: 'Armor', generator: 'Generator', core: 'Core' };
+
+// Effects[] code → effect, built once from GAME_MODULE_EFFECT_RUNS.
+interface DecodedEffect { type: ModuleType; effect: string; rar: SubRarity; val: string }
+const EFFECT_CODES: Map<number, DecodedEffect | null> = (() => {
+    const codes = new Map<number, DecodedEffect | null>();
+    let code = 1;
+    for (const [type, run] of GAME_MODULE_EFFECT_RUNS) {
+        for (const entry of run) {
+            if (typeof entry === 'number') {
+                for (let i = 0; i < entry; i++) codes.set(code++, null);
+                continue;
+            }
+            const def = SUB_EFFECTS[type].find(([name]) => name === entry);
+            if (!def) continue;
+            def[2].forEach((v, r) => {
+                if (v === null) return;
+                codes.set(code++, { type, effect: entry, rar: SUB_RARITIES[r], val: `${v}${def[1]}` });
+            });
+        }
+    }
+    return codes;
+})();
+
+// The type a module's effect codes belong to (blocks are contiguous by type).
+function typeOfEffects(effects: number[]): ModuleType | null {
+    for (const c of effects) {
+        const e = EFFECT_CODES.get(c);
+        if (e) return e.type;
+    }
+    return null;
+}
+
+// Effects the module has revealed: its pre-rolled slots whose unlock level it has reached.
+function visibleEffects(m: Raw): number[] {
+    const reached = num(m.MaxLevelReached);
+    return arr(m.Effects).map(num)
+        .filter((c, slot) => c > 0 && reached >= (MODULE_EFFECT_SLOT_UNLOCK[slot] ?? Infinity));
+}
+
+const ASSIST_RARITY: AssistData[string]['rarity'][] = ['Epic', 'Legendary', 'Mythic', 'Ancestral'];
+
+// Unique modules (library), the equipped loadout and saved presets, assist
+// slots and slot levels. Generic modules (no unique effect) are skipped.
+function parseModules(raw: Raw, labs: LabData | null): ModuleImport | null {
+    const equipped = arr(raw.ModuleEquipped);
+    const assistSlots = arr(raw.AssistModuleSlots).filter(isObj);
+    if (equipped.length === 0 && arr(raw.ModuleInventory).length === 0) return null;
+
+    // Every module the player owns, once each.
+    const owned = new Map<string, Raw>();
+    for (const m of [...equipped, ...assistSlots.map(s => s.EquippedModule), ...arr(raw.ModuleInventory)]) {
+        if (isObj(m) && typeof m.Guid === 'string' && !owned.has(m.Guid)) owned.set(m.Guid, m);
+    }
+
+    const library: ModuleEntry[] = [];
+    const unnamed: UnnamedModule[] = [];
+    for (const m of owned.values()) {
+        const info = num(m.InfoIndex);
+        if (!isUniqueModule(info)) continue;
+        const codes = visibleEffects(m);
+        const rarity = GAME_MODULE_RARITY[num(m.CurrentRarity)] ?? null;
+        const def = GAME_MODULES[info];
+        if (!def || !rarity) {
+            const type = def?.type ?? typeOfEffects(arr(m.Effects).map(num));
+            if (type) {
+                unnamed.push({
+                    infoIndex: info, type, rarity,
+                    effects: codes.flatMap(c => { const e = EFFECT_CODES.get(c); return e ? [`${e.rar} ${e.effect}`] : []; }),
+                });
+            }
+            continue;
+        }
+        const subs: SubSlot[] = codes.map(c => {
+            const e = EFFECT_CODES.get(c);
+            return e && e.type === def.type ? { effect: e.effect, rar: e.rar, val: e.val } : { effect: '', rar: 'Common', val: '' };
+        });
+        library.push({ id: String(m.Guid), name: def.name, type: def.type, rarity, subs });
+    }
+
+    // Loadouts reference library modules by Guid; unnamed modules leave the slot empty.
+    const known = new Set(library.map(m => m.id));
+    const ref = (g: unknown) => (typeof g === 'string' && known.has(g) ? g : '');
+    const slotsFrom = (primary: unknown[], assist: unknown[]): LoadoutSlots => {
+        const out = {} as LoadoutSlots;
+        MODULE_TYPES.forEach((t, i) => { out[t] = { main: ref(primary[i]), assist: ref(assist[i]) }; });
+        return out;
+    };
+    const presets = arr(raw.ModulePresets).filter(isObj);
+    const current = num(raw.CurrentModulePreset);
+    const assistByType = (i: number) => assistSlots.find(s => num(s.Type) === i);
+
+    // Every game preset in the game's order (empty ones too, like the game's
+    // tabs). The equipped one uses what's actually equipped (it can differ from
+    // the saved preset) and is marked active — the calculators read it.
+    const equippedSlots = slotsFrom(
+        equipped.map(m => (isObj(m) ? m.Guid : null)),
+        MODULE_TYPES.map((_, i) => { const e = assistByType(i)?.EquippedModule; return isObj(e) ? e.Guid : null; }),
+    );
+    const loadouts: Loadout[] = presets.map((p, i) => ({
+        id: `game-${i}`,
+        name: String(p.PresetName ?? `Preset ${i + 1}`),
+        slots: i === current ? equippedSlots : slotsFrom(arr(p.PrimaryModuleGuids), arr(p.AssistModuleGuids)),
+    }));
+    if (!loadouts.some(l => l.id === `game-${current}`)) {
+        loadouts.unshift({ id: `game-${current}`, name: 'Equipped', slots: equippedSlots });
+    }
+
+    // Assist slots: efficiency = 1% + stone upgrades + Assist Module labs.
+    // Checked on a real account: cannon substats 1 + 7 + 9 = 17%, core 1 + 18 + 13 = 32%.
+    const assistData: AssistData = {};
+    const slotLevels = {} as ModuleState['slotLevels'];
+    const primaryLevels = arr(raw.SlotLevels).map(num);
+    MODULE_TYPES.forEach((t, i) => {
+        const s = assistByType(i);
+        const lab = (kind: 'Mult' | 'Substat') => labs?.[`Assist-${TYPE_LABEL[t]} ${kind}`] ?? 0;
+        assistData[t] = s?.Unlocked === true
+            ? {
+                rarity: ASSIST_RARITY[clamp(num(s.UniqueEffectEfficiencyLevel), 0, 3)],
+                multEff: 1 + num(s.MainEffectEfficiencyLevel) + lab('Mult'),
+                subEff: 1 + num(s.SubstatEfficiencyLevel) + lab('Substat'),
+            }
+            : { rarity: 'locked', multEff: 0, subEff: 0 };
+        slotLevels[t] = { main: primaryLevels[i] ?? 0, assist: s?.Unlocked === true ? num(s.Level) : 0 };
+    });
+
+    return { state: { library, loadouts, activeLoadout: `game-${current}`, assistData, slotLevels }, unnamed };
+}
+
+// Names for the app presets, from the game's presets: a global preset's own
+// name if the player set one, else its workshop preset's name. A name already
+// used by an earlier preset (or a default "Preset N") is left blank.
+function parsePresetNames(raw: Raw): string[] {
+    const isDefault = (n: string) => !n.trim() || /^preset \d+$/i.test(n.trim());
+    const wsNames = arr(raw.WorkshopPresetName).map(n => String(n ?? ''));
+    const used = new Set<string>();
+    return Array.from({ length: APP_PRESETS }, (_, i) => {
+        const g = arr(raw.GlobalPresets)[i];
+        const own = isObj(g) ? String(g.PresetName ?? '') : '';
+        const ws = wsNames[workshopIndexFor(raw, i)] ?? '';
+        const name = !isDefault(own) ? own.trim() : !isDefault(ws) ? ws.trim() : '';
+        if (!name || used.has(name.toLowerCase())) return '';
+        used.add(name.toLowerCase());
+        return name;
+    });
+}
+
+// The export has these top-level keys; enough of them to be sure it's the game's file.
+export function isGameExport(raw: unknown): raw is Raw {
+    return !!raw && typeof raw === 'object'
+        && 'VersionNumber' in raw && 'DataVersion' in raw && 'Coins' in raw && 'Gems' in raw;
+}
+
+// Waves needed on tier t to unlock tier t + 1 (300 from tier 15 on, per the wiki).
+const wavesToUnlockNext = (tier: number) => (tier >= 15 ? 300 : 100);
+
+function formatBattleDate(iso: string): string {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleString('en-US', {
+        month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
+    });
+}
+
+// One BattleHistory entry → the same shape a pasted Battle Report produces.
+function battleToReport(b: Raw): BattleReport {
+    const total = num(b.TotalEnemies);
+    const share = (killed: unknown) => (total > 0 ? Math.min(1, num(killed) / total) : null);
+    const realTime = num(b.RealTime);   // seconds
+    return {
+        date: formatBattleDate(String(b.BattleDate ?? '')),
+        tier: num(b.Tier),
+        wave: num(b.Wave),
+        gameTimeSec: num(b.GameTime),    // seconds
+        realTimeSec: realTime,
+        coinsEarned: num(b.CoinsEarned),
+        coinsPerHour: realTime > 0 ? num(b.CoinsEarned) / realTime * 3600 : 0,
+        totalEnemies: total,
+        wavesSkipped: num(b.WavesSkipped),
+        largestGoldenCombo: num(b.LargestGoldenCombo),
+        recoveryPackages: num(b.RecoveryPackages),
+        thornsKills: num(b.DestroyedByThorns),
+        killedWithEffect: {
+            goldenTower: share(b.DestroyedInGoldenTower),
+            deathWave: share(b.TaggedByDeathwave),
+            spotlight: share(b.DestroyedInSpotlight),
+            goldenBot: share(b.DestroyedInGoldenBot),
+            blackHole: share(b.DestroyedInBlackhole),
+            orbs: share(b.DestroyedInOrbs),
+        },
+        coins: {
+            goldenCombo: num(b.CoinsFromGoldenTowerPlus),
+            waveSkip: num(b.CoinsEarnedWaveSkip),
+            coinsPerWave: num(b.CoinsEarnedCPW),
+            criticalCoin: num(b.CoinsFromCritCoin),
+            fetched: num(b.GuardianCoinsFetched),
+        },
+        tournament: b.IsTournament === true,
+        bossKills: num(b.TotalBoss),
+        eliteKills: num(b.TotalElites),
+        fleetKills: num(b.TotalCommanders) + num(b.TotalSaboteurs) + num(b.TotalOvercharges),
+        cashEarned: num(b.CashEarned),
+        clHits: num(b.EnemiesHitByChainLightningThisRound),
+        psHits: num(b.EnemiesHitByPoisonSwampThisRound),
+        orbHits: num(b.OrbHits),
+    };
+}
+
+export function parseGameExport(raw: Raw): GameImport {
+    const currencies: Currencies = {
+        coins: num(raw.Coins),
+        gems: num(raw.Gems),
+        stones: num(raw.Stones),
+        medals: num(raw.Medals),
+        cells: num(raw.Cells),
+        keys: num(raw.Keys),
+        tokens: num(raw.Tokens),
+        bits: num(raw.Bits),
+    };
+
+    // HighestWaveThisTier is indexed by tier number (index 0 is unused).
+    const waves = arr(raw.HighestWaveThisTier).map(num);
+    const rounds = arr(raw.RoundsStartedThisTier).map(num);
+    const tierWaves: TierWaves = {};
+    let playedTier = 0;
+    let completedTier = 0;
+    waves.forEach((w, tier) => {
+        if (tier === 0) return;
+        if (w > 0) tierWaves[tier] = w;
+        if (w > 0 || (rounds[tier] ?? 0) > 0) playedTier = Math.max(playedTier, tier);
+        if (w >= wavesToUnlockNext(tier)) completedTier = Math.max(completedTier, tier);
+    });
+
+    const labs = parseLabs(raw);
+    const workshop = parseWorkshop(raw);
+
+    return {
+        gameVersion: num(raw.VersionNumber),
+        dataVersion: num(raw.DataVersion),
+        currencies,
+        tierWaves,
+        highestTier: Math.max(playedTier, Math.min(24, completedTier + 1)),
+        completedTier,
+        userName: typeof raw.UserName === 'string' ? raw.UserName : '',
+        battles: arr(raw.BattleHistory).filter(isObj).map(battleToReport),
+        workshop,
+        enhancements: parseEnhancements(raw),
+        uws: parseUWs(raw),
+        cardSlots: clamp(num(raw.SlotsUnlocked), 0, 28),
+        fivePresets: usesFivePresets(raw),
+        cards: parseCards(raw),
+        bannedPerks: parseBannedPerks(raw),
+        labs,
+        modules: parseModules(raw, labs),
+        league: GAME_LEAGUES[num(raw.HighestLeague)] ?? '',
+        wallUnlocked: (workshop ?? []).some(p => (p.defense[WS_STATS.defense.findIndex(([n]) => n === 'Wall Health')] ?? 0) > 0),
+        presetNames: parsePresetNames(raw),
+    };
+}
+
+// A run worth listing: it got past wave 1 (not a quick restart).
+export const isRealRun = (b: BattleReport) => b.wave > 1 && b.totalEnemies > 0;
+
+// The battle the optimizer should calibrate from by default: the newest
+// full-length run on the player's usual farming tier (the non-tournament
+// tier they run most), so short test starts and tournaments are skipped.
+// Battle history is stored oldest → newest. -1 when nothing qualifies.
+export function defaultBattleIndex(battles: BattleReport[]): number {
+    const runs = battles.map((b, i) => ({ b, i })).filter(({ b }) => !b.tournament && isRealRun(b));
+    if (runs.length === 0) return -1;
+
+    const countByTier = new Map<number, number>();
+    for (const { b } of runs) countByTier.set(b.tier, (countByTier.get(b.tier) ?? 0) + 1);
+    const farmTier = [...countByTier.entries()].sort((x, y) => y[1] - x[1] || y[0] - x[0])[0][0];
+
+    const onTier = runs.filter(({ b }) => b.tier === farmTier);
+    const bestWave = Math.max(...onTier.map(({ b }) => b.wave));
+    const full = onTier.filter(({ b }) => b.wave >= 0.9 * bestWave);
+    return (full.length ? full : onTier)[(full.length ? full : onTier).length - 1].i;
+}
