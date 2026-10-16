@@ -199,7 +199,7 @@ export default function App() {
                     Tower<span className="logo-forge">Forge</span>
                     <span className="logo-sub"> Companion</span>
                 </div>
-                <span className="app-version">v0.12</span>
+                <span className="app-version">v{__APP_VERSION__}</span>
 
                 <div className="header-actions">
                     {/* TODO: Re-enable cloud save button after testing */}

@@ -34,12 +34,18 @@ if (!fs.existsSync(certFilePath) || !fs.existsSync(keyFilePath)) {
     }
 }
 
+// The site's version comes from package.json ("version") and shows in the header.
+const appVersion: string = JSON.parse(fs.readFileSync(new URL('./package.json', import.meta.url), 'utf-8')).version;
+
 const target = env.ASPNETCORE_HTTPS_PORT ? `https://localhost:${env.ASPNETCORE_HTTPS_PORT}` :
     env.ASPNETCORE_URLS ? env.ASPNETCORE_URLS.split(';')[0] : 'https://localhost:7065';
 
 // https://vitejs.dev/config/
 export default defineConfig({
     plugins: [plugin()],
+    define: {
+        __APP_VERSION__: JSON.stringify(appVersion),
+    },
     resolve: {
         alias: {
             '@': fileURLToPath(new URL('./src', import.meta.url))

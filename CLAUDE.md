@@ -53,6 +53,7 @@ saveParser, towerAuth and gameTypes (`CloudSaveData`). Lint the files you change
 - New CSS goes in `tabs.css` with a short prefix per feature (`modg-` modules, `botg-` bots). Colors come from tokens in `variables.css` or the nearby block.
 - Every tab must work at phone width (375px) with no sideways scrolling.
 - Player-facing text uses the game's own words (stat names, rarities, "preset", "Bot+").
+- The site's version lives only in `towerforge.client/package.json` (`npm version <x.y.z> --no-git-tag-version`); Vite injects it as `__APP_VERSION__` for the header. Tag releases `vX.Y.Z` in git.
 
 ## Checking UI changes
 
