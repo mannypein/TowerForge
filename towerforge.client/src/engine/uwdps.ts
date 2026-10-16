@@ -39,7 +39,6 @@ import {
     calcTowerRange,
 } from './ttt';
 
-import { calcCardMasteryBonuses } from './modBonuses';
 import { calcTowerDamage, calcCritMult, calcAttackSpeed, calcDamageMeter, calcCoreUWDamageMult } from './towerDamage';
 
 import type {
@@ -193,6 +192,12 @@ function extraMinesPerSec(modBonuses: ModBonuses, wsData: WSPreset[], presetIdx:
 // ── Per-UW eDPS Calculations ───────────────────────────────────
 // Returns 0 for SL (handled separately as a multiplier) and CF
 // (handled via TTT, not summed).
+// Wiki facts used below: ILM cooldown hard cap; Poison Swamp's base tick
+// ramp without PS+; Spotlight Missiles' damage without Smart Missiles.
+const ILM_MIN_CD = 37;
+const PS_BASE_RAMP = 0.5;
+const SL_MISSILE_BASE_DAMAGE = 14;
+
 export function calcUWDPS(
     uwAbbr: UWAbbr,
     uwData: UWData,
@@ -227,12 +232,11 @@ export function calcUWDPS(
             // Dimension Core: 60% chance to also hit the first target.
             const qty = uwStatValue('CL', 1, ud.sv[1]) + (b.qty ?? 0) + dimensionCoreExtraHits(modBonuses);
             const chance = (uwStatValue('CL', 2, ud.sv[2]) + (b.chance ?? 0) * 100) / 100;  // Chance (5%…27.5%) + module bonus
-            const cardMastery = calcCardMasteryBonuses(presetIdx, cardData);
-            const critMastAdd = cardMastery.critMastAdd / 100;
+            // (Critical Chance mastery raises tower crit chance — already in critMult.)
             const clDmgMult = pk.clDmgMult ?? 1;
 
             return uwMult * towerDamage * critMult * clDmgMult
-                * qty * (chance + critMastAdd) * attackSpeed;
+                * qty * chance * attackSpeed;
         }
 
         case 'SM': {
@@ -264,8 +268,13 @@ export function calcUWDPS(
             const mvnCD = getMultiverseNexusCombinedCD(uwData, modBonuses, labData, wsData, cardData, presetIdx);
             const effCD = mvnCD > 0 ? mvnCD : calcEffCD(rawCD, b.cd ?? 0, modBonuses, wsData, labData, cardData, true, presetIdx);
 
-            const EW_INTERVAL = 10;
+            // Effect waves fire every 4s (wiki) and reach every enemy (infinite range).
+            const EW_INTERVAL = 4;
             const wavesLanding = Math.min(ewCount, Math.floor(effCD / EW_INTERVAL));
+            // Damage Amplifier: each effect-wave hit on an enemy boosts the Death
+            // Wave damage it takes by 5× (base) — the lab raises that to 50×.
+            const ampPerHit = 5 + 1.5 * (labData['DW-Dmg Amplifier'] ?? 0);
+            const ampMult = 1 + wavesLanding * ampPerHit;
             const kwData = UW_PLUS_DATA['DW'];
             const kwLv = ud.upOwn ? Math.min(ud.upLvl ?? 0, (kwData?.vals.length ?? 1) - 1) : -1;
             const kwVal = kwLv >= 0 ? (parseFloat(kwData?.vals[kwLv] ?? '1') || 1) : 1;
@@ -273,7 +282,7 @@ export function calcUWDPS(
 
             const acts = calcUWActivations(refTTT, effCD);
 
-            return uwMult * towerDamage * critMult * DW_NORM * kwAmp * acts;
+            return uwMult * towerDamage * critMult * DW_NORM * ampMult * kwAmp * acts;
         }
 
         case 'ILM': {
@@ -282,9 +291,10 @@ export function calcUWDPS(
             // + Space Displacer mines × chargedVal      (land mines turned into ILMs)
             // + Magnetic Hook mines                     (fired straight at bosses/fleets/elites)
             const uwMult = uwStatValue('ILM', 0, ud.sv[0]) + (b.dmg ?? 0); // Damage (10x…3021x)
-            const qty = uwStatValue('ILM', 1, ud.sv[1]) + (b.qty ?? 0); // Quantity (3…6)
+            const qty = uwStatValue('ILM', 1, ud.sv[1]) + (b.qty ?? 0) + (pk.ilmExtraQty ?? 0); // Quantity (3…6) + perk's 6
             const rawCD = uwStatValue('ILM', 2, ud.sv[2]) || 999;       // Cooldown (200s…50s)
-            const effCD = calcEffCD(rawCD, b.cd ?? 0, modBonuses, wsData, labData, cardData, true, presetIdx);
+            // The ILM cooldown is hard capped at 37s (wiki).
+            const effCD = Math.max(ILM_MIN_CD, calcEffCD(rawCD, b.cd ?? 0, modBonuses, wsData, labData, cardData, true, presetIdx));
 
             // Charged Mine (ILM+): a mine's damage grows by `chargePerSec`× every
             // second and never resets until detonated. In the late game a mine
@@ -322,14 +332,16 @@ export function calcUWDPS(
             const towerRange = calcTowerRange(presetIdx, wsData, labData, cardData);
             const psCoverage = calcPSCoverage(towerRange, psRadius);
 
-            // Death Creep (PS+): each 1s tick deals +creepPerTick of base damage,
-            // additively (tick n = base × (1 + (n-1)·creepPerTick)). Over `duration`
-            // ticks the average tick = base × (1 + creepPerTick·(duration-1)/2), so
-            // that average is the multiplier on the flat-tick PS eDPS.
+            // Tick ramp (wiki, from in-game hit text): every swamp ramps by r — 50%
+            // without PS+, Death Creep's value with it (120%…1110%). Tick 1 = base,
+            // tick k ≥ 2 = base × (1 + r) × (k − 1) (e.g. r = 50%: 1×, 1.5×, 3×,
+            // 4.5×, 6×…). Over `duration` 1s ticks the average tick is
+            // (1 + (1 + r) × d(d − 1)/2) ÷ d — the multiplier on a flat-tick swamp.
             const psPlus = UW_PLUS_DATA['PS'];
             const psLv = ud.upOwn ? Math.min(ud.upLvl ?? 0, (psPlus?.vals.length ?? 1) - 1) : -1;
-            const creepPerTick = psLv >= 0 ? (parseFloat(psPlus?.vals[psLv] ?? '0') || 0) / 100 : 0;
-            const creepMult = 1 + creepPerTick * Math.max(0, duration - 1) / 2;
+            const ramp = psLv >= 0 ? (parseFloat(psPlus?.vals[psLv] ?? '0') || 0) / 100 : PS_BASE_RAMP;
+            const ticks = Math.max(1, duration);
+            const creepMult = (1 + (1 + ramp) * ticks * (ticks - 1) / 2) / ticks;
 
             // Swamp Rend: +3% damage per lab level (max +90% at lv 30).
             // Swamp Rend Extra: extends rend to 1 additional enemy type per level
@@ -483,7 +495,10 @@ export function calcBlackHoleReach(
     const mvnCD = getMultiverseNexusCombinedCD(uwData, modBonuses, labData, wsData, cardData, presetIdx);
     const effCD = mvnCD > 0 ? mvnCD : calcEffCD(rawCD, b.cd ?? 0, modBonuses, wsData, labData, cardData, true, presetIdx);
     const holes = 1 + ((labData['BH-Extra(unlock)'] ?? 0) >= 1 ? 1 : 0) + primordialCollapseExtraHoles(modBonuses);
-    return holes * Math.min(1, dur / Math.max(1, effCD)) * size;
+    // BH Damage lab: 0.2% of enemy total health per second per level (2% max).
+    // Without it a Black Hole only pulls.
+    const pctPerSec = 0.002 * (labData['BH-Damage'] ?? 0);
+    return holes * Math.min(1, dur / Math.max(1, effCD)) * size * pctPerSec;
 }
 
 // Chain Lightning's proc chance (0–1) and chain count, with module bonuses.
@@ -528,15 +543,15 @@ export function calcSmiteWaveHPFraction(uwData: UWData): number {
 // ── Spotlight Missiles Lab Contribution ──────────────────────
 // SL-Missiles lab makes Spotlight fire Smart Missiles on a timer.
 // Cooldown = 20 - labLevel (19s at Lv1 → 2s at Lv18)
-// Each missile does SM-damage, hits only enemies in SL coverage.
+// Each missile does Smart Missiles damage.
 export function calcSpotlightMissilesDPS(
     uwData: UWData,
     modBonuses: ModBonuses,
     refTTT: number,
     _presetIdx: number,
-    wsData: WSPreset[],
+    _wsData: WSPreset[],
     labData: LabData,
-    cardData: CardData,
+    _cardData: CardData,
     _moduleState: ModuleState,
     _relicData: RelicData,
     _enhData: EnhData,
@@ -545,35 +560,19 @@ export function calcSpotlightMissilesDPS(
     const sl = uwData.data['SL'];
     if (!sl?.own) return 0;
 
-    // Get SL coverage (used to weight missile hits)
-    const b = modBonuses.uwBonus['SL'] ?? {};
-    const angle = uwStatValue('SL', 1, sl.sv[1]) + (b.angle ?? 0);
-    const qty = uwStatValue('SL', 2, sl.sv[2]);
-    const coverage = Math.min(1, (angle * qty) / 360);
-    if (coverage <= 0) return 0;
-
-    // Calculate cooldown: cooldown = 20 - labLevel
+    // Spotlight Missiles lab (wiki): the tower fires one missile every 19s at
+    // Lv 1 down to 2s at Lv 18, each dealing Smart Missiles' damage (14× when
+    // Smart Missiles isn't unlocked). Missiles fired per TTT pass, like the UWs.
     const slMissilesLabLv = labData['SL-Missiles'] ?? 0;
     if (slMissilesLabLv <= 0) return 0;
-    const cooldown = Math.max(2, 20 - slMissilesLabLv);  // Min 2s at Lv18
+    const cooldown = Math.max(2, 20 - slMissilesLabLv);
+    const missiles = refTTT / cooldown;
 
-    // Calculate missiles fired per reference time
-    const missilesPerRef = refTTT / cooldown;
-
-    // SM damage (same as Smart Missiles UW damage)
-    const smUW = uwStatValue('SM', 0, uwData.data['SM']?.sv[0] ?? 0);
-    const smBonus = modBonuses.uwBonus['SM'] ?? {};
-    const smDamage = smUW * (1 + (smBonus.dmg ?? 0));
-
-    // Missiles inherit SM quantity/cooldown bonuses for full scaling
-    const smQty = (uwStatValue('SM', 1, uwData.data['SM']?.sv[1] ?? 0) || 1) + (modBonuses.perks.smExtraQty ?? 0) + (smBonus.qty ?? 0);
-    const rawCD = uwStatValue('SM', 2, uwData.data['SM']?.sv[2] ?? 0) || 999;
-    const effCD = calcEffCD(rawCD, smBonus.cd ?? 0, modBonuses, wsData, labData, cardData);
-    const smActs = calcUWActivations(refTTT, effCD);
-    const totalSMPower = smDamage * smQty * smActs;
-
-    // SL missiles: inherit tower damage/crit from dmgCtx, scale by coverage
-    return totalSMPower * dmgCtx.towerDamage * dmgCtx.critMult * missilesPerRef * coverage;
+    const sm = uwData.data['SM'];
+    const perMissile = sm?.own
+        ? uwStatValue('SM', 0, sm.sv[0]) + (modBonuses.uwBonus['SM']?.dmg ?? 0)
+        : SL_MISSILE_BASE_DAMAGE;
+    return perMissile * dmgCtx.towerDamage * dmgCtx.critMult * missiles;
 }
 
 // ── Total Tower eDPS ──────────────────────────────────────────
@@ -598,7 +597,9 @@ export function calcTowerEDPS(
         presetIdx, wsData, labData, cardData, relicData, enhData, modBonuses, moduleState, botData,
     );
 
-    const sumUWs: UWAbbr[] = ['CL', 'SM', 'DW', 'ILM', 'PS', 'BH'];
+    // Spotlight multiplies damage that isn't based on enemy health (wiki), so
+    // Black Hole is added outside it.
+    const sumUWs: UWAbbr[] = ['CL', 'SM', 'DW', 'ILM', 'PS'];
 
     const baseSum = sumUWs.reduce((total, abbr) => {
         return total + calcUWDPS(
@@ -623,7 +624,9 @@ export function calcTowerEDPS(
         moduleState, relicData, enhData, dmgCtx,
     );
 
-    return (baseSum * coreUWMult * relicUWMult * slMult + slMissilesDPS)
+    const bhDPS = calcUWDPS('BH', uwData, modBonuses, refTTT, presetIdx, wsData, labData, cardData, dmgCtx);
+
+    return ((baseSum * slMult + bhDPS) * coreUWMult * relicUWMult + slMissilesDPS)
         * calcDamageTakenMult(uwData, modBonuses, refTTT, presetIdx, wsData, labData);
 }
 

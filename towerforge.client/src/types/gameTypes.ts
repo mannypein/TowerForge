@@ -269,6 +269,7 @@ export interface PerkBonuses {
     smExtraQty: number;
     bhExtraDur: number;
     cfExtraDur: number;
+    ilmExtraQty: number;
     gtBonusMult: number;
     psRadMult: number;
     enemySpdMult: number;

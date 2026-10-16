@@ -151,7 +151,7 @@ export const GAME_PERKS: Record<number, string | null> = {
     12: null,   // Max Game Speed +1
     14: 'absdef',
     20: 'sm_qty', 21: 'ps_radius', 22: 'dw_wave',
-    23: null,   // Extra Set of Inner Mines
+    23: 'ilm_extra',   // Extra Set of Inner Mines (+6 mines)
     24: 'gt_bonus', 25: 'cl_dmg', 26: 'cf_dur', 27: 'bh_dur', 28: 'sl_bonus',
     40: 'to_dmg', 41: 'to_coins', 42: 'to_enemyhp', 43: 'to_enemydmg',
     44: 'to_rangeddistance', 45: 'to_espd', 46: 'to_cash', 47: 'to_regen',

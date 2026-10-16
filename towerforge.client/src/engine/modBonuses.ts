@@ -234,6 +234,7 @@ export function calcPerkBonuses(
         smExtraQty: uwActive('sm_qty') ? 4 : 0,
         bhExtraDur: uwActive('bh_dur') ? 12 : 0,
         cfExtraDur: uwActive('cf_dur') ? 5 : 0,
+        ilmExtraQty: uwActive('ilm_extra') ? 6 : 0,
         gtBonusMult: uwActive('gt_bonus') ? 1.5 : 1.0,
         psRadMult: uwActive('ps_radius') ? 1.5 : 1.0,
         enemySpdMult: toActive('to_espd') ? 0.6 : 1.0,

@@ -395,6 +395,7 @@ export const PERKS: {
         { id: 'sm_qty', name: 'SM +4 Missiles', type: 'uw', stat: 'sm_qty', add: 4, uw: 'SM' },
         { id: 'bh_dur', name: 'BH Duration +12s', type: 'uw', stat: 'bh_dur', add: 12, uw: 'BH' },
         { id: 'cf_dur', name: 'CF Duration +5s', type: 'uw', stat: 'cf_dur', add: 5, uw: 'CF' },
+        { id: 'ilm_extra', name: 'ILM +6 Mines', type: 'uw', stat: 'ilm_extra', add: 6, uw: 'ILM' },
         { id: 'gt_bonus', name: 'GT Bonus ×1.5', type: 'uw', stat: 'gt_bonus', mult: 1.5, uw: 'GT' },
         { id: 'ps_radius', name: 'PS Swamp Radius ×1.5', type: 'uw', stat: 'ps_radius', mult: 1.5, uw: 'PS' },
         // Trade-offs
