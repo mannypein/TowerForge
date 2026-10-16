@@ -511,7 +511,8 @@ export function parseGameExport(raw: Raw): GameImport {
         bannedPerks: parseBannedPerks(raw),
         labs,
         modules: parseModules(raw, labs),
-        league: GAME_LEAGUES[num(raw.HighestLeague)] ?? '',
+        // A file without the field keeps the player's league ('' = unknown), not Copper.
+        league: typeof raw.HighestLeague === 'number' ? GAME_LEAGUES[raw.HighestLeague] ?? '' : '',
         wallUnlocked: (workshop ?? []).some(p => (p.defense[WS_STATS.defense.findIndex(([n]) => n === 'Wall Health')] ?? 0) > 0),
         presetNames: parsePresetNames(raw),
     };

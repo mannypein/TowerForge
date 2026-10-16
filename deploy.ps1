@@ -16,9 +16,15 @@ $STAGING       = "/home/ubuntu/deploy-staging"
 
 Write-Host "=== TowerForge Deploy ===" -ForegroundColor Cyan
 
-# ── Step 1: Build frontend ──────────────────────────────────
-Write-Host "`n[1/6] Building frontend..." -ForegroundColor Yellow
+# ── Step 1: Test + build frontend ───────────────────────────
+Write-Host "`n[1/6] Testing and building frontend..." -ForegroundColor Yellow
 Push-Location towerforge.client
+npm test
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Tests failed - nothing was deployed." -ForegroundColor Red
+    Pop-Location
+    exit 1
+}
 npm run build
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Frontend build failed!" -ForegroundColor Red
