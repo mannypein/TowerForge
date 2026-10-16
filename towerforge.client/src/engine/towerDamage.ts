@@ -210,7 +210,8 @@ export function calcCannonModuleMult(
 }
 
 // Assist slot contribution to a module main effect: 1 + (×value − 1) × Mult
-// Efficiency (multiplicative since v27.1). Mult Efficiency caps at 130%.
+// Efficiency (multiplicative since v27.1). Stones and the Assist labs reach
+// 100%; the main-effect lab unlocked at T23 W500 lifts the cap to 130%.
 function assistMainContrib(
     assistMod: ModuleEntry | undefined,
     ad: ModuleState['assistData'][string] | undefined,

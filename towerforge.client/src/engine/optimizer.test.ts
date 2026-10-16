@@ -131,9 +131,10 @@ describe('assist modules', () => {
         expect(find(assist(1, 100, { 'Assist-Cannon Substat': 30 }), 'Substat Eff')).toBeUndefined();
     });
 
-    it('lets Main Effect stones reach 100% (130% with labs)', () => {
-        expect(find(assist(99, 1), 'Mult Eff')).toBeDefined();
-        expect(find(assist(100, 1), 'Mult Eff')).toBeUndefined();
+    it('stops Main Effect stones at 70% too (labs take it to 100%, a T23 lab to 130%)', () => {
+        expect(find(assist(69, 1), 'Mult Eff')).toBeDefined();
+        expect(find(assist(70, 1), 'Mult Eff')).toBeUndefined();
+        expect(find(assist(99, 1, { 'Assist-Cannon Mult': 30 }), 'Mult Eff')).toBeDefined();
     });
 });
 

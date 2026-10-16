@@ -19,7 +19,8 @@
 //    health), Smite at the run's proc rate, Consume on kills inside BH. The
 //    uncalibrated model below is the fallback; its absolute eDPS isn't real.
 //  • Card mastery: stones only unlock (Lv 0); levels come from labs.
-//  • Assist: Substat stones stop at 70%, Main Effect at 100% (130% w/ labs).
+//  • Assist: stones stop at 70% for Main Effect and Substats (labs add the
+//    rest: 100%, or 130% Main Effect with the T23 W500 lab).
 //  • UW stat values and stone costs match the wiki for all 27 stats.
 //  • Paths skip upgrades worth < GC_SCORING.minGainPct.
 //
@@ -448,18 +449,18 @@ export function buildCandidates(
     }
 
     // ── Assist Module Stones ───────────────────────────────────
-    // Efficiency % = 1% base + stone levels + Assist lab levels (labs add up
-    // to 30%). The k-th stone level costs 15 + 3k — with the base, 12 + 3 ×
-    // (base + stone %). Substat Efficiency stones stop at 70% (the wiki's
-    // per-slot total matches: unlock + rarities 4,600 + 2 × 8,073 = 20,746,
-    // i.e. 69 stone levels each). Main Effect Efficiency caps at 130% since
-    // v27.1, so its stones go to 100% — not yet checked in game.
+    // Efficiency % = 1% base + stone levels + Assist lab levels. Stones stop
+    // at 70% for both Main Effect and Substat Efficiency: 69 levels each, the
+    // k-th costing 15 + 3k (with the base, 12 + 3 × (base + stone %)). The
+    // wiki's per-slot total matches: unlock + rarities 4,600 + 2 × 8,073 =
+    // 20,746. The Assist labs add up to 30% (100%); a later lab (T23 W500)
+    // lets Main Effect reach 130%.
     // Every assist slot is scored in the build's metric: main effects (cannon
     // damage, armor health, generator coins, core UW damage), sub-effects and
     // unique effects all flow into eDPS, coins and survival.
     if (cat === 'assist') {
         const ASSIST_TYPES = ['cannon', 'armor', 'generator', 'core'];
-        const ASSIST_STONE_MAX = { multEff: 100, subEff: 70 };   // base 1% + stone levels
+        const ASSIST_STONE_MAX = 70;   // base 1% + 69 stone levels
 
         for (const type of ASSIST_TYPES) {
             const ad = snap.moduleState.assistData[type] ?? { rarity: 'locked', multEff: 0, subEff: 0 };
@@ -470,7 +471,7 @@ export function buildCandidates(
 
             // Mult Eff upgrade — only while unlocked and stones haven't hit 70%
             const multEffStone = (ad.multEff ?? 0) - labMultLv;   // base 1% + stone levels
-            if (ad.rarity !== 'locked' && multEffStone < ASSIST_STONE_MAX.multEff) {
+            if (ad.rarity !== 'locked' && multEffStone < ASSIST_STONE_MAX) {
                 const totalPct = ad.multEff ?? 0;
                 const stoneLv = multEffStone;
                 const cost = 12 + Math.max(1, stoneLv) * 3;
@@ -486,7 +487,7 @@ export function buildCandidates(
                 candidates.push({
                     category: 'assist',
                     label: `${type.charAt(0).toUpperCase() + type.slice(1)} Assist — Mult Eff`,
-                    subLabel: `${totalPct}% → ${totalPct + 1}% (stones ${Math.max(0, stoneLv - 1)}/99, lab ${labMultLv})`,
+                    subLabel: `${totalPct}% → ${totalPct + 1}% (stones ${Math.max(0, stoneLv - 1)}/69, lab ${labMultLv})`,
                     fromLv: totalPct,
                     toLv: totalPct + 1,
                     cost,
@@ -498,7 +499,7 @@ export function buildCandidates(
 
             // Substat Eff upgrade — only while unlocked and stones haven't hit 70%
             const subEffStone = (ad.subEff ?? 0) - labSubLv;   // base 1% + stone levels
-            if (ad.rarity !== 'locked' && subEffStone < ASSIST_STONE_MAX.subEff) {
+            if (ad.rarity !== 'locked' && subEffStone < ASSIST_STONE_MAX) {
                 const totalPct = ad.subEff ?? 0;
                 const stoneLv = subEffStone;
                 const cost = 12 + Math.max(1, stoneLv) * 3;
