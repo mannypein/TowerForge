@@ -131,7 +131,7 @@ export function readFarmInputs(snap: OptimizerSnapshot): FarmInputs {
     // Mastery scales the card's bonus (×1.45 → +45% × mastery), not the whole ×value.
     const coinsCard = coins ? masteredCardMult(cardValue('Coins', coins.stars), coins.mastery) : 1;
     const relic = 1 + (snap.relicData['rCoins'] ?? 0) / 100;
-    const generator = calcModuleSlotMult(snap.moduleState, 'generator');
+    const generator = calcModuleSlotMult(snap.moduleState, 'generator', snap.labData);
 
     // Wave Skip: chance per wave × (1 + mastery chance of a double skip).
     const skip = activeCard(snap, 'Wave Skip');

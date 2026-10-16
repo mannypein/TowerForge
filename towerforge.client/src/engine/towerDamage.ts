@@ -172,15 +172,38 @@ export function calcModuleDamageMult(
     return calcModuleMainMult(module.rarity, module.type, Math.min(level, moduleMaxLevel(module.rarity)));
 }
 // ── Module Slot Main-Effect Multiplier ────────────────────────
-// A type's main effect: the primary module at full value × the assist at its
-// Mult Efficiency (cannon = Tower Damage, generator = Coin Bonus,
-// core = UW Damage, armor = Tower Health).
-export function calcModuleSlotMult(moduleState: ModuleState, type: ModuleType): number {
+// Primary module efficiency labs, one per type (T23 W500): +1% a level.
+export const PRIMARY_EFF_LAB: Record<ModuleType, string> = {
+    cannon: 'Primary-Cannon Mult',
+    armor: 'Primary-Armor Mult',
+    generator: 'Primary-Generator Mult',
+    core: 'Primary-Core Mult',
+};
+
+// A primary module's main effect. Primary modules run at 100% efficiency;
+// their lab adds 1% a level (130% max): 1 + (×value − 1) × (1 + lab%). A
+// ×value typed from the module card already shows the boost.
+export function primaryMainMult(
+    mod: ModuleEntry | null | undefined,
+    level: number,
+    type: ModuleType,
+    labData?: LabData,
+): number {
+    const value = calcModuleDamageMult(mod, level);
+    if (!mod || (mod.mainMult ?? 0) > 0) return value;
+    const lab = labData?.[PRIMARY_EFF_LAB[type]] ?? 0;
+    return 1 + (value - 1) * (1 + lab / 100);
+}
+
+// A type's main effect: the primary module (with its efficiency lab) × the
+// assist at its Mult Efficiency (cannon = Tower Damage, generator = Coin
+// Bonus, core = UW Damage, armor = Tower Health).
+export function calcModuleSlotMult(moduleState: ModuleState, type: ModuleType, labData?: LabData): number {
     const slots = activeLoadout(moduleState)?.slots[type] ?? { main: '', assist: '' };
     const lv = moduleState.slotLevels?.[type] ?? { main: 0, assist: 0 };
     const mainMod = moduleState.library.find(m => m.id === slots.main);
     const assistMod = moduleState.library.find(m => m.id === slots.assist);
-    return calcModuleDamageMult(mainMod, lv.main)
+    return primaryMainMult(mainMod, lv.main, type, labData)
         * assistMainContrib(assistMod, moduleState.assistData[type], lv.assist);
 }
 
@@ -190,6 +213,7 @@ export function calcModuleSlotMult(moduleState: ModuleState, type: ModuleType): 
 //   AssistContribution = 1 + (ModuleDamageMult - 1) × efficiency
 export function calcCannonModuleMult(
     moduleState: ModuleState,
+    labData?: LabData,
 ): number {
     const { library, assistData } = moduleState;
 
@@ -198,9 +222,9 @@ export function calcCannonModuleMult(
     const cannonSlots = loadout?.slots.cannon ?? { main: '', assist: '' };
     const lv = moduleState.slotLevels?.cannon ?? { main: 0, assist: 0 };
 
-    // Main cannon module — full effect at the cannon-main slot level
+    // Main cannon module — full effect at the cannon-main slot level (+ its lab)
     const mainMod = library.find(m => m.id === cannonSlots.main);
-    const mainMult = calcModuleDamageMult(mainMod, lv.main);
+    const mainMult = primaryMainMult(mainMod, lv.main, 'cannon', labData);
 
     // Assist cannon module — its own main effect at the assist slot level,
     // scaled by Mult Efficiency. Checked against a real card: Ancestral ★5
@@ -227,9 +251,9 @@ function assistMainContrib(
 // on the summed UW eDPS (separate from Tower Damage). The ×value is
 // auto-computed from the core column of the module tables (or a manual
 // mainMult override), exactly like the cannon path.
-//   Main slot  = full ×value
+//   Main slot  = full ×value (+ its efficiency lab)
 //   Assist slot = 1 + (×value − 1) × multEff
-export function calcCoreUWDamageMult(moduleState: ModuleState): number {
+export function calcCoreUWDamageMult(moduleState: ModuleState, labData?: LabData): number {
     const { library, assistData } = moduleState;
     const loadout = activeLoadout(moduleState);
     const coreSlots = loadout?.slots.core ?? { main: '', assist: '' };
@@ -237,7 +261,7 @@ export function calcCoreUWDamageMult(moduleState: ModuleState): number {
     const lv = moduleState.slotLevels?.core ?? { main: 0, assist: 0 };
 
     const mainMod = library.find(m => m.id === coreSlots.main);
-    const mainMult = calcModuleDamageMult(mainMod, lv.main);
+    const mainMult = primaryMainMult(mainMod, lv.main, 'core', labData);
 
     const assistMod = library.find(m => m.id === coreSlots.assist);
     return mainMult * assistMainContrib(assistMod, assistData['core'], lv.assist);
@@ -326,7 +350,7 @@ export function calcTowerDamage(
 
     // Cannon module damage multiplier — 2 equipped modules (full effect)
     // × 2 assist modules (reduced efficiency based on assist stone/lab levels)
-    const cannonMult = calcCannonModuleMult(moduleState);
+    const cannonMult = calcCannonModuleMult(moduleState, labData);
 
     const enhDmgMult = enhMult(enhData, 'attack', 0, 0.01); // Damage enhancement, 1%/level
 

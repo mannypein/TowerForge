@@ -35,7 +35,7 @@ import {
     WS_RECOVERY_AMOUNT, WS_MAX_RECOVERY,
 } from '../constants/buildStatCurves';
 import { calcCFUptime, packageChancePct } from './ttt';
-import { calcModuleDamageMult } from './towerDamage';
+import { calcModuleDamageMult, primaryMainMult, PRIMARY_EFF_LAB } from './towerDamage';
 import { activeCard as activeCardIn, activeLoadout, cardValue, labMult as labMultIn, masteredCardMult } from './statHelpers';
 import {
     uniq, sharpFortitudeMult, harmonyConductorReduction, negativeMassReduction, primordialCollapseReduction,
@@ -175,7 +175,9 @@ export function readEhpInputs(snap: OptimizerSnapshot): EhpInputs {
     const armorAssist = snap.moduleState.library.find(m => m.id === armorSlots?.assist);
     const lvLabel = (lv: number, override?: number) => (override ? 'from the module card' : `slot Lv ${lv}`);
     if (armorMain) {
-        mult(parts.health, `Armor module: ${armorMain.name}`, calcModuleDamageMult(armorMain, armorLv.main), lvLabel(armorLv.main, armorMain.mainMult));
+        const effLab = snap.labData[PRIMARY_EFF_LAB.armor] ?? 0;
+        const how = lvLabel(armorLv.main, armorMain.mainMult) + (effLab > 0 && !armorMain.mainMult ? `, +${effLab}% efficiency lab` : '');
+        mult(parts.health, `Armor module: ${armorMain.name}`, primaryMainMult(armorMain, armorLv.main, 'armor', snap.labData), how);
     }
     const armorAd = snap.moduleState.assistData['armor'];
     if (armorAssist && armorAd && armorAd.rarity !== 'locked') {

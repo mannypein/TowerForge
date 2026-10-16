@@ -93,7 +93,7 @@ export function edpsParts(snap: OptimizerSnapshot, ttt?: number): EdpsParts {
     const range = calcTowerRange(presetIdx, wsData, labData, cardData);
     const sl = calcSpotlightMult(uwData, modBonuses, damageMeter, range);
     const taken = calcDamageTakenMult(uwData, modBonuses, refTTT, presetIdx, wsData, labData);
-    const uwShared = calcCoreUWDamageMult(moduleState) * (1 + (relicData['rUWDmg'] ?? 0) / 100) * sl * taken;
+    const uwShared = calcCoreUWDamageMult(moduleState, labData) * (1 + (relicData['rUWDmg'] ?? 0) / 100) * sl * taken;
     const uw = (abbr: 'CL' | 'SM' | 'DW' | 'ILM' | 'PS') =>
         calcUWDPS(abbr, uwData, modBonuses, refTTT, presetIdx, wsData, labData, cardData, ctx) * uwShared;
     const slMissiles = calcSpotlightMissilesDPS(

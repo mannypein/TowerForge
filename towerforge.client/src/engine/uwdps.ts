@@ -612,7 +612,7 @@ export function calcTowerEDPS(
     const slMult = calcSpotlightMult(uwData, modBonuses, damageMeter, range);
 
     // Core modules' "Ultimate Weapon Damage" main effect multiplies the UW sum.
-    const coreUWMult = calcCoreUWDamageMult(moduleState);
+    const coreUWMult = calcCoreUWDamageMult(moduleState, labData);
 
     // Ultimate Damage relic (rUWDmg, max +40%) also multiplies all UW damage.
     const relicUWMult = 1 + (relicData['rUWDmg'] ?? 0) / 100;

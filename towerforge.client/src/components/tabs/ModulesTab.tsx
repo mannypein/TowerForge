@@ -17,7 +17,7 @@ import ModuleBadge from '../common/ModuleBadge';
 import { RARITIES, moduleMaxLevel, rarityColor, rarityStars } from '../../constants/moduleRarities';
 import { SUB_RARITIES, UNIQUE_MODULES, SUB_EFFECTS, UNIQUE_EFFECT_MODEL } from '../../constants/moduleData';
 import type { SubRarity, RarityProgression, SubEffectDef } from '../../constants/moduleData';
-import { calcModuleDamageMult } from '../../engine/towerDamage';
+import { calcModuleDamageMult, primaryMainMult } from '../../engine/towerDamage';
 import { activeLoadout } from '../../engine/statHelpers';
 
 // ── Types ─────────────────────────────────────────────────────
@@ -192,6 +192,7 @@ export default function ModulesTab() {
     const profile = useGameStore(s => s.profile);
     const tierWaves = useGameStore(s => s.tierWaves);
     const moduleState = useGameStore(s => s.moduleState);
+    const labData = useGameStore(s => s.labData);
     const setModuleState = useGameStore(s => s.setModuleState);
     const setSlotLevel = useGameStore(s => s.setSlotLevel);
     const updateAssist = useGameStore(s => s.updateAssist);
@@ -547,6 +548,14 @@ export default function ModulesTab() {
                             const stars = rarityStars(m.rarity);
                             const desc = uniqueDescription(m.type, m.name, m.rarity);
                             const model = UNIQUE_EFFECT_MODEL[m.name];
+                            // The ×value the calculations use, like the in-game card: a primary
+                            // module with its efficiency lab, an assist at its Mult Efficiency.
+                            const ad = assistData[m.type];
+                            const shown = where === 'main'
+                                ? primaryMainMult(m, lvl, m.type, labData)
+                                : where === 'assist' && ad && ad.rarity !== 'locked'
+                                    ? 1 + (calcModuleDamageMult(m, lvl) - 1) * Math.min(1.3, (ad.multEff ?? 0) / 100)
+                                    : calcModuleDamageMult(m, lvl);
                             return (
                                 <>
                                     <div className="modg-card-top">
@@ -558,7 +567,7 @@ export default function ModulesTab() {
                                             {stars > 0 && <div className="modg-card-stars" style={{ color }}>{'★'.repeat(stars)}</div>}
                                             <div className="modg-card-name">{m.name}</div>
                                             <div className="modg-card-main">
-                                                <strong style={{ color: '#5ad6ff' }}>×{fmtMult(calcModuleDamageMult(m, lvl))}</strong>
+                                                <strong style={{ color: '#5ad6ff' }}>×{fmtMult(shown)}</strong>
                                                 {' '}{MAIN_EFFECT_LABELS[m.type]}
                                             </div>
                                             <div className="modg-card-sub">

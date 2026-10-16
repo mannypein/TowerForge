@@ -745,6 +745,13 @@ export const LABS: { c: string; l: [string, number, number, number, number?][] }
             ['Assist-Generator Substat', 30, 19, 50],
             ['Assist-Core Mult', 30, 19, 50],
             ['Assist-Core Substat', 30, 19, 50],
+            // Primary modules run at 100% efficiency; each of these adds 1% a
+            // level to that type's primary module (130% max). Game numbers not
+            // known yet, so the import leaves them as entered.
+            ['Primary-Cannon Mult', 30, 23, 500],
+            ['Primary-Armor Mult', 30, 23, 500],
+            ['Primary-Generator Mult', 30, 23, 500],
+            ['Primary-Core Mult', 30, 23, 500],
         ]
     },
     {

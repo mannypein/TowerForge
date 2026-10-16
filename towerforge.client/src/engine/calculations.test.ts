@@ -3,7 +3,7 @@
 // them shows up here.
 
 import { describe, expect, it } from 'vitest';
-import { calcModuleDamageMult } from './towerDamage';
+import { calcCannonModuleMult, calcModuleDamageMult, primaryMainMult } from './towerDamage';
 import { activeLoadout, enhForPreset, masteredCardMult, uniqueTier } from './statHelpers';
 import { DEFAULT_RUN_RATES, runRatesFrom } from './runRates';
 import { parseGameExport } from './gameExport';
@@ -34,6 +34,36 @@ describe('module main effect (×value on the module card)', () => {
     it('uses the ×value typed in from the card when there is one', () => {
         expect(calcModuleDamageMult(mod('cannon', 'L', 12.5), 100)).toBe(12.5);
         expect(calcModuleDamageMult(null, 100)).toBe(1);
+    });
+});
+
+describe('module efficiency labs', () => {
+    // Primary modules run at 100%; their lab (one per type, T23 W500) adds
+    // 1% a level, up to 130%. Assist modules: 1% base, stones to 100%, +30% lab.
+    const as = mod('cannon', 'A5');
+
+    it('scale a primary module by 1 + (×value − 1) × (1 + lab%)', () => {
+        const base = calcModuleDamageMult(as, 217);
+        expect(primaryMainMult(as, 217, 'cannon', {})).toBe(base);
+        expect(primaryMainMult(as, 217, 'cannon', { 'Primary-Cannon Mult': 30 })).toBeCloseTo(1 + (base - 1) * 1.3, 10);
+        expect(primaryMainMult(as, 217, 'cannon', { 'Primary-Core Mult': 30 })).toBe(base);   // other type's lab
+    });
+
+    it("don't boost a ×value typed from the card (it already shows the lab)", () => {
+        expect(primaryMainMult(mod('cannon', 'A5', 30), 217, 'cannon', { 'Primary-Cannon Mult': 30 })).toBe(30);
+    });
+
+    it('reach tower damage through the equipped cannon module', () => {
+        const slots = { main: '', assist: '' };
+        const state: ModuleState = {
+            library: [{ ...as, id: 'p' }],
+            loadouts: [{ id: 'l', name: 'l', slots: { cannon: { main: 'p', assist: '' }, armor: slots, generator: slots, core: slots } }],
+            activeLoadout: 'l', assistData: {},
+            slotLevels: { cannon: { main: 217, assist: 0 }, armor: { main: 0, assist: 0 }, generator: { main: 0, assist: 0 }, core: { main: 0, assist: 0 } },
+        };
+        const base = calcCannonModuleMult(state);
+        expect(base).toBeCloseTo(23.37, 2);
+        expect(calcCannonModuleMult(state, { 'Primary-Cannon Mult': 10 })).toBeCloseTo(1 + (base - 1) * 1.1, 10);
     });
 });
 
