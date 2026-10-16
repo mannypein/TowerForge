@@ -25,6 +25,8 @@ import { buildEhpCalibration } from '../../engine/ehp';
 import { enhForPreset } from '../../engine/statHelpers';
 import { botsForPreset } from '../../constants/botData';
 import type { EhpCalibration } from '../../engine/ehp';
+import { buildEdpsCalibration } from '../../engine/edps';
+import type { EdpsCalibration } from '../../engine/edps';
 import { BattleReportPanel, EconomyStats, EhpStats } from './BuildPanels';
 
 const EMPTY_RESULTS: Record<OptCategory, OptCandidate[]> = {
@@ -49,6 +51,7 @@ export default function OptimizerTab() {
     const [undoStack, setUndoStack] = useState<OptCandidate[]>([]);
     const [farmCalib, setFarmCalib] = useState<FarmCalibration | null>(null);
     const [ehpCalib, setEhpCalib] = useState<EhpCalibration | null>(null);
+    const [edpsCalib, setEdpsCalib] = useState<EdpsCalibration | null>(null);
 
     useEffect(() => {
         if (!appliedMsg) return;
@@ -133,13 +136,20 @@ export default function OptimizerTab() {
                 );
                 setTTStats(stats);
 
-                // Farming / eHP: calibrate the model from the saved Battle Report.
+                // Calibrate the build's model from the chosen Battle Report: coins
+                // and survival always; eDPS when the report has damage by source.
                 const st = useGameStore.getState();
                 const report = activeBattleReport(st.battleReportText, st.importedBattles, st.battleReportChoice);
                 snap.farm = snap.metric === 'coins' ? buildFarmCalibration(snap, report) : undefined;
                 snap.ehp = snap.metric === 'ehp' ? buildEhpCalibration(snap, report) : undefined;
+                snap.edps = snap.metric === 'edps' ? buildEdpsCalibration(snap, report) ?? undefined : undefined;
                 setFarmCalib(snap.farm ?? null);
                 setEhpCalib(snap.ehp ?? null);
+                setEdpsCalib(snap.edps ?? null);
+                if (snap.edps) {
+                    // Smite at this run's proc rate (not the 100-hit cap).
+                    setSmitePct(Math.min(1, snap.edps.anchor.smite * snap.edps.smiteProcs) * 100);
+                }
 
                 // Only run the simulation for builds with verified scoring.
                 if (buildSupport.ready) {
@@ -203,7 +213,8 @@ export default function OptimizerTab() {
                 return true;
             }
             case 'mast': {
-                st.setCardMastery(c.label.replace(' Mastery', ''), level);
+                // Stones unlock the mastery (fromLv −1 = locked); its level is the lab's.
+                st.setCardMasteryUnlocked(c.label.replace(' Mastery', ''), level >= 0);
                 return true;
             }
             case 'assist': {
@@ -430,8 +441,8 @@ export default function OptimizerTab() {
                 </div>
             )}
 
-            {/* ── Farming / eHP: Battle Report + build breakdown ── */}
-            {(isFarming || isEhp) && <BattleReportPanel purpose={isEhp ? 'ehp' : 'farming'} />}
+            {/* ── Battle Report (calibrates every build) + build breakdown ── */}
+            {buildSupport.ready && <BattleReportPanel purpose={isEhp ? 'ehp' : isFarming ? 'farming' : 'edps'} />}
             {isFarming && farmCalib && <EconomyStats calib={farmCalib} />}
             {isEhp && ehpCalib && <EhpStats calib={ehpCalib} />}
 
@@ -497,9 +508,9 @@ export default function OptimizerTab() {
                                 </span>
                             </div>
 
-                            {currentEDPS !== null && (
-                                <div className="stat-pill">
-                                    <span className="stat-pill-label">eDPS</span>
+                            {currentEDPS !== null && !edpsCalib && (
+                                <div className="stat-pill" title="Model units — only the change between upgrades matters. Choose a run with damage data above to rank by your real damage.">
+                                    <span className="stat-pill-label">eDPS (model)</span>
                                     <span className="stat-pill-val gold" style={{ fontSize: '15px' }}>
                                         {currentEDPS.toExponential(3)}
                                     </span>
@@ -507,7 +518,9 @@ export default function OptimizerTab() {
                             )}
 
                             {smitePct > 0 && (
-                                <div className="stat-pill" title="CL+ Smite: % of each enemy's wave HP dealt over 100 hits (assumes the hit cap is reached). Separate from tower eDPS.">
+                                <div className="stat-pill" title={edpsCalib
+                                    ? `CL+ Smite: % of each enemy's wave HP dealt, at ${edpsCalib.smiteProcs.toFixed(1)} smites per enemy in your run (100 max).`
+                                    : "CL+ Smite: % of each enemy's wave HP dealt over 100 hits (assumes the hit cap is reached)."}>
                                     <span className="stat-pill-label">Smite (wave HP)</span>
                                     <span className="stat-pill-val" style={{ color: 'var(--purple)', fontSize: '15px' }}>
                                         {smitePct.toFixed(1)}%
@@ -558,9 +571,12 @@ export default function OptimizerTab() {
                 <div className="opt-warning-banner">
                     <span className="opt-warning-icon">⚠️</span>
                     <div>
-                        <strong>These upgrades are ranked for pure eDPS.</strong> They do not
-                        account for coin income. Some upgrades that boost eDPS can hurt your
-                        economy — for example, heavily investing in Poison Swamp or stacking
+                        <strong>These upgrades are ranked for pure eDPS.</strong>{' '}
+                        {edpsCalib
+                            ? 'Gains are a share of all the damage in your chosen run, so sources stones can’t change (like orbs) keep their real weight.'
+                            : 'Without a run that has damage data, gains come from the model alone and can over- or under-value some sources (Black Hole especially).'}
+                        {' '}They don&apos;t account for coin income: some upgrades that boost eDPS can
+                        hurt your economy — for example, heavily investing in Poison Swamp or stacking
                         too much slow/stun can reduce coin generation even though eDPS goes up.
                         Use your judgment alongside these suggestions.
                     </div>

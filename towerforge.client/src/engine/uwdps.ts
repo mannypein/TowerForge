@@ -462,6 +462,60 @@ export function calcGTMult(
 // Returned as a 0–1 fraction of wave HP. Because this scales with enemy HP
 // (not tower damage), it is reported separately rather than summed into eDPS.
 const SMITE_HIT_CAP = 100;
+// Black Hole deals a share of each enemy's health (the BH Damage lab),
+// not tower damage, so its damage grows with how much of the run the
+// holes cover: holes × uptime × size (the same reach the farming model
+// uses for Black Hole coins). Relative units — only ratios matter.
+export function calcBlackHoleReach(
+    uwData: UWData,
+    modBonuses: ModBonuses,
+    presetIdx: number,
+    wsData: WSPreset[],
+    labData: LabData,
+    cardData: CardData,
+): number {
+    const ud = uwData.data['BH'];
+    if (!ud?.own) return 0;
+    const b = modBonuses.uwBonus['BH'] ?? {};
+    const size = uwStatValue('BH', 0, ud.sv[0]) + (b.size ?? 0);
+    const dur = uwStatValue('BH', 1, ud.sv[1]) + (modBonuses.perks.bhExtraDur ?? 0) + (b.dur ?? 0);
+    const rawCD = uwStatValue('BH', 2, ud.sv[2]) || 999;
+    const mvnCD = getMultiverseNexusCombinedCD(uwData, modBonuses, labData, wsData, cardData, presetIdx);
+    const effCD = mvnCD > 0 ? mvnCD : calcEffCD(rawCD, b.cd ?? 0, modBonuses, wsData, labData, cardData, true, presetIdx);
+    const holes = 1 + ((labData['BH-Extra(unlock)'] ?? 0) >= 1 ? 1 : 0) + primordialCollapseExtraHoles(modBonuses);
+    return holes * Math.min(1, dur / Math.max(1, effCD)) * size;
+}
+
+// Chain Lightning's proc chance (0–1) and chain count, with module bonuses.
+export function calcCLChanceQty(uwData: UWData, modBonuses: ModBonuses): { chance: number; qty: number } {
+    const ud = uwData.data['CL'];
+    if (!ud?.own) return { chance: 0, qty: 0 };
+    const b = modBonuses.uwBonus['CL'] ?? {};
+    return {
+        chance: (uwStatValue('CL', 2, ud.sv[2]) + (b.chance ?? 0) * 100) / 100,
+        qty: uwStatValue('CL', 1, ud.sv[1]) + (b.qty ?? 0) + dimensionCoreExtraHits(modBonuses),
+    };
+}
+
+// Consume (BH+): each hole ends by dealing this share of the wave's enemy
+// health to every enemy inside (0.05 = 5%). 0 without BH+.
+export function calcConsumeFraction(uwData: UWData): number {
+    const ud = uwData.data['BH'];
+    if (!ud?.own || !ud.upOwn) return 0;
+    const plus = UW_PLUS_DATA['BH'];
+    const lv = Math.min(ud.upLvl ?? 0, (plus?.vals.length ?? 1) - 1);
+    return (parseFloat(plus?.vals[lv] ?? '0') || 0) / 100;
+}
+
+// Smite (CL+): share of the wave's enemy health dealt per proc (0.0005 = 0.05%).
+export function calcSmitePerProc(uwData: UWData): number {
+    const cl = uwData.data['CL'];
+    if (!cl?.own || !cl?.upOwn) return 0;
+    const smite = UW_PLUS_DATA['CL'];
+    const lv = Math.min(cl.upLvl ?? 0, (smite?.vals.length ?? 1) - 1);
+    return (parseFloat(smite?.vals[lv] ?? '0') || 0) / 100;
+}
+
 export function calcSmiteWaveHPFraction(uwData: UWData): number {
     const cl = uwData.data['CL'];
     if (!cl?.own || !cl?.upOwn) return 0;
@@ -475,7 +529,7 @@ export function calcSmiteWaveHPFraction(uwData: UWData): number {
 // SL-Missiles lab makes Spotlight fire Smart Missiles on a timer.
 // Cooldown = 20 - labLevel (19s at Lv1 → 2s at Lv18)
 // Each missile does SM-damage, hits only enemies in SL coverage.
-function calcSpotlightMissilesDPS(
+export function calcSpotlightMissilesDPS(
     uwData: UWData,
     modBonuses: ModBonuses,
     refTTT: number,

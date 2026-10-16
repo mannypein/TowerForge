@@ -52,6 +52,7 @@ export const GC_SCORING = {
     altMinScoreRatio: 0.80,   // alts must score >= 80% of top pick to be shown
     altMaxCount: 3,      // max alternative suggestions per step
     comboBudgetTopN: 8,      // top-N singles considered for 2-upgrade combos
+    minGainPct: 0.001,       // paths stop at upgrades worth less than this (% of the build's metric)
 } as const;
 
 // ── Non-GC Optimizer Weights ──────────────────────────────────

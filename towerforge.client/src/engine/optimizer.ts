@@ -12,6 +12,17 @@
 //  All state passed as parameters.
 // ============================================================
 //
+// Audit 2026-10-16 (checked against the wiki and a real account's runs):
+//  • Glass Cannon is scored by engine/edps.ts when the chosen run has damage
+//    by source: each source weighted by what it really dealt (orbs and other
+//    fixed sources dilute UW gains), Black Hole by reach (it deals % of enemy
+//    health), Smite at the run's proc rate, Consume on kills inside BH. The
+//    uncalibrated model below is the fallback; its absolute eDPS isn't real.
+//  • Card mastery: stones only unlock (Lv 0); levels come from labs.
+//  • Assist: Substat stones stop at 70%, Main Effect at 100% (130% w/ labs).
+//  • UW stat values and stone costs match the wiki for all 27 stats.
+//  • Paths skip upgrades worth < GC_SCORING.minGainPct.
+//
 // ┌──────────────────────────────────────────────────────────┐
 // │  GLASS CANNON OPTIMIZER — STATUS & HANDOFF (2026-06-25)   │
 // └──────────────────────────────────────────────────────────┘
@@ -111,6 +122,8 @@ import { coinRate } from './farming';
 import type { FarmCalibration } from './farming';
 import { ehpScore } from './ehp';
 import type { EhpCalibration } from './ehp';
+import { edpsScore } from './edps';
+import type { EdpsCalibration } from './edps';
 import {
     WS_COIN_PER_KILL, WS_COIN_PER_WAVE, WS_HEALTH, WS_HEALTH_REGEN, WS_DEFENSE_PCT,
     WS_DEFENSE_ABSOLUTE, WS_THORNS, WS_WALL_HEALTH, WS_RECOVERY_AMOUNT, WS_MAX_RECOVERY, WS_PACKAGE_CHANCE,
@@ -167,6 +180,9 @@ export interface OptimizerSnapshot {
     metric?: 'edps' | 'coins' | 'ehp';
     farm?: FarmCalibration;
     ehp?: EhpCalibration;
+    // eDPS weighted by a run's real damage by source (engine/edps.ts). Without
+    // it, eDPS is the uncalibrated UW model.
+    edps?: EdpsCalibration;
 }
 
 // ── Deep Clone Snapshot ───────────────────────────────────────
@@ -217,6 +233,7 @@ function getEDPS(snap: OptimizerSnapshot): number {
 function getScore(snap: OptimizerSnapshot): number {
     if (snap.metric === 'coins' && snap.farm) return coinRate(snap, snap.farm);
     if (snap.metric === 'ehp' && snap.ehp) return ehpScore(snap, snap.ehp);
+    if (snap.edps) return edpsScore(snap, snap.edps);
     return getEDPS(snap);
 }
 
@@ -312,7 +329,7 @@ export function buildCandidates(
                 after.uwData.data[uw.a]!.upLvl = 0;
                 // CL+ Smite is %wave-HP (not tower eDPS); score by the gain in
                 // wave-HP% dealt per enemy instead of the eDPS delta.
-                const delta = uw.a === 'CL' && isEdps
+                const delta = uw.a === 'CL' && isEdps && !snap.edps
                     ? (calcSmiteWaveHPFraction(after.uwData) - calcSmiteWaveHPFraction(snap.uwData)) * 100
                     : edpsDeltaPct(basEDPS, getScore(after));
 
@@ -349,13 +366,15 @@ export function buildCandidates(
                     0,
                 );
                 const newTTT = tttData.ttt + deltaTTT;
-                const afterEDPS = calcTowerEDPS(
-                    snap.uwData, snap.modBonuses, newTTT,
-                    snap.presetIdx, snap.wsData, snap.labData,
-                    snap.cardData, snap.moduleState,
-                    snap.relicData, snap.enhData,
-                    snap.botData,
-                );
+                const afterEDPS = snap.edps
+                    ? edpsScore(snap, snap.edps, newTTT)
+                    : calcTowerEDPS(
+                        snap.uwData, snap.modBonuses, newTTT,
+                        snap.presetIdx, snap.wsData, snap.labData,
+                        snap.cardData, snap.moduleState,
+                        snap.relicData, snap.enhData,
+                        snap.botData,
+                    );
                 const delta = edpsDeltaPct(basEDPS, afterEDPS);
                 candidates.push({
                     category: 'uwp',
@@ -374,7 +393,7 @@ export function buildCandidates(
             const after = cloneSnapshot(snap);
             after.uwData.data[uw.a]!.upLvl = curLv + 1;
             // CL+ Smite is %wave-HP, not tower eDPS — score by the wave-HP% gain.
-            const delta = uw.a === 'CL' && isEdps
+            const delta = uw.a === 'CL' && isEdps && !snap.edps
                 ? (calcSmiteWaveHPFraction(after.uwData) - calcSmiteWaveHPFraction(snap.uwData)) * 100
                 : edpsDeltaPct(basEDPS, getScore(after));
 
@@ -393,41 +412,33 @@ export function buildCandidates(
     }
 
     // ── Card Mastery Unlocks ───────────────────────────────────
-    // Mastery is a single stone-cost unlock per card, not a per-level
-    // spend — once purchased it climbs to max for free. Score the
-    // full jump from the current level straight to max (9) against
-    // that one-time cost, rather than generating a candidate per level.
+    // Stones only UNLOCK a mastery, at its first value (level 0). Levels 1–9
+    // come from that card's mastery lab afterwards (coins and weeks of lab
+    // time), so an unlocked mastery has nothing left to buy with stones.
+    // fromLv −1 = locked; toLv = the lab level it unlocks at (0 until labbed).
     if (cat === 'mast') {
         const activeNames = new Set(snap.cardData.presets[snap.presetIdx] ?? []);
-        // Mastery is a one-time stone unlock (mu) that then climbs to its max
-        // in-game level for free, so we score the jump straight to max (Lv 9 =
-        // CARD_MASTERY_VALS index 9) against that single cost.
-        const MAX_MASTERY_LV = 9;
 
         for (const [cardName] of CARDS) {
             const entry = snap.cardData.data[cardName];
             if (!entry || entry.s < 7) continue;       // must be 7★
             if (!activeNames.has(cardName)) continue;   // must be active in preset
-
-            const unlocked = entry.mu ?? false;
-            const curLv = entry.m ?? 0;
-            if (unlocked && curLv >= MAX_MASTERY_LV) continue;  // already maxed
+            if (entry.mu) continue;                     // already unlocked
 
             const cost = CARD_MASTERY_STONE_COSTS[cardName];
             if (!cost) continue;
 
+            const labLv = entry.m ?? 0;
             const after = cloneSnapshot(snap);
             after.cardData.data[cardName]!.mu = true;
-            after.cardData.data[cardName]!.m = MAX_MASTERY_LV;
-            const afterEDPS = getScore(after);
-            const delta = edpsDeltaPct(basEDPS, afterEDPS);
+            const delta = edpsDeltaPct(basEDPS, getScore(after));
 
             candidates.push({
                 category: 'mast',
                 label: `${cardName} Mastery`,
-                subLabel: unlocked ? `Lv ${curLv} → ${MAX_MASTERY_LV}` : `Unlock → Lv ${MAX_MASTERY_LV}`,
-                fromLv: curLv,
-                toLv: MAX_MASTERY_LV,
+                subLabel: `Unlock (Lv ${labLv}) — more levels come from labs`,
+                fromLv: -1,
+                toLv: labLv,
                 cost,
                 costType: 'stones',
                 scorePct: delta,
@@ -437,14 +448,18 @@ export function buildCandidates(
     }
 
     // ── Assist Module Stones ───────────────────────────────────
-    // Total % = stone % + lab level. Labs provide passive %, stones provide active %.
-    // Cost to upgrade stones: (stonePct + 1) × 3, where stonePct = totalPct - labLevel.
+    // Efficiency % = 1% base + stone levels + Assist lab levels (labs add up
+    // to 30%). The k-th stone level costs 15 + 3k — with the base, 12 + 3 ×
+    // (base + stone %). Substat Efficiency stones stop at 70% (the wiki's
+    // per-slot total matches: unlock + rarities 4,600 + 2 × 8,073 = 20,746,
+    // i.e. 69 stone levels each). Main Effect Efficiency caps at 130% since
+    // v27.1, so its stones go to 100% — not yet checked in game.
     // Every assist slot is scored in the build's metric: main effects (cannon
     // damage, armor health, generator coins, core UW damage), sub-effects and
     // unique effects all flow into eDPS, coins and survival.
     if (cat === 'assist') {
         const ASSIST_TYPES = ['cannon', 'armor', 'generator', 'core'];
-        const ASSIST_STONE_CAP = 100;
+        const ASSIST_STONE_MAX = { multEff: 100, subEff: 70 };   // base 1% + stone levels
 
         for (const type of ASSIST_TYPES) {
             const ad = snap.moduleState.assistData[type] ?? { rarity: 'locked', multEff: 0, subEff: 0 };
@@ -453,11 +468,12 @@ export function buildCandidates(
             const labMultLv = snap.labData?.[labMultName] ?? 0;
             const labSubLv = snap.labData?.[labSubName] ?? 0;
 
-            // Mult Eff upgrade — cost = 12 + (stoneLevel × 3), only if unlocked
-            if ((ad.rarity !== 'locked') && (ad.multEff ?? 0) < ASSIST_STONE_CAP) {
+            // Mult Eff upgrade — only while unlocked and stones haven't hit 70%
+            const multEffStone = (ad.multEff ?? 0) - labMultLv;   // base 1% + stone levels
+            if (ad.rarity !== 'locked' && multEffStone < ASSIST_STONE_MAX.multEff) {
                 const totalPct = ad.multEff ?? 0;
-                const stoneLv = totalPct - labMultLv;
-                const cost = 12 + stoneLv * 3;
+                const stoneLv = multEffStone;
+                const cost = 12 + Math.max(1, stoneLv) * 3;
                 const after = cloneSnapshot(snap);
                 after.moduleState.assistData[type] = { ...ad, multEff: totalPct + 1 };
                 // Recalculate modBonuses since assist multEff changed
@@ -470,7 +486,7 @@ export function buildCandidates(
                 candidates.push({
                     category: 'assist',
                     label: `${type.charAt(0).toUpperCase() + type.slice(1)} Assist — Mult Eff`,
-                    subLabel: `${totalPct}% → ${totalPct + 1}% (${stoneLv}% stones + ${labMultLv}% lab)`,
+                    subLabel: `${totalPct}% → ${totalPct + 1}% (stones ${Math.max(0, stoneLv - 1)}/99, lab ${labMultLv})`,
                     fromLv: totalPct,
                     toLv: totalPct + 1,
                     cost,
@@ -480,11 +496,12 @@ export function buildCandidates(
                 });
             }
 
-            // Substat Eff upgrade — cost = 12 + (stoneLevel × 3), only if unlocked
-            if ((ad.rarity !== 'locked') && (ad.subEff ?? 0) < ASSIST_STONE_CAP) {
+            // Substat Eff upgrade — only while unlocked and stones haven't hit 70%
+            const subEffStone = (ad.subEff ?? 0) - labSubLv;   // base 1% + stone levels
+            if (ad.rarity !== 'locked' && subEffStone < ASSIST_STONE_MAX.subEff) {
                 const totalPct = ad.subEff ?? 0;
-                const stoneLv = totalPct - labSubLv;
-                const cost = 12 + stoneLv * 3;
+                const stoneLv = subEffStone;
+                const cost = 12 + Math.max(1, stoneLv) * 3;
                 const after = cloneSnapshot(snap);
                 after.moduleState.assistData[type] = { ...ad, subEff: totalPct + 1 };
                 // Recalculate modBonuses since assist subEff changed
@@ -497,7 +514,7 @@ export function buildCandidates(
                 candidates.push({
                     category: 'assist',
                     label: `${type.charAt(0).toUpperCase() + type.slice(1)} Assist — Substat Eff`,
-                    subLabel: `${totalPct}% → ${totalPct + 1}% (${stoneLv}% stones + ${labSubLv}% lab)`,
+                    subLabel: `${totalPct}% → ${totalPct + 1}% (stones ${Math.max(0, stoneLv - 1)}/69, lab ${labSubLv})`,
                     fromLv: totalPct,
                     toLv: totalPct + 1,
                     cost,
@@ -799,10 +816,7 @@ export function applyUpgrade(
 
         case 'mast': {
             const cardName = c.label.replace(' Mastery', '');
-            if (snap.cardData.data[cardName]) {
-                snap.cardData.data[cardName]!.mu = true;
-                snap.cardData.data[cardName]!.m = c.toLv;
-            }
+            if (snap.cardData.data[cardName]) snap.cardData.data[cardName]!.mu = true;
             break;
         }
 
@@ -872,6 +886,9 @@ export function applyUpgrade(
     }
 }
 
+// An upgrade worth recommending: a real gain, not rounding noise.
+const worthIt = (c: OptCandidate) => c.scorePct >= GC_SCORING.minGainPct;
+
 // ============================================================
 //  SIMULATE CATEGORY PATH
 //  Runs the full simulation for one optimizer panel.
@@ -886,12 +903,11 @@ export function simulateCategoryPath(
     const state = cloneSnapshot(snapshot);
 
     for (let i = 0; i < steps; i++) {
-        const candidates = buildCandidates(state, cat);
+        // Upgrades worth almost nothing (< minGainPct) aren't recommended.
+        const candidates = buildCandidates(state, cat).filter(worthIt);
         if (!candidates.length) break;
 
         const best = candidates[0];
-        // All categories are eDPS-scored for GC now — stop once the best
-        // remaining upgrade yields no gain.
         if (best.scorePerCost <= 0) break;
 
         path.push(best);
@@ -925,6 +941,7 @@ export function simulateStonePath(
     for (let i = 0; i < steps; i++) {
         const candidates = STONE_CATEGORIES
             .flatMap(cat => buildCandidates(state, cat))
+            .filter(worthIt)
             .sort((a, b) => b.scorePerCost - a.scorePerCost);
 
         if (!candidates.length) break;

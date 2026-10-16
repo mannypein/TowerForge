@@ -459,9 +459,24 @@ function battleToReport(b: Raw): BattleReport {
         eliteKills: num(b.TotalElites),
         fleetKills: num(b.TotalCommanders) + num(b.TotalSaboteurs) + num(b.TotalOvercharges),
         cashEarned: num(b.CashEarned),
+        projectileCount: num(b.ProjectilesCount),
         clHits: num(b.EnemiesHitByChainLightningThisRound),
         psHits: num(b.EnemiesHitByPoisonSwampThisRound),
         orbHits: num(b.OrbHits),
+        damage: num(b.DamageDealt) > 0 ? {
+            total: num(b.DamageDealt),
+            chainLightning: num(b.ChainLightningDamage),
+            smartMissiles: num(b.SmartMissileDamage),
+            deathWave: num(b.DeathWaveDamage),
+            innerLandMines: num(b.InnerLandMineDamage),
+            poisonSwamp: num(b.SwampDamage),
+            blackHole: num(b.BlackHoleDamage),
+            orbs: num(b.OrbDamage),
+            projectiles: num(b.ProjectilesDamage),
+            rendArmor: num(b.RendArmorDamage),
+            landMines: num(b.LandMineDamage),
+            thorns: num(b.ThornDamage),
+        } : undefined,
     };
 }
 

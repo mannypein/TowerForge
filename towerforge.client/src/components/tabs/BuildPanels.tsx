@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { useGameStore } from '../../store/useGameStore';
 import { activeBattleReport, parseBattleReport } from '../../engine/battleReport';
+import type { BattleReport } from '../../engine/battleReport';
 import { isRealRun } from '../../engine/gameExport';
 import { FARM_EFFECTS, FARM_EFFECT_LABELS } from '../../engine/farming';
 import type { FarmCalibration } from '../../engine/farming';
@@ -23,7 +24,20 @@ const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
 
 // ── Battle Report input ───────────────────────────────────────
 // One saved report calibrates both builds; `purpose` only changes the copy.
-export function BattleReportPanel({ purpose }: { purpose: 'farming' | 'ehp' }) {
+// Damage by source, biggest first, as "Orbs 88% · CL 8.9% · …".
+function damageLine(d: NonNullable<BattleReport['damage']>): string {
+    const rows: [string, number][] = [
+        ['Orbs', d.orbs], ['Chain Lightning', d.chainLightning], ['Black Hole', d.blackHole],
+        ['Tower shots', d.projectiles], ['Thorns', d.thorns], ['Poison Swamp', d.poisonSwamp],
+        ['Rend Armor', d.rendArmor], ['Smart Missiles', d.smartMissiles], ['Inner Land Mines', d.innerLandMines],
+        ['Death Wave', d.deathWave], ['Land Mines', d.landMines],
+    ];
+    const listed = rows.filter(([, v]) => v / d.total >= 0.001).sort((a, b) => b[1] - a[1]);
+    const rest = 1 - listed.reduce((t, [, v]) => t + v / d.total, 0);
+    return [...listed.map(([k, v]) => `${k} ${pct(v / d.total)}`), ...(rest >= 0.001 ? [`other ${pct(rest)}`] : [])].join(' · ');
+}
+
+export function BattleReportPanel({ purpose }: { purpose: 'farming' | 'ehp' | 'edps' }) {
     const text = useGameStore(s => s.battleReportText);
     const setText = useGameStore(s => s.setBattleReportText);
     const imported = useGameStore(s => s.importedBattles);
@@ -54,7 +68,7 @@ export function BattleReportPanel({ purpose }: { purpose: 'farming' | 'ehp' }) {
         <div className="section" style={{ marginBottom: '12px' }}>
             <div className="section-head">
                 <h3>Battle Report</h3>
-                {report && <span className="s-badge">Calibrated</span>}
+                {report && (purpose !== 'edps' || report.damage) && <span className="s-badge">Calibrated</span>}
             </div>
             <div className="section-body" style={{ padding: '10px 14px' }}>
                 {runs.length > 0 && !editing && (
@@ -80,7 +94,13 @@ export function BattleReportPanel({ purpose }: { purpose: 'farming' | 'ehp' }) {
                             Tier {report.tier} · Wave {report.wave.toLocaleString()} · {fmtBig(report.coinsPerHour)} coins/hour
                             {report.date ? ` · ${report.date}` : ''}
                         </p>
-                        {purpose === 'ehp' ? (
+                        {purpose === 'edps' ? (
+                            <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginTop: '6px', lineHeight: 1.6 }}>
+                                {report.damage
+                                    ? <>Damage dealt: {damageLine(report.damage)}</>
+                                    : 'This report has no damage breakdown, so eDPS uses the model alone. Import your game data and pick one of its runs to rank by your real damage.'}
+                            </p>
+                        ) : purpose === 'ehp' ? (
                             <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginTop: '6px', lineHeight: 1.6 }}>
                                 {report.recoveryPackages.toLocaleString()} recovery packages ·{' '}
                                 thorns made {pct(report.totalEnemies > 0 ? report.thornsKills / report.totalEnemies : 0)} of kills
@@ -110,7 +130,9 @@ export function BattleReportPanel({ purpose }: { purpose: 'farming' | 'ehp' }) {
                         <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginBottom: '8px', lineHeight: 1.6 }}>
                             {purpose === 'ehp'
                                 ? 'Paste the Battle Report from a recent run (copy it from the game’s run stats when the run ends). It tells the optimizer how often you really get recovery packages and how much of the killing your thorns do.'
-                                : 'Paste the Battle Report from a recent farming run (copy it from the game’s run stats when the run ends). It tells the optimizer how many of your kills each coin effect actually covers, and how much Golden Combo and Wave Skip add.'}
+                                : purpose === 'edps'
+                                    ? 'Import your game data and pick a run, or paste a Battle Report. The damage each source dealt in that run weights the eDPS ranking — e.g. if orbs did most of the damage, a Chain Lightning upgrade counts for less.'
+                                    : 'Paste the Battle Report from a recent farming run (copy it from the game’s run stats when the run ends). It tells the optimizer how many of your kills each coin effect actually covers, and how much Golden Combo and Wave Skip add.'}
                             {' '}Without it, the results use rough estimates.
                         </p>
                         <textarea

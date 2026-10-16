@@ -1,7 +1,7 @@
 // ============================================================
 //  TowerForge Companion — Battle Report Parser
 //  Reads the end-of-run "Battle Report" text players copy from the
-//  game, so the Farming optimizer can calibrate to their real runs.
+//  game, so the optimizer can calibrate to their real runs.
 //
 //  The report is "Label<TAB>Value" lines grouped under section
 //  headers (lines with no value). Labels repeat across sections
@@ -24,6 +24,22 @@ export function parseDuration(raw: string): number {
 function parseBracketPct(raw: string): number | null {
     const m = raw.match(/\[([\d.]+)%\]/);
     return m ? parseFloat(m[1]) / 100 : null;
+}
+
+// Damage dealt in the run, by source (same units as the game's report).
+export interface DamageBreakdown {
+    total: number;
+    chainLightning: number;
+    smartMissiles: number;
+    deathWave: number;
+    innerLandMines: number;
+    poisonSwamp: number;
+    blackHole: number;
+    orbs: number;
+    projectiles: number;
+    rendArmor: number;
+    landMines: number;
+    thorns: number;
 }
 
 export interface BattleReport {
@@ -63,9 +79,11 @@ export interface BattleReport {
     eliteKills?: number;        // Vampire + Ray + Scatter
     fleetKills?: number;        // Commander + Saboteur + Overcharge
     cashEarned?: number;
-    clHits?: number;            // enemies hit by Chain Lightning
+    projectileCount?: number;   // tower shots fired
+    clHits?: number;            // enemies hit by Chain Lightning (each counted once)
     psHits?: number;            // enemies hit by Poison Swamp
     orbHits?: number;
+    damage?: DamageBreakdown;   // damage by source (calibrates Glass Cannon)
 }
 
 type Sections = Record<string, Record<string, string>>;
@@ -118,6 +136,29 @@ export function parseBattleReport(text: string): BattleReport | null {
     };
     const pct = (key: string) => (effect[key] ? parseBracketPct(effect[key]) : null);
 
+    // Damage lines can sit in any section; match their labels loosely
+    // ("Chain Lightning Damage", "Chain Lightning" under a Damage header…).
+    const all = Object.entries(s).flatMap(([sec, rows]) => Object.entries(rows).map(([k, v]) => [`${sec} ${k}`.toLowerCase(), k.toLowerCase(), v] as const));
+    const dmg = (...names: string[]) => {
+        const hit = all.find(([full, label]) => names.some(n => label === n || (full.includes('damage') && label === n.replace(/ damage$/, ''))));
+        return hit ? num(hit[2]) : 0;
+    };
+    const total = dmg('damage dealt');
+    const damage = total > 0 ? {
+        total,
+        chainLightning: dmg('chain lightning damage'),
+        smartMissiles: dmg('smart missile damage', 'smart missiles damage'),
+        deathWave: dmg('death wave damage'),
+        innerLandMines: dmg('inner land mine damage', 'inner land mines damage'),
+        poisonSwamp: dmg('swamp damage', 'poison swamp damage'),
+        blackHole: dmg('black hole damage'),
+        orbs: dmg('orb damage'),
+        projectiles: dmg('projectiles damage'),
+        rendArmor: dmg('rend armor damage'),
+        landMines: dmg('land mine damage'),
+        thorns: dmg('thorn damage'),
+    } : undefined;
+
     return {
         date: top['Battle Date'] ?? '',
         tier: num(top['Tier']),
@@ -146,6 +187,8 @@ export function parseBattleReport(text: string): BattleReport | null {
             criticalCoin: num(coins['Critical Coin']),
             fetched: num(coins['Coins Fetched']),
         },
+        damage,
+        projectileCount: dmg('projectiles count') || undefined,
     };
 }
 
