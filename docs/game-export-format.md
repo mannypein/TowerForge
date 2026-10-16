@@ -20,6 +20,29 @@ notes below are the expected layout, not yet verified.
 
 ---
 
+## The file's format, and PDFs
+
+The export is pretty-printed JSON: ~29,000 lines, none longer than ~63
+characters (a real account, 600 KB). Some players end up with it as a **PDF**
+(their phone printed it or "saved as PDF"). Import accepts PDFs too
+(`engine/pdfImport.ts`), after a warning that it might not work:
+
+- pdf.js (loaded only for PDFs) reads the text one line at a time;
+- headers / footers printing adds to every page (date, file path + "3/448",
+  Chrome's "Pretty-print" label) are dropped: lines near a page's top or
+  bottom that aren't a JSON line and start the same way at the same height on
+  at least half the pages — a real JSON line is never dropped;
+- the lines are joined and parsed; if that fails (a line wrapped mid-value),
+  they're joined without breaks and parsed again.
+
+Checked on Chrome's and Edge's "Save as PDF" of a full real export (448 pages,
+with and without headers): identical data back, in ~0.5–0.8 s. A minified copy
+printed with wrapped lines also imports; the only loss was spaces where a line
+wrapped ("Preset 1" → "Preset1", treated as a default name). A file named
+`.json` that's really a PDF is detected by its `%PDF` start.
+
+---
+
 ## File info
 
 | Field | Status | Notes |

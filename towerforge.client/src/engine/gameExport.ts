@@ -390,7 +390,8 @@ function parseModules(raw: Raw, labs: LabData | null): ModuleImport | null {
 // name if the player set one, else its workshop preset's name. A name already
 // used by an earlier preset (or a default "Preset N") is left blank.
 function parsePresetNames(raw: Raw): string[] {
-    const isDefault = (n: string) => !n.trim() || /^preset \d+$/i.test(n.trim());
+    // "Preset1" too: a PDF that wrapped the line can drop the space.
+    const isDefault = (n: string) => !n.trim() || /^preset ?\d+$/i.test(n.trim());
     const wsNames = arr(raw.WorkshopPresetName).map(n => String(n ?? ''));
     const used = new Set<string>();
     return Array.from({ length: APP_PRESETS }, (_, i) => {

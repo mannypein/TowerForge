@@ -10,6 +10,7 @@ import type { TabName } from './types/gameTypes';
 import { parseCloudSave } from './engine/saveParser';
 import { isGameExport, parseGameExport } from './engine/gameExport';
 import { trackEvent, trackTabView } from './analytics';
+import { isPdfFile, jsonFromPdf, looksLikePdf } from './engine/pdfImport';
 import CurrencyBar from './components/common/CurrencyBar';
 
 // ── Tab Components (stubs for now — filled in one by one) ────
@@ -53,6 +54,7 @@ const TABS: { id: TabName; label: string }[] = [
 
 export default function App() {
     const [showLoginModal, setShowLoginModal] = useState(false);
+    const [pdfBusy, setPdfBusy] = useState(false);
     // ?share=CODE opens the read-only viewer instead of the app shell.
     const [shareCode] = useState(() => new URLSearchParams(window.location.search).get('share'));
     const activeTab = useGameStore(s => s.activeTab);
@@ -83,7 +85,12 @@ export default function App() {
     // backup files still import too.
     function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
         const file = e.target.files?.[0];
+        e.target.value = '';
         if (!file) return;
+        if (isPdfFile(file)) {
+            void importPdf(file);
+            return;
+        }
         const reader = new FileReader();
         reader.onload = (ev) => {
             const text = ev.target?.result as string;
@@ -91,44 +98,74 @@ export default function App() {
             try {
                 json = JSON.parse(text);
             } catch {
-                alert('Import failed — that file isn’t valid JSON.');
+                // A PDF saved with a .json name — offer to read it as a PDF.
+                if (looksLikePdf(text)) void importPdf(file);
+                else alert('Import failed — that file isn’t valid JSON.');
                 return;
             }
-
-            if (isGameExport(json)) {
-                const imp = parseGameExport(json);
-                applyGameImport(imp, json);
-                trackEvent('Import game data');
-                const lines = [
-                    '✓ Imported from your game data:',
-                    '• Currencies',
-                    `• Tier progress${imp.highestTier ? ` (up to Tier ${imp.highestTier})` : ''}`,
-                    ...(imp.userName ? [`• Player name${imp.league ? `, ${imp.league} league` : ''}${imp.presetNames.some(n => n) ? ', preset names' : ''}`] : []),
-                    `• ${imp.battles.length} recent battles — used to calibrate the Farming and eHP optimizer`,
-                    ...(imp.workshop ? ['• Workshop upgrades for all 5 presets (matched to your game presets)'] : []),
-                    ...(imp.enhancements ? ['• Workshop enhancements (per preset)'] : []),
-                    ...(imp.uws ? ['• Ultimate weapons and UW+ levels'] : []),
-                    ...(imp.cards ? [`• Cards: stars, masteries and presets${imp.cardSlots > 0 ? ` (${imp.cardSlots} slots)` : ''}`] : []),
-                    ...(imp.bannedPerks ? ['• Banned perks'] : []),
-                    ...(imp.labs ? [`• ${Object.keys(imp.labs).length} labs`] : []),
-                    ...(imp.modules ? [
-                        `• Modules: ${imp.modules.state.library.length} unique modules, ${imp.modules.state.loadouts.length} presets, assist slots and slot levels`,
-                    ] : []),
-                    ...(imp.modules?.unnamed.length ? [
-                        `  (${imp.modules.unnamed.length} more unique modules aren’t identified yet — those were skipped)`,
-                    ] : []),
-                    '',
-                    'Not imported yet: bots and relics.',
-                    'The game file doesn’t include bots, and we’re still confirming the rest, so what you entered there was left as it is.',
-                ];
-                alert(lines.join('\n'));
-                return;
-            }
-
-            if (!importData(text)) alert('Import failed — this isn’t a game data export or a TowerForge backup.');
+            importJson(json, text, 'json');
         };
         reader.readAsText(file);
-        e.target.value = '';
+    }
+
+    // The game's data file can end up as a PDF (printed or "saved as PDF" on
+    // a phone). Warn, then try to read the JSON text back out of it.
+    async function importPdf(file: File) {
+        const tryIt = confirm(
+            'This is a PDF file. Import is made for the game’s data file (tool_export.json), so reading a PDF might not work, or might miss some data.\n\n'
+            + 'Try it anyway?',
+        );
+        if (!tryIt) return;
+        setPdfBusy(true);
+        try {
+            const json = await jsonFromPdf(await file.arrayBuffer());
+            importJson(json, JSON.stringify(json), 'pdf');
+        } catch (err) {
+            const why = err instanceof Error ? err.message : String(err);
+            alert(
+                'Couldn’t read your game data from that PDF.\n\n'
+                + `${why}\n\n`
+                + 'Tip: when you export from the game, save or share the file itself (tool_export.json) instead of printing it or saving it as a PDF.',
+            );
+        } finally {
+            setPdfBusy(false);
+        }
+    }
+
+    // Imports parsed data: the game's export, else a TowerForge backup.
+    function importJson(json: unknown, text: string, source: 'json' | 'pdf') {
+        if (isGameExport(json)) {
+            const imp = parseGameExport(json);
+            applyGameImport(imp, json);
+            trackEvent(source === 'pdf' ? 'Import game data (PDF)' : 'Import game data');
+            const lines = [
+                '✓ Imported from your game data:',
+                '• Currencies',
+                `• Tier progress${imp.highestTier ? ` (up to Tier ${imp.highestTier})` : ''}`,
+                ...(imp.userName ? [`• Player name${imp.league ? `, ${imp.league} league` : ''}${imp.presetNames.some(n => n) ? ', preset names' : ''}`] : []),
+                `• ${imp.battles.length} recent battles — used to calibrate the Farming and eHP optimizer`,
+                ...(imp.workshop ? ['• Workshop upgrades for all 5 presets (matched to your game presets)'] : []),
+                ...(imp.enhancements ? ['• Workshop enhancements (per preset)'] : []),
+                ...(imp.uws ? ['• Ultimate weapons and UW+ levels'] : []),
+                ...(imp.cards ? [`• Cards: stars, masteries and presets${imp.cardSlots > 0 ? ` (${imp.cardSlots} slots)` : ''}`] : []),
+                ...(imp.bannedPerks ? ['• Banned perks'] : []),
+                ...(imp.labs ? [`• ${Object.keys(imp.labs).length} labs`] : []),
+                ...(imp.modules ? [
+                    `• Modules: ${imp.modules.state.library.length} unique modules, ${imp.modules.state.loadouts.length} presets, assist slots and slot levels`,
+                ] : []),
+                ...(imp.modules?.unnamed.length ? [
+                    `  (${imp.modules.unnamed.length} more unique modules aren’t identified yet — those were skipped)`,
+                ] : []),
+                '',
+                'Not imported yet: bots and relics.',
+                'The game file doesn’t include bots, and we’re still confirming the rest, so what you entered there was left as it is.',
+                ...(source === 'pdf' ? ['', 'Read from a PDF — if something looks off, import the tool_export.json file itself.'] : []),
+            ];
+            alert(lines.join('\n'));
+            return;
+        }
+
+        if (!importData(text)) alert('Import failed — this isn’t a game data export or a TowerForge backup.');
     }
 
     // ── Cloud save pull handler ──────────────────────────────────
@@ -195,6 +232,9 @@ export default function App() {
 
     return (
         <div className="app-shell">
+            {pdfBusy && (
+                <div className="opt-apply-toast" role="status">Reading the PDF… this can take a few seconds.</div>
+            )}
             {/* ── Header ── */}
             <header className="app-header">
                 <div className="app-logo">
@@ -212,7 +252,7 @@ export default function App() {
                         ⬆ Import Game Data
                         <input
                             type="file"
-                            accept=".json"
+                            accept=".json,application/json,.pdf,application/pdf"
                             style={{ display: 'none' }}
                             onChange={handleImport}
                         />

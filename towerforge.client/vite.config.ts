@@ -46,6 +46,18 @@ export default defineConfig({
     define: {
         __APP_VERSION__: JSON.stringify(appVersion),
     },
+    build: {
+        rollupOptions: {
+            output: {
+                // pdf.js's worker ships as .mjs; nginx serves .mjs as a plain
+                // download, which browsers won't run as a module worker. A .js
+                // name gets the JavaScript type.
+                assetFileNames: (asset) => asset.names?.some(n => n.endsWith('.mjs'))
+                    ? 'assets/[name]-[hash].js'
+                    : 'assets/[name]-[hash][extname]',
+            },
+        },
+    },
     resolve: {
         alias: {
             '@': fileURLToPath(new URL('./src', import.meta.url))
