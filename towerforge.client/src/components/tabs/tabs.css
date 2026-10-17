@@ -2363,10 +2363,25 @@
     overflow-wrap: anywhere;
 }
 
+.cc-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 10px;
+    font-size: 12px;
+    color: var(--text-dim);
+    overflow-wrap: anywhere;
+}
+
 .cc-id {
     font-family: var(--font-mono);
     font-size: 11px;
-    color: var(--text-dim);
+}
+
+.cc-about {
+    margin-top: 2px;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--text);
 }
 
 .cc-links {
@@ -2463,3 +2478,4 @@
     .cc-link[data-site="discord"] { --site: #5865f2; }
     .cc-link[data-site="reddit"] { --site: #ff4500; }
     .cc-link[data-site="x"] { --site: var(--text-bright); }
+    .cc-link[data-site="github"] { --site: var(--text-bright); }

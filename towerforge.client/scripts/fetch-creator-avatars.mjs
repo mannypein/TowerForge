@@ -10,7 +10,7 @@
 // ============================================================
 
 import { mkdir, readdir, unlink, writeFile } from 'node:fs/promises';
-import { CREATORS, creatorSlug } from '../src/constants/creatorCodes.ts';
+import { CREATORS, creatorLink, creatorSlug } from '../src/constants/creatorCodes.ts';
 
 const OUT = new URL('../src/assets/creators/', import.meta.url);
 const SIZE = 120;   // shown at 44px; sharp on 2–3× phone screens
@@ -27,7 +27,7 @@ const wanted = new Set();
 let failed = 0;
 
 for (const creator of CREATORS) {
-    const channel = creator.links.youtube;
+    const channel = creatorLink(creator, 'youtube');
     if (!channel) continue;
     const slug = creatorSlug(creator.code);
     try {

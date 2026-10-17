@@ -1,16 +1,26 @@
 // ============================================================
 //  TowerForge Companion — Creator Codes Tab
-//  Every content creator's code in one list: search by code or
-//  name, copy a code with one tap, and open their channels. The
-//  YouTube button is the creator's profile picture.
+//  Every content creator's code in one list: search by code, name or
+//  what they're known for, copy a code with one tap, and open their
+//  channels. The YouTube button is the creator's profile picture.
 // ============================================================
 
 import { useState } from 'react';
 import { CREATORS, CREATOR_SITES, WEBSTORE_URL, creatorSlug } from '../../constants/creatorCodes';
-import type { CreatorSite } from '../../constants/creatorCodes';
+import type { CreatorLink, CreatorSite } from '../../constants/creatorCodes';
 import { trackEvent } from '../../analytics';
 
 const SITES = Object.keys(CREATOR_SITES) as CreatorSite[];
+
+// Fancy-letter names (𝓥𝓒𝓜𝓸𝓶𝓸) fold to plain letters, so "vcmomo" finds them.
+const fold = (s: string) => s.normalize('NFKC').toLowerCase();
+const plain = (s: string) => fold(s).replace(/[^\p{L}\p{N}]/gu, '');
+const SEARCH_TEXT = new Map(CREATORS.map(c => [c, fold([c.code, c.name, c.player, c.about ?? ''].join(' '))]));
+
+// Links in site order; a website shows its address unless it has a label.
+const byFixedOrder = (a: CreatorLink, b: CreatorLink) => SITES.indexOf(a.site) - SITES.indexOf(b.site);
+const linkLabel = (l: CreatorLink) =>
+    l.label ?? (l.site === 'website' ? new URL(l.url).hostname.replace(/^www\./, '') : CREATOR_SITES[l.site]);
 
 // YouTube profile pictures by code slug (saved by scripts/fetch-creator-avatars.mjs).
 const AVATARS: Record<string, string> = Object.fromEntries(
@@ -48,10 +58,8 @@ export default function CreatorCodesTab() {
     const [search, setSearch] = useState('');
     const [copied, setCopied] = useState<string | null>(null);
 
-    const q = search.trim().toLowerCase();
-    const shown = q
-        ? CREATORS.filter(c => c.code.toLowerCase().includes(q) || c.player.toLowerCase().includes(q))
-        : CREATORS;
+    const q = fold(search.trim());
+    const shown = q ? CREATORS.filter(c => SEARCH_TEXT.get(c)!.includes(q)) : CREATORS;
 
     // Copies a code; if the browser won't, selects it on screen so the
     // player can copy it themselves.
@@ -79,7 +87,7 @@ export default function CreatorCodesTab() {
                     type="text"
                     className="search-bar"
                     style={{ margin: 0, flex: 1, minWidth: '160px' }}
-                    placeholder="🔍  Search code or name..."
+                    placeholder="🔍  Search code, name or what they do..."
                     value={search}
                     onChange={e => setSearch(e.target.value)}
                 />
@@ -90,8 +98,10 @@ export default function CreatorCodesTab() {
 
             <div className="cc-grid">
                 {shown.map(c => {
-                    const sites = SITES.filter(site => c.links[site]);
+                    const links = [...c.links].sort(byFixedOrder);
                     const avatar = AVATARS[creatorSlug(c.code)];
+                    // The code-list name, when it isn't just the name above it.
+                    const showPlayer = !plain(c.name).includes(plain(c.player));
                     return (
                         <div key={c.code} className="cc-card">
                             <div className="cc-top">
@@ -104,35 +114,41 @@ export default function CreatorCodesTab() {
                                     {copied === c.code ? '✓ Copied' : 'Copy'}
                                 </button>
                             </div>
-                            <div className="cc-player">{c.player}</div>
-                            <div className="cc-id">ID {c.playerId}</div>
-                            {sites.length > 0 && (
+                            <div className="cc-player">{c.name}</div>
+                            {(showPlayer || c.playerId) && (
+                                <div className="cc-meta">
+                                    {showPlayer && <span>{c.player}</span>}
+                                    {c.playerId && <span className="cc-id">ID {c.playerId}</span>}
+                                </div>
+                            )}
+                            {c.about && <div className="cc-about">{c.about}</div>}
+                            {links.length > 0 && (
                                 <div className="cc-links">
-                                    {sites.map(site => (
-                                        site === 'youtube' && avatar ? (
+                                    {links.map(l => (
+                                        l.site === 'youtube' && avatar ? (
                                             <a
-                                                key={site}
+                                                key={l.url}
                                                 className="cc-avatar"
-                                                href={c.links[site]}
+                                                href={l.url}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                title={`${c.code} on YouTube`}
-                                                aria-label={`${c.code} on YouTube`}
-                                                onClick={() => trackEvent('Open creator link', { code: c.code, site })}
+                                                title={`${c.name} on YouTube`}
+                                                aria-label={`${c.name} on YouTube`}
+                                                onClick={() => trackEvent('Open creator link', { code: c.code, site: l.site })}
                                             >
                                                 <img src={avatar} alt="" width={44} height={44} loading="lazy" />
                                             </a>
                                         ) : (
                                             <a
-                                                key={site}
+                                                key={l.url}
                                                 className="cc-link"
-                                                data-site={site}
-                                                href={c.links[site]}
+                                                data-site={l.site}
+                                                href={l.url}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                onClick={() => trackEvent('Open creator link', { code: c.code, site })}
+                                                onClick={() => trackEvent('Open creator link', { code: c.code, site: l.site })}
                                             >
-                                                {CREATOR_SITES[site]}
+                                                {linkLabel(l)}
                                             </a>
                                         )
                                     ))}
