@@ -191,6 +191,62 @@
         border-bottom-color: var(--accent);
     }
 
+/* Sections (top row) and the open section's tabs (second row). */
+.tab-group {
+    padding: 10px 20px;
+    font-size: 13px;
+}
+
+.tab-subbar {
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 7px 12px;
+    flex-shrink: 0;
+}
+
+.tab-sub {
+    padding: 4px 12px;
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-dim);
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
+}
+
+    .tab-sub:hover {
+        color: var(--text);
+    }
+
+    .tab-sub.active {
+        color: var(--accent);
+        border-color: var(--accent);
+        background: var(--accent-glow);
+    }
+
+/* Phones: the five sections share the row evenly. */
+@media (max-width: 600px) {
+    .tab-group {
+        flex: 1 1 0;
+        min-width: 0;
+        padding: 10px 2px;
+        font-size: 11px;
+        letter-spacing: 0;
+        text-align: center;
+    }
+
+    .tab-subbar {
+        padding: 6px 10px;
+    }
+}
+
 /* ── Content Area ────────────────────────────────────────────── */
 .tab-content {
     flex: 1;

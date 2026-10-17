@@ -35,26 +35,54 @@ import SharedView from './components/share/SharedView';
 import './styles/app.css';
 
 // ── Tab Definitions ───────────────────────────────────────────
-const TABS: { id: TabName; label: string }[] = [
-    { id: 'profile', label: 'Profile' },
-    { id: 'perks', label: 'Perks' },
-    { id: 'tiers', label: 'Tiers' },
-    { id: 'workshop', label: 'Workshop' },
-    { id: 'labs', label: 'Labs' },
-    { id: 'cards', label: 'Cards' },
-    { id: 'uw', label: 'UW' },
-    { id: 'puws', label: 'pUWs' },
-    { id: 'relics', label: 'Relics' },
-    { id: 'bots', label: 'Bots' },
-    { id: 'modules', label: 'Modules' },
-    { id: 'optimizer', label: 'Optimizer' },
-    { id: 'share', label: 'Share' },
-    { id: 'account', label: 'Account' },
+// The tabs, grouped into five sections so the menu fits a phone: the top row
+// picks a section, the row under it picks the tab inside it (no second row
+// for a section with one tab).
+interface TabGroup {
+    id: string;
+    label: string;
+    tabs: { id: TabName; label: string }[];
+}
+const TAB_GROUPS: TabGroup[] = [
+    {
+        id: 'player', label: 'Player', tabs: [
+            { id: 'profile', label: 'Profile' },
+            { id: 'tiers', label: 'Tiers' },
+            { id: 'share', label: 'Share' },
+            { id: 'account', label: 'Account' },
+        ],
+    },
+    {
+        id: 'upgrades', label: 'Upgrades', tabs: [
+            { id: 'workshop', label: 'Workshop' },
+            { id: 'labs', label: 'Labs' },
+            { id: 'cards', label: 'Cards' },
+            { id: 'perks', label: 'Perks' },
+        ],
+    },
+    {
+        id: 'uws', label: 'UWs', tabs: [
+            { id: 'uw', label: 'Ultimate Weapons' },
+            { id: 'puws', label: 'Permanent UWs' },
+        ],
+    },
+    {
+        id: 'gear', label: 'Gear', tabs: [
+            { id: 'modules', label: 'Modules' },
+            { id: 'bots', label: 'Bots' },
+            { id: 'relics', label: 'Relics' },
+        ],
+    },
+    { id: 'optimizer', label: 'Optimizer', tabs: [{ id: 'optimizer', label: 'Optimizer' }] },
 ];
+
+const groupOf = (tab: TabName): TabGroup => TAB_GROUPS.find(g => g.tabs.some(t => t.id === tab)) ?? TAB_GROUPS[0];
 
 export default function App() {
     const [showLoginModal, setShowLoginModal] = useState(false);
     const [pdfBusy, setPdfBusy] = useState(false);
+    // The tab last opened in each section, so going back to a section returns to it.
+    const [lastInGroup, setLastInGroup] = useState<Record<string, TabName>>({});
     // ?share=CODE opens the read-only viewer instead of the app shell.
     const [shareCode] = useState(() => new URLSearchParams(window.location.search).get('share'));
     const activeTab = useGameStore(s => s.activeTab);
@@ -209,6 +237,13 @@ export default function App() {
 
     if (shareCode) return <SharedView code={shareCode} />;
 
+    const activeGroup = groupOf(activeTab);
+    function openTab(tab: TabName) {
+        setActiveTab(tab);
+        setLastInGroup(last => ({ ...last, [groupOf(tab).id]: tab }));
+        trackTabView(tab);
+    }
+
     // ── Active tab renderer ──────────────────────────────────────
     function renderTab() {
         switch (activeTab) {
@@ -288,18 +323,31 @@ export default function App() {
             {/* ── Currencies ── */}
             <CurrencyBar />
 
-            {/* ── Tab Bar ── */}
-            <nav className="tab-bar">
-                {TABS.map(tab => (
+            {/* ── Sections, then the tabs of the open section ── */}
+            <nav className="tab-bar" aria-label="Sections">
+                {TAB_GROUPS.map(group => (
                     <button
-                        key={tab.id}
-                        className={`tab-btn ${activeTab === tab.id ? 'active' : ''}`}
-                        onClick={() => { setActiveTab(tab.id); trackTabView(tab.id); }}
+                        key={group.id}
+                        className={`tab-btn tab-group ${activeGroup.id === group.id ? 'active' : ''}`}
+                        onClick={() => openTab(lastInGroup[group.id] ?? group.tabs[0].id)}
                     >
-                        {tab.id === 'account' && accountUsername ? `👤 ${accountUsername}` : tab.label}
+                        {group.label}
                     </button>
                 ))}
             </nav>
+            {activeGroup.tabs.length > 1 && (
+                <nav className="tab-subbar" aria-label={activeGroup.label}>
+                    {activeGroup.tabs.map(tab => (
+                        <button
+                            key={tab.id}
+                            className={`tab-sub ${activeTab === tab.id ? 'active' : ''}`}
+                            onClick={() => openTab(tab.id)}
+                        >
+                            {tab.id === 'account' && accountUsername ? `👤 ${accountUsername}` : tab.label}
+                        </button>
+                    ))}
+                </nav>
+            )}
 
             {/* ── Content ── */}
             <main className="tab-content">
