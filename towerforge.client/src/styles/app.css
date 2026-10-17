@@ -231,8 +231,20 @@
         background: var(--accent-glow);
     }
 
-/* Phones: the five sections share the row evenly. */
+.tab-short {
+    display: none;
+}
+
+/* Phones: the sections share the row evenly, long names shortened. */
 @media (max-width: 600px) {
+    .tab-long {
+        display: none;
+    }
+
+    .tab-short {
+        display: inline;
+    }
+
     .tab-group {
         flex: 1 1 0;
         min-width: 0;

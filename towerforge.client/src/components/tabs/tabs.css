@@ -2282,3 +2282,133 @@
         grid-template-columns: 1fr;
     }
 }
+
+/* ── Creator Codes Tab ───────────────────────────────────────── */
+.cc-note a {
+    color: var(--accent);
+}
+
+.cc-count {
+    align-self: center;
+    font-size: 12px;
+    color: var(--text-dim);
+}
+
+.cc-empty {
+    padding: 24px 0;
+    text-align: center;
+    font-size: 13px;
+    color: var(--text-dim);
+}
+
+.cc-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 10px;
+}
+
+.cc-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.cc-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.cc-code {
+    flex: 1;
+    min-width: 0;
+    font-family: var(--font-mono);
+    font-size: 17px;
+    color: var(--text-bright);
+    overflow-wrap: anywhere;
+    user-select: all;   /* one tap selects the whole code */
+}
+
+.cc-copy {
+    flex-shrink: 0;
+    padding: 3px 10px;
+    font-family: var(--font-ui);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .3px;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: none;
+    border: 1px solid var(--accent);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background var(--transition-fast);
+}
+
+    .cc-copy:hover,
+    .cc-copy.done {
+        background: var(--accent-glow);
+    }
+
+.cc-player {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    overflow-wrap: anywhere;
+}
+
+.cc-id {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-dim);
+}
+
+.cc-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 5px;
+}
+
+/* --site is the platform's own color, shown as a dot and on hover. */
+.cc-link {
+    --site: var(--accent);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    text-decoration: none;
+    transition: border-color var(--transition-fast), color var(--transition-fast);
+}
+
+    .cc-link::before {
+        content: '';
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--site);
+    }
+
+    .cc-link:hover {
+        color: var(--text-bright);
+        border-color: var(--site);
+    }
+
+    .cc-link[data-site="youtube"] { --site: #ff3b3b; }
+    .cc-link[data-site="twitch"] { --site: #9146ff; }
+    .cc-link[data-site="kick"] { --site: #53fc18; }
+    .cc-link[data-site="tiktok"] { --site: #25f4ee; }
+    .cc-link[data-site="discord"] { --site: #5865f2; }
+    .cc-link[data-site="reddit"] { --site: #ff4500; }
+    .cc-link[data-site="x"] { --site: var(--text-bright); }

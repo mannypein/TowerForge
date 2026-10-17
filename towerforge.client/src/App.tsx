@@ -29,18 +29,21 @@ import ModulesTab from './components/tabs/ModulesTab';
 import OptimizerTab from './components/tabs/OptimizerTab';
 import ShareTab from './components/tabs/ShareTab';
 import AccountTab from './components/tabs/AccountTab';
+import CreatorCodesTab from './components/tabs/CreatorCodesTab';
 import { useAccountStore } from './store/useAccountStore';
 import SharedView from './components/share/SharedView';
 
 import './styles/app.css';
 
 // ── Tab Definitions ───────────────────────────────────────────
-// The tabs, grouped into five sections so the menu fits a phone: the top row
+// The tabs, grouped into sections so the menu fits a phone: the top row
 // picks a section, the row under it picks the tab inside it (no second row
-// for a section with one tab).
+// for a section with one tab). A section with a long name has a short one
+// for phones.
 interface TabGroup {
     id: string;
     label: string;
+    short?: string;
     tabs: { id: TabName; label: string }[];
 }
 const TAB_GROUPS: TabGroup[] = [
@@ -74,6 +77,7 @@ const TAB_GROUPS: TabGroup[] = [
         ],
     },
     { id: 'optimizer', label: 'Optimizer', tabs: [{ id: 'optimizer', label: 'Optimizer' }] },
+    { id: 'creators', label: 'Creator Codes', short: 'Creators', tabs: [{ id: 'creators', label: 'Creator Codes' }] },
 ];
 
 const groupOf = (tab: TabName): TabGroup => TAB_GROUPS.find(g => g.tabs.some(t => t.id === tab)) ?? TAB_GROUPS[0];
@@ -259,6 +263,7 @@ export default function App() {
             case 'bots': return <BotsTab />;
             case 'modules': return <ModulesTab />;
             case 'optimizer': return <OptimizerTab />;
+            case 'creators': return <CreatorCodesTab />;
             case 'share': return <ShareTab />;
             case 'account': return <AccountTab />;
             default: return null;
@@ -331,7 +336,9 @@ export default function App() {
                         className={`tab-btn tab-group ${activeGroup.id === group.id ? 'active' : ''}`}
                         onClick={() => openTab(lastInGroup[group.id] ?? group.tabs[0].id)}
                     >
-                        {group.label}
+                        {group.short
+                            ? <><span className="tab-long">{group.label}</span><span className="tab-short">{group.short}</span></>
+                            : group.label}
                     </button>
                 ))}
             </nav>
