@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { calcCannonModuleMult, calcModuleDamageMult, primaryMainMult } from './towerDamage';
-import { activeLoadout, enhForPreset, masteredCardMult, uniqueTier } from './statHelpers';
+import { activeLoadout, enhForPreset, masteredCardMult, milestoneReached, uniqueTier } from './statHelpers';
 import { DEFAULT_RUN_RATES, runRatesFrom } from './runRates';
 import { calcCFSpeedReduction, calcCFUptime, calcEnemySpeedFactor, calcSlowAura } from './ttt';
 import { parseGameExport } from './gameExport';
@@ -109,6 +109,25 @@ describe('Chrono Field', () => {
         expect(calcSlowAura(cards(['Slow Aura'], false), 0)).toBeCloseTo(0.31, 10);
         expect(calcSlowAura(cards(['Slow Aura'], true), 0)).toBeCloseTo(0.31, 10);
         expect(calcSlowAura(cards([], false), 0)).toBe(0);
+    });
+});
+
+describe('Tier / Wave milestones', () => {
+    // Labs, cards and assist slots unlock at "Tier X, Wave Y". Finishing a tier
+    // only takes wave 100 (300 from Tier 15), so later milestones need the wave.
+    const waves = { 5: 150, 19: 4527, 23: 197 };
+
+    it('use the best wave reached on that tier', () => {
+        expect(milestoneReached(5, 100, 22, waves)).toBe(true);
+        expect(milestoneReached(5, 500, 22, waves)).toBe(false);    // Extra Black Hole: T5 W500
+        expect(milestoneReached(19, 40, 22, waves)).toBe(true);     // assist modules: T19 W40
+        expect(milestoneReached(23, 500, 22, waves)).toBe(false);   // primary module labs: T23 W500
+        expect(milestoneReached(0, 0, 0, {})).toBe(true);
+    });
+
+    it('fall back to "tier completed" when no wave is recorded', () => {
+        expect(milestoneReached(7, 900, 10, {})).toBe(true);
+        expect(milestoneReached(11, 10, 10, {})).toBe(false);
     });
 });
 

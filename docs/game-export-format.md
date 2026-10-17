@@ -72,6 +72,17 @@ wrapped ("Preset 1" → "Preset1", treated as a default name). A file named
 | `HighestWavePerTierThisCycle[40]` | ❓ | Highest wave per tier "this cycle". |
 | `HighestLeague` | ✅ | Highest tournament league reached: 0 Copper, 1 Silver, 2 Gold, 3 Platinum, 4 Champion, 5 Legend, 6 Mythic (confirmed: a Mythic player has 6). Sets the profile league. |
 
+- **Highest tier unlocked** = the highest tier played (wave > 0 or a run
+  started), or one past the highest completed tier, up to Tier 24.
+- **Highest tier completed** = the highest tier whose best wave unlocks the
+  next: wave 100, or wave 300 from Tier 15 (Tiers 16–24 need 300 on the tier
+  before — Fandom "Tiers" page). A real account (best waves T1 7,827 … T22 528,
+  T23 197) imports as unlocked 23, completed 22.
+- Labs, cards and assist slots unlock at "Tier X, Wave Y" milestones; the
+  site checks them against the best wave on that tier (`milestoneReached` in
+  `engine/statHelpers.ts`), since completing a tier doesn't mean its later
+  milestones are reached (e.g. Extra Black Hole needs Tier 5 wave 500).
+
 ## Workshop
 
 | Field | Status | Notes |

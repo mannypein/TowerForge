@@ -7,6 +7,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { useGameStore } from '../../store/useGameStore';
 import { LABS } from '../../constants/gameData';
 import NumericInput from '../common/NumericInput';
+import { milestoneReached } from '../../engine/statHelpers';
 
 export default function LabsTab() {
     const [search, setSearch] = useState('');
@@ -16,28 +17,14 @@ export default function LabsTab() {
     const setLabLevel = useGameStore(s => s.setLabLevel);
     const setAllLabs = useGameStore(s => s.setAllLabs);
 
-    const highestTier = profile.highestTier || 0;
     const completedTier = profile.completedTier || 0;
 
-    // A lab is unlocked if the player has reached its tier+wave requirement
-    const isUnlocked = useCallback((unlockTier: number, unlockWave: number): boolean => {
-        // No requirement
-        if (unlockTier === 0) return true;
-
-        // Haven't reached this tier at all
-        if (highestTier < unlockTier) return false;
-
-        // Tier is fully completed — all labs in it are unlocked
-        if (completedTier >= unlockTier) return true;
-
-        // Tier is the current highest — check wave progress
-        if (unlockTier <= highestTier) {
-            const waveReached = tierWaves[unlockTier] ?? 0;
-            return waveReached >= unlockWave;
-        }
-
-        return false;
-    }, [highestTier, completedTier, tierWaves]);
+    // A lab is unlocked once its Tier / Wave milestone is reached.
+    const isUnlocked = useCallback(
+        (unlockTier: number, unlockWave: number): boolean =>
+            milestoneReached(unlockTier, unlockWave, completedTier, tierWaves),
+        [completedTier, tierWaves],
+    );
 
     // Max all unlocked labs
     function maxAllUnlocked() {

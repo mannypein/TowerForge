@@ -7,6 +7,7 @@ import { useRef, useState } from 'react';
 import { useGameStore } from '../../store/useGameStore';
 import { CARDS, CARD_MASTERY_VALS } from '../../constants/gameData';
 import NumericInput from '../common/NumericInput';
+import { milestoneReached } from '../../engine/statHelpers';
 import { presetLabel } from '../../constants/gameData';
 import CardsShareCard from '../share/CardsShareCard';
 import { exportNodeAsPng, SHARE_OFFSCREEN_STYLE } from '../share/shareTheme';
@@ -30,18 +31,9 @@ export default function CardsTab() {
     const presetCount = profile.presets || 2;
     const presets = Array.from({ length: presetCount }, (_, i) => i);
 
-    // Same unlock logic as Labs — fully completed tier, or current tier with sufficient wave progress
+    // A card unlocks at its Tier / Wave milestone (same rule as labs).
     function isCardUnlocked(lockTier: number, lockWave: number): boolean {
-        if (lockTier === 0) return true;
-        const highestTier = profile.highestTier || 0;
-        const completedTier = profile.completedTier || 0;
-        if (highestTier < lockTier) return false;
-        if (completedTier >= lockTier) return true;
-        if (lockTier <= highestTier) {
-            const waveReached = tierWaves[lockTier] ?? 0;
-            return waveReached >= lockWave;
-        }
-        return false;
+        return milestoneReached(lockTier, lockWave, profile.completedTier || 0, tierWaves);
     }
 
     // ── Max / Clear helpers ──

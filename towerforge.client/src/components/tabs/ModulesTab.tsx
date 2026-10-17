@@ -18,7 +18,7 @@ import { RARITIES, moduleMaxLevel, rarityColor, rarityStars } from '../../consta
 import { SUB_RARITIES, UNIQUE_MODULES, SUB_EFFECTS, UNIQUE_EFFECT_MODEL } from '../../constants/moduleData';
 import type { SubRarity, RarityProgression, SubEffectDef } from '../../constants/moduleData';
 import { calcModuleDamageMult, primaryMainMult } from '../../engine/towerDamage';
-import { activeLoadout } from '../../engine/statHelpers';
+import { activeLoadout, milestoneReached } from '../../engine/statHelpers';
 
 // ── Types ─────────────────────────────────────────────────────
 const MODULE_TYPES: ModuleType[] = ['cannon', 'armor', 'generator', 'core'];
@@ -202,16 +202,8 @@ export default function ModulesTab() {
     const equipped = activeLoadout(moduleState);
     const viewed = loadouts.find(l => l.id === viewId) ?? equipped;
 
-    // Same unlock convention used in Labs/Cards tabs — fully completed
-    // tier, or current tier with sufficient wave progress.
-    const highestTier = profile.highestTier || 0;
-    const completedTier = profile.completedTier || 0;
-    const assistUnlocked = (() => {
-        if (highestTier < ASSIST_UNLOCK_TIER) return false;
-        if (completedTier >= ASSIST_UNLOCK_TIER) return true;
-        const waveReached = tierWaves[ASSIST_UNLOCK_TIER] ?? 0;
-        return waveReached >= ASSIST_UNLOCK_WAVE;
-    })();
+    // Assist slots unlock at their Tier / Wave milestone (same rule as labs).
+    const assistUnlocked = milestoneReached(ASSIST_UNLOCK_TIER, ASSIST_UNLOCK_WAVE, profile.completedTier || 0, tierWaves);
 
     const modById = (id: string | undefined) => (id ? library.find(m => m.id === id) ?? null : null);
 

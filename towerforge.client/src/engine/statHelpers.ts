@@ -6,7 +6,18 @@
 
 import { CARDS, CARD_MASTERY_VALS } from '../constants/gameData';
 import { labValue } from '../constants/buildStatCurves';
-import type { CardData, EnhData, LabData, Loadout, ModuleRarity, ModuleState } from '../types/gameTypes';
+import type { CardData, EnhData, LabData, Loadout, ModuleRarity, ModuleState, TierWaves } from '../types/gameTypes';
+
+// Whether a "Tier X, Wave Y" milestone (lab, card, feature unlock) is reached:
+// the best wave on that tier when it's known (imported from the game, or typed
+// on the Tiers tab). Completing a tier only takes wave 100 (300 from Tier 15),
+// so a completed tier doesn't mean its later milestones are reached. With no
+// wave recorded for the tier, a tier marked completed still counts.
+export function milestoneReached(tier: number, wave: number, completedTier: number, tierWaves: TierWaves): boolean {
+    if (tier <= 0) return true;
+    const best = tierWaves[tier] ?? 0;
+    return best > 0 ? best >= wave : completedTier >= tier;
+}
 
 // The equipped module loadout — the one every calculation reads.
 export function activeLoadout(ms: ModuleState): Loadout | undefined {
