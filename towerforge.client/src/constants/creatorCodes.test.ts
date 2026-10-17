@@ -2,7 +2,7 @@
 // link shows up before it reaches the site.
 
 import { describe, expect, it } from 'vitest';
-import { CREATORS, CREATOR_SITES } from './creatorCodes';
+import { CREATORS, CREATOR_SITES, creatorSlug } from './creatorCodes';
 import type { CreatorSite } from './creatorCodes';
 
 // The address each link should point at, per site.
@@ -38,5 +38,13 @@ describe('creator codes', () => {
                 expect(u.hostname, `${c.code} ${site}`).toMatch(HOSTS[site as CreatorSite]);
             }
         }
+    });
+
+    it('has a profile picture for every YouTube link, and no leftovers', () => {
+        // Missing one? Run "npm run creator-avatars".
+        const pictures = Object.keys(import.meta.glob('../assets/creators/*.{jpg,png,webp}'))
+            .map(path => path.split('/').pop()!.replace(/\.\w+$/, '')).sort();
+        const youtube = CREATORS.filter(c => c.links.youtube).map(c => creatorSlug(c.code)).sort();
+        expect(pictures).toEqual(youtube);
     });
 });

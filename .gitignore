@@ -26,3 +26,6 @@ tool_export*.json
 
 # Logs
 *.log
+
+# Local server data: dev database and data-protection keys
+TowerForge.Server/App_Data/

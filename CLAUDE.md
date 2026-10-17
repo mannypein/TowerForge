@@ -29,6 +29,7 @@ Run from `towerforge.client/` unless noted.
 | Lint | `npx eslint <files>` |
 | Deploy (repo root) | `powershell -ExecutionPolicy Bypass -File deploy.ps1` — runs the tests first and stops if any fail |
 | Import game icons (repo root) | `powershell -ExecutionPolicy Bypass -File import-icons.ps1` — trims, centers and resizes PNGs from `Desktop\Tower-Forge-Assets` |
+| Creator profile pictures | `npm run creator-avatars` — downloads each YouTube-linked creator's picture into `src/assets/creators/`; run after adding a YouTube link to `creatorCodes.ts` (a test fails until you do) |
 
 `npx eslint src` shows older `no-explicit-any` errors in LoginModal, moduleDefinitions,
 saveParser, towerAuth and gameTypes (`CloudSaveData`). Lint the files you change instead.

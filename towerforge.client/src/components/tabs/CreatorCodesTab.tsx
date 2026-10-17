@@ -1,15 +1,22 @@
 // ============================================================
 //  TowerForge Companion — Creator Codes Tab
 //  Every content creator's code in one list: search by code or
-//  name, copy a code with one tap, and open their channels.
+//  name, copy a code with one tap, and open their channels. The
+//  YouTube button is the creator's profile picture.
 // ============================================================
 
 import { useState } from 'react';
-import { CREATORS, CREATOR_SITES, WEBSTORE_URL } from '../../constants/creatorCodes';
+import { CREATORS, CREATOR_SITES, WEBSTORE_URL, creatorSlug } from '../../constants/creatorCodes';
 import type { CreatorSite } from '../../constants/creatorCodes';
 import { trackEvent } from '../../analytics';
 
 const SITES = Object.keys(CREATOR_SITES) as CreatorSite[];
+
+// YouTube profile pictures by code slug (saved by scripts/fetch-creator-avatars.mjs).
+const AVATARS: Record<string, string> = Object.fromEntries(
+    Object.entries(import.meta.glob('../../assets/creators/*.{jpg,png,webp}', { eager: true, import: 'default' }) as Record<string, string>)
+        .map(([path, url]) => [path.split('/').pop()!.replace(/\.\w+$/, ''), url]),
+);
 
 // navigator.clipboard is missing or blocked in some in-app browsers (the
 // ones Discord and Reddit open links in), so fall back to the older copy
@@ -84,6 +91,7 @@ export default function CreatorCodesTab() {
             <div className="cc-grid">
                 {shown.map(c => {
                     const sites = SITES.filter(site => c.links[site]);
+                    const avatar = AVATARS[creatorSlug(c.code)];
                     return (
                         <div key={c.code} className="cc-card">
                             <div className="cc-top">
@@ -101,17 +109,32 @@ export default function CreatorCodesTab() {
                             {sites.length > 0 && (
                                 <div className="cc-links">
                                     {sites.map(site => (
-                                        <a
-                                            key={site}
-                                            className="cc-link"
-                                            data-site={site}
-                                            href={c.links[site]}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            onClick={() => trackEvent('Open creator link', { code: c.code, site })}
-                                        >
-                                            {CREATOR_SITES[site]}
-                                        </a>
+                                        site === 'youtube' && avatar ? (
+                                            <a
+                                                key={site}
+                                                className="cc-avatar"
+                                                href={c.links[site]}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                title={`${c.code} on YouTube`}
+                                                aria-label={`${c.code} on YouTube`}
+                                                onClick={() => trackEvent('Open creator link', { code: c.code, site })}
+                                            >
+                                                <img src={avatar} alt="" width={44} height={44} loading="lazy" />
+                                            </a>
+                                        ) : (
+                                            <a
+                                                key={site}
+                                                className="cc-link"
+                                                data-site={site}
+                                                href={c.links[site]}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                onClick={() => trackEvent('Open creator link', { code: c.code, site })}
+                                            >
+                                                {CREATOR_SITES[site]}
+                                            </a>
+                                        )
                                     ))}
                                 </div>
                             )}
