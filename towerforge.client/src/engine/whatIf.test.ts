@@ -93,6 +93,15 @@ describe('what happens', () => {
         expect(r.costs.stones).toBeGreaterThan(0);
     });
 
+    it('counts the health lab of the enemy that ends the runs as push', () => {
+        const snap = account();
+        const r = whatIf(snap, [{ kind: 'lab', key: 'Ray Health', level: 10 }], upgradeTargets(snap),
+            'Glass Cannon', runs[4], models);
+        expect(r.damagePct).toBeCloseTo(0, 9);
+        expect(r.pushPct).toBeCloseTo((1 / 0.96 - 1) * 100, 6);          // every death here is a Ray
+        expect(r.waves!.to).toBeGreaterThan(r.waves!.from);
+    });
+
     it('moves the death wave by level skip without any damage', () => {
         const snap = account();
         const r = whatIf(snap, [{ kind: 'lab', key: 'Enemy HP Lvl Skip Lab', level: 5 }], upgradeTargets(snap),

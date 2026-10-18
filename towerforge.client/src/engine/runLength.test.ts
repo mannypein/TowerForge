@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
-    buildRunLengthModel, deathWave, killedBy, pathRunGains, pathSkipGains, runEnds, skipWorth,
+    buildRunLengthModel, deathWave, killedBy, killerMix, pathRunGains, pathSkipGains, runEnds, skipWorth,
     wavesFromDamage, wavesFromSkip,
 } from './runLength';
 import { baseEnemyHealth } from './enemyStats';
@@ -70,6 +70,13 @@ describe('death wave', () => {
         const gains = [0.01, 0.05, 0.1, 0.25, 0.5, 1].map(g => wavesFromDamage(model, g));
         expect(gains[0]).toBeGreaterThan(0);
         gains.slice(1).forEach((g, i) => expect(g).toBeGreaterThanOrEqual(gains[i]));
+    });
+});
+
+describe('which enemies end the runs', () => {
+    it('shares out the recorded killers, leaving out runs without one', () => {
+        const model = buildRunLengthModel(runs(death(8100, 10, 9), death(8200, 11, 2), death(8402, 12, 9), death(8500, 13, 6)))!;
+        expect(killerMix(model)).toEqual({ Ray: 0.5, Tank: 0.25, Vampire: 0.25 });
     });
 });
 

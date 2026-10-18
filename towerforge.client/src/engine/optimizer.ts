@@ -31,7 +31,8 @@
 //  • Labs are ranked by gain per hour of research (the lab catalog's
 //    time ÷ lab speed), since lab slots, not coins, are what runs out.
 //  • Waves mode also counts Enemy Health Level Skip, at the flat damage
-//    one point of skip is worth in waves (`skipWorth`, engine/runLength.ts).
+//    one point of skip is worth in waves (`skipWorth`, engine/runLength.ts),
+//    and the enemy health labs of the types that end runs (`killers`).
 //  • The path is shown in blocks of 10 steps, one row per stat or lab in
 //    each, so one-level steps that take turns don't fill the list.
 //
@@ -143,6 +144,8 @@ import { ehpScore } from './ehp';
 import type { EhpCalibration } from './ehp';
 import { edpsScore, edpsSurvivalScore } from './edps';
 import { healthSkipChance, healthSkipSources } from './levelSkip';
+import { healthLabCut } from './enemyStats';
+import type { EnemyType } from './enemyStats';
 import {
     botMedalCost, CARD_SLOT_GEMS, enhancementCost, enhancementDiscount, labLevelCost, MEDAL_TRADE_GIVES,
     MEDAL_TRADE_PRICES, MODULE_SLOT_MAX, moduleSlotCost, workshopCost, workshopDiscount,
@@ -196,6 +199,10 @@ export interface OptimizerSnapshot {
     // worth, as the log of the damage factor that gains the same waves
     // (runLength.skipWorth). Omitted = skip isn't scored.
     skipWorth?: number;
+    // Waves: the enemy types that end the runs, as shares (runLength.killerMix).
+    // An enemy health lab counts as that much more damage against its type,
+    // weighted by how often the type ends a run. Omitted = labs not scored.
+    killers?: Partial<Record<EnemyType, number>>;
     // "Coins and push": coins per hour (needs `farm`) blended with the push
     // score — waves (flat damage + skip, needs `edps`) or survival (`ehp`).
     // coinWeight 0–1 is how much coins count.
@@ -266,7 +273,19 @@ function getScore(snap: OptimizerSnapshot): number {
 // uncalibrated model without a run to calibrate from.
 function wavesScore(snap: OptimizerSnapshot): number {
     if (!snap.edps) return getEDPS(snap);
-    return edpsSurvivalScore(snap, snap.edps) * Math.exp((snap.skipWorth ?? 0) * scoredSkip(snap));
+    return edpsSurvivalScore(snap, snap.edps) * Math.exp((snap.skipWorth ?? 0) * scoredSkip(snap))
+        * killerHealthFactor(snap);
+}
+
+// Less health on the enemies that end runs works like more damage against
+// them: Π (1 ÷ health left)^(share of deaths). The code's assumption — each
+// type's lab moves the death limit in proportion to how often it kills.
+function killerHealthFactor(snap: OptimizerSnapshot): number {
+    let log = 0;
+    for (const [type, share] of Object.entries(snap.killers ?? {}) as [EnemyType, number][]) {
+        log -= share * Math.log(Math.max(0.01, healthLabCut(snap.labData, type)));
+    }
+    return Math.exp(log);
 }
 
 // The push half of "coins and push".

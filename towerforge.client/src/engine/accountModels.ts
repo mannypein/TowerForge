@@ -21,7 +21,7 @@ import { botsForPreset } from '../constants/botData';
 import { buildFarmCalibration } from './farming';
 import { buildEhpCalibration } from './ehp';
 import { buildEdpsCalibration } from './edps';
-import { buildRunLengthModel, skipWorth } from './runLength';
+import { buildRunLengthModel, killerMix, skipWorth } from './runLength';
 import type { RunLengthModel } from './runLength';
 import { buildRunModel, projectRun, runSettingsFromCards } from './runCoins';
 import { defaultBattleIndex } from './gameExport';
@@ -100,4 +100,5 @@ export function applyGoal(
     snap.edpsMode = wantsWaves && snap.edps ? 'waves' : 'damage';
     snap.blend = goal === 'blend' ? { push: pushWaves ? 'waves' : 'ehp', coinWeight } : undefined;
     snap.skipWorth = wantsWaves && models.run ? models.worth : undefined;
+    snap.killers = wantsWaves && models.run ? killerMix(models.run) : undefined;
 }

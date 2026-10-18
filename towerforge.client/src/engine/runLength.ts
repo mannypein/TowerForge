@@ -24,6 +24,7 @@
 
 import type { BattleReport } from './battleReport';
 import { baseEnemyHealth } from './enemyStats';
+import type { EnemyType } from './enemyStats';
 
 // What ended a run (the game's KilledBy number): its enemy-type order.
 // −1, 99 and 255 mean nothing killed the tower — the player ended the run.
@@ -114,6 +115,15 @@ export function buildRunLengthModel(runs: BattleReport[]): RunLengthModel | null
         skipRate: 1 - used[0].healthLevel! / used[0].run.wave,
         typicalWave: Math.round(used.reduce((s, d) => s + d.run.wave, 0) / used.length),
     };
+}
+
+// The enemies that ended the model's runs, as shares (Scatter split counts
+// as Scatter); deaths without a recorded killer are left out.
+export function killerMix(m: RunLengthModel): Partial<Record<EnemyType, number>> {
+    const killers = m.used.map(d => d.killer).filter((k): k is string => typeof k === 'string');
+    const mix: Partial<Record<EnemyType, number>> = {};
+    for (const k of killers) mix[k as EnemyType] = (mix[k as EnemyType] ?? 0) + 1 / killers.length;
+    return mix;
 }
 
 // Enemy health doesn't rise smoothly: at some levels several of the

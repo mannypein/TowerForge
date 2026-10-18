@@ -217,6 +217,19 @@ describe('Glass Cannon workshop and labs', () => {
         expect(skip()!.skipPoints).toBeUndefined();
     });
 
+    it('counts enemy health labs by how often that enemy ends a run (waves)', () => {
+        const lab = (killers: OptimizerSnapshot['killers'], name: string) => buildCandidates(calibrated(s => {
+            s.edpsMode = 'waves';
+            s.killers = killers;
+            s.labData = { [name]: 10 };
+        }), 'labs').find(c => c.label === name);
+        // Ray Health Lv 10 → 11: 96% → 95.6% of Ray health.
+        expect(lab({ Ray: 1 }, 'Ray Health')!.scorePct).toBeCloseTo((0.96 / 0.956 - 1) * 100, 6);
+        expect(lab({ Ray: 0.5, Tank: 0.5 }, 'Ray Health')!.scorePct).toBeCloseTo((Math.sqrt(0.96 / 0.956) - 1) * 100, 6);
+        expect(lab({ Ray: 1 }, 'Tank Enemy Health')!.scorePct).toBeCloseTo(0, 9);   // Tanks never ended these runs
+        expect(lab(undefined, 'Ray Health')!.scorePct).toBeCloseTo(0, 9);            // no killers recorded
+    });
+
     it('ranks labs by gain per hour of research, with coins and time', () => {
         const snap = calibrated(s => { s.labData = { 'Damage Lab': 40 }; });
         const lab = buildCandidates(snap, 'labs').find(c => c.label === 'Damage Lab')!;

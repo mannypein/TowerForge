@@ -226,7 +226,7 @@ function goalPct(
     const b = JSON.parse(JSON.stringify(before)) as OptimizerSnapshot;
     applyGoal(b, goal, build, report, models);
     const a = { ...after, farm: b.farm, ehp: b.ehp, edps: b.edps, metric: b.metric, edpsMode: b.edpsMode,
-        blend: b.blend, skipWorth: b.skipWorth };
+        blend: b.blend, skipWorth: b.skipWorth, killers: b.killers };
     return ratioPct(goalScore(a), goalScore(b));
 }
 

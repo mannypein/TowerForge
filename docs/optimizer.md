@@ -47,7 +47,11 @@ What each currency buys (wiki Currencies page) and how it's ranked:
   event. 150-gem trades aren't valued (gems have no single use to price them).
 - **Bots**: only stats a model reads score — Amplify Bot and Bot Bot bonus
   (damage), Golden Bot (coins). Flame and Thunder Bot aren't modeled, so
-  their levels show no gain. Bot+ (stones) isn't offered.
+  their levels show no gain: battle reports record Flame Bot kills and hits
+  and Thunder Bot stuns (TheTowerSDK's battle field list), but no bot
+  damage, so there's no share of damage to calibrate them from; Flame Bot's
+  damage reduction only matters to tanky builds, and Thunder Bot's stuns
+  would need a stun-uptime model in TTT. Bot+ (stones) isn't offered.
 - **Card pulls** are random (80/17/3% by rarity), so stars aren't ranked;
   lab slots, rushes and tickets aren't either.
 - Enhancement costs match every wiki level (the SDK prices up to 600 levels,
@@ -118,10 +122,15 @@ to the new wave × the coins-per-hour gain.
   - On the rows, a step's skip moves the death wave as skip (not as its
     damage equivalent), so the skip lab shows the same waves in the Labs
     panel as in the Enemy Health Level Skip panel.
-  - Not scored yet: the enemy health labs (Common/Tank/Ray/… Enemy Health,
-    −0.4% a level). They'd act like damage against that enemy type only, so
-    they need a rule for which types end runs — the code's assumption would
-    be the KilledBy mix, not yet built.
+  - Enemy health labs (2026-10-18): each type's lab (−0.4% health a level,
+    −0.3% for Boss and Protector — values from Enemy Stats, which matches the
+    in-game Wave Info panel) counts as that much more damage against its
+    type, weighted by the share of the model's recent deaths that type
+    caused (`killerMix`, from KilledBy): push × Π (1 ÷ health left)^share.
+    The weighting is the code's assumption; runs without a recorded killer
+    don't count, and with no killers the labs aren't scored. They're slow
+    and costly per level (Ray Health Lv 1: 212.5q coins, 4d 12h), so they
+    rank behind cheap labs until those are maxed.
 - **Farming** — `engine/farming.ts`, calibrated by the run's coin breakdown
   and "killed with effect active" coverage. Golden Combo uses the wiki's
   compounding formula.
