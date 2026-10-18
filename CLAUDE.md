@@ -16,6 +16,7 @@ suggests what to upgrade next.
 - `docs/game-export-format.md` — field-by-field notes on the game's `tool_export.json` and how each mapping was confirmed. `docs/module-effects.md` — unique module formulas and assumptions.
 - `docs/analytics.md` — Umami visitor analytics (self-hosted on the VPS at /analytics): what's tracked, where it runs, how to open the dashboard and update it. Setup scripts in `ops/umami/`.
 - `docs/ultimate-weapons.md` — every UW and UW+ mechanic checked against the wiki (values, costs, labs, perks) and how the model uses it. `docs/optimizer.md` — how each build scores upgrades, calibration from battle reports, and the verified stone rules (card mastery, assist modules, primary module labs).
+- `docs/run-simulation.md` — research for the planned run simulator: enemy scaling, spawning, elites/fleets, battle conditions, level skip, in-run cash/perks/free upgrades, survival, what battle reports hold, the gaps, and the disagreements between sources. TheTowerSDK (MIT, npm `thetowersdk`) is the main formula source.
 
 ## Commands
 
@@ -46,7 +47,7 @@ saveParser, towerAuth and gameTypes (`CloudSaveData`). Lint the files you change
 - Don't run the Save Tool's login or pull scripts, and don't create accounts on the production site.
 - **Game data only goes in when it's confirmed.** Map an export index only after checking it against a real account (or in-game screenshots), and note how in `docs/game-export-format.md`. Anything unconfirmed keeps what the player entered. Wiki values are a starting point; the in-game screen wins.
 - When a formula is checked against an in-game number, add that number as a test anchor (see `src/engine/calculations.test.ts`).
-- **Write down what you verify.** Game mechanics checked against the wiki or the game go in `docs/ultimate-weapons.md` / `docs/optimizer.md` (with the source), so they don't have to be looked up again. Say when something is the code's assumption rather than verified.
+- **Write down what you verify.** Game mechanics checked against the wiki or the game go in `docs/ultimate-weapons.md` / `docs/optimizer.md` / `docs/run-simulation.md` (with the source), so they don't have to be looked up again. Say when something is the code's assumption rather than verified.
 - Reading the wiki: Fandom (`the-tower-idle-tower-defense.fandom.com`) blocks plain fetches and Notion (`the-tower.notion.site`) renders client-side — read both in the browser; on a fandom tab, `fetch('/wiki/<Name>')` + `DOMParser` reads any page's tables.
 
 ## Conventions
