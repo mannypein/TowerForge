@@ -1,9 +1,10 @@
 // ============================================================
 //  TowerForge — Workshop and lab cost tables
-//  Writes src/constants/workshopCosts.ts and src/constants/labCosts.ts
-//  from TheTowerSDK's data (MIT, npm `thetowersdk`): the game's
-//  workshop upgrade table and the SDK's lab catalog. How they were
-//  checked against the wiki is in docs/optimizer.md.
+//  Writes src/constants/workshopCosts.ts (workshop and enhancement
+//  coins), labCosts.ts and moduleCosts.ts (module slot shards and coins)
+//  from TheTowerSDK's data (MIT, npm `thetowersdk`): the game's workshop
+//  table, the enhancement and module cost tables, and the SDK's lab
+//  catalog. How they were checked against the wiki is in docs/optimizer.md.
 //  Get the package, then point the script at it:
 //      npm pack thetowersdk@0.12.0      (in a scratch folder)
 //      tar -xzf thetowersdk-0.12.0.tgz
@@ -13,7 +14,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
-import { LABS, WS_STATS } from '../src/constants/gameData.ts';
+import { LABS, WS_ENH, WS_STATS } from '../src/constants/gameData.ts';
 
 const sdk = process.argv[2];
 if (!sdk) {
@@ -21,6 +22,8 @@ if (!sdk) {
     process.exit(1);
 }
 const workshop = JSON.parse(readFileSync(join(sdk, 'dist/data/workshop/table.json'), 'utf8'));
+const enhancements = JSON.parse(readFileSync(join(sdk, 'dist/data/workshop/enhancement-costs.json'), 'utf8')).costs;
+const { MODULE_SHARD_COSTS, MODULE_COIN_COSTS } = createRequire(import.meta.url)(join(sdk, 'dist/data/modules/costs.js'));
 const { LAB_CATALOG } = createRequire(import.meta.url)(join(sdk, 'dist/data/labs/catalog.data.js'));
 const out = (file) => new URL(`../src/constants/${file}`, import.meta.url);
 
@@ -59,15 +62,29 @@ const WS_NAMES = {
     'Enemy Atk Level Skip': 'Enemy Attack Level Skip', 'Enemy HP Level Skip': 'Enemy Health Level Skip',
 };
 const LONG = 300;
+const step = (max) => (max > LONG ? 10 : 1);
+// Costs per level summed `size` levels at a time.
+function entries(per, size) {
+    const vals = [];
+    for (let k = 0; k < per.length; k += size) vals.push(per.slice(k, k + size).reduce((a, b) => a + b, 0));
+    return vals;
+}
 const wsRows = Object.values(WS_STATS).flat().map(([name, max]) => {
     const table = workshop[WS_NAMES[name] ?? name];
     if (!table || Object.keys(table).length - 1 !== max) throw new Error(`Workshop ${name}: no table of ${max} levels`);
     const per = Array.from({ length: max }, (_, l) => table[String(l)].coins);   // entry l buys level l + 1
-    const step = max > LONG ? 10 : 1;
-    const vals = [];
-    for (let k = 0; k < max; k += step) vals.push(per.slice(k, k + step).reduce((a, b) => a + b, 0));
-    return `    ${key(name)}: [${step}, [\n${wrap(vals.map(num), '        ')}\n    ]],`;
+    return `    ${key(name)}: [${step(max)}, [\n${wrap(entries(per, step(max)).map(num), '        ')}\n    ]],`;
 });
+// ── Enhancements ────────────────────────────────────────────
+// Our names → the SDK's. The SDK prices more levels than the wiki and
+// the site allow (600 vs 400 on most); only ours are written.
+const ENH_NAMES = { 'Super Crit Multi': 'Super Crit Mult', 'Cells/Kill Bonus': 'Cells / Kill Bonus' };
+const enhRows = Object.values(WS_ENH).flat().map(([name, max]) => {
+    const table = enhancements[ENH_NAMES[name] ?? name];
+    if (!table || table.length < max) throw new Error(`Enhancement ${name}: no table of ${max} levels`);
+    return `    ${key(name)}: [${step(max)}, [\n${wrap(entries(table.slice(0, max), step(max)).map(num), '        ')}\n    ]],`;
+});
+
 writeFileSync(out('workshopCosts.ts'), `// ============================================================
 //  TowerForge Companion — Workshop coin costs
 //  Coins for every workshop level, before the Workshop Discount labs —
@@ -84,6 +101,38 @@ writeFileSync(out('workshopCosts.ts'), `// =====================================
 export const WS_COIN_COSTS: Record<string, [number, number[]]> = {
 ${wsRows.join('\n')}
 };
+
+// Workshop enhancements, the same way, before the Enhancement Coin
+// Discount labs (data/workshop/enhancement-costs.json; every level the
+// wiki lists matches).
+export const ENH_COIN_COSTS: Record<string, [number, number[]]> = {
+${enhRows.join('\n')}
+};
+`);
+
+// ── Module slots ────────────────────────────────────────────
+// The SDK's tables start at level 2; level 1 is 7 shards and 10K coins
+// (wiki Modules/Cost, whose totals then match: 3,136,095 shards to 300).
+const shards = [7, ...MODULE_SHARD_COSTS];
+const coins = [10000, ...MODULE_COIN_COSTS];
+if (shards.length !== 300 || coins.length !== 300) throw new Error('Module slot tables are not 300 levels');
+writeFileSync(out('moduleCosts.ts'), `// ============================================================
+//  TowerForge Companion — Module slot level costs
+//  Shards and coins for each level of a module slot, before the Module
+//  Shard Cost and Module Coin Cost labs — TheTowerSDK's module tables
+//  (MIT, npm \`thetowersdk\`, data/modules/costs), with level 1 from the
+//  wiki (Modules/Cost). Levels belong to the slot, not the module.
+//  Generated by scripts/upgrade-costs.mjs — regenerate rather than edit.
+// ============================================================
+
+// Entry 0 buys level 1; 300 levels.
+export const MODULE_SLOT_SHARDS: number[] = [
+${wrap(shards.map(num), '    ')}
+];
+
+export const MODULE_SLOT_COINS: number[] = [
+${wrap(coins.map(num), '    ')}
+];
 `);
 
 // ── Labs ────────────────────────────────────────────────────
@@ -181,4 +230,4 @@ export const LAB_LEVEL_COSTS: Record<string, [number[], number[]]> = {
 ${labRows.join('\n')}
 };
 `);
-console.log(`Wrote ${wsRows.length} workshop stats and ${labRows.length} labs.`);
+console.log(`Wrote ${wsRows.length} workshop stats, ${enhRows.length} enhancements, ${labRows.length} labs and module slots.`);

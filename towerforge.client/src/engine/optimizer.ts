@@ -35,6 +35,15 @@
 //  • The path is shown in blocks of 10 steps, one row per stat or lab in
 //    each, so one-level steps that take turns don't fill the list.
 //
+// 2026-10-18, goals and every currency:
+//  • Goals (optimizerConfig OptGoal) pick the score for every panel; "coins
+//    and push" blends coins/hour with the push score (coins^w × push^(1−w)).
+//  • Workshop and labs use the cost tables for every build now.
+//  • Enhancements (coins, discount labs), module slot levels (shards),
+//    bot stats (medals, 100 + 40 × (L − 1)) and card slots (gems) are
+//    priced; medals also weigh Event Shop trades for stones and shards,
+//    valued by what those buy on their own paths.
+//
 // ┌──────────────────────────────────────────────────────────┐
 // │  GLASS CANNON OPTIMIZER — STATUS & HANDOFF (2026-06-25)   │
 // └──────────────────────────────────────────────────────────┘
@@ -134,28 +143,12 @@ import { ehpScore } from './ehp';
 import type { EhpCalibration } from './ehp';
 import { edpsScore, edpsSurvivalScore } from './edps';
 import { healthSkipChance, healthSkipSources } from './levelSkip';
-import { labLevelCost, workshopCost, workshopDiscount } from './upgradeCosts';
-import type { EdpsCalibration } from './edps';
 import {
-    WS_COIN_PER_KILL, WS_COIN_PER_WAVE, WS_HEALTH, WS_HEALTH_REGEN, WS_DEFENSE_PCT,
-    WS_DEFENSE_ABSOLUTE, WS_THORNS, WS_WALL_HEALTH, WS_RECOVERY_AMOUNT, WS_MAX_RECOVERY, WS_PACKAGE_CHANCE,
-} from '../constants/buildStatCurves';
-import type { StatCurve } from '../constants/buildStatCurves';
-
-// Workshop stats whose coin costs are known (from the community wiki).
-const WS_COST_CURVES: Record<string, StatCurve> = {
-    'Health': WS_HEALTH,
-    'Health Regen': WS_HEALTH_REGEN,
-    'Defense %': WS_DEFENSE_PCT,
-    'Defense Absolute': WS_DEFENSE_ABSOLUTE,
-    'Thorn Damage': WS_THORNS,
-    'Wall Health': WS_WALL_HEALTH,
-    'Coin/Kill Bonus': WS_COIN_PER_KILL,
-    'Coin/Wave': WS_COIN_PER_WAVE,
-    'Recovery Amount': WS_RECOVERY_AMOUNT,
-    'Max Amount': WS_MAX_RECOVERY,
-    'Package Chance': WS_PACKAGE_CHANCE,
-};
+    botMedalCost, CARD_SLOT_GEMS, enhancementCost, enhancementDiscount, labLevelCost, MEDAL_TRADE_GIVES,
+    MEDAL_TRADE_PRICES, MODULE_SLOT_MAX, moduleSlotCost, workshopCost, workshopDiscount,
+} from './upgradeCosts';
+import type { EdpsCalibration } from './edps';
+import { BOTS_CONFIG } from '../constants/botData';
 
 import type {
     AppState,
@@ -169,6 +162,7 @@ import type {
     CardData,
     ModBonuses,
     PerkData,
+    ModuleType,
 } from '../types/gameTypes';
 
 // ── State Snapshot ────────────────────────────────────────────
@@ -202,6 +196,10 @@ export interface OptimizerSnapshot {
     // worth, as the log of the damage factor that gains the same waves
     // (runLength.skipWorth). Omitted = skip isn't scored.
     skipWorth?: number;
+    // "Coins and push": coins per hour (needs `farm`) blended with the push
+    // score — waves (flat damage + skip, needs `edps`) or survival (`ehp`).
+    // coinWeight 0–1 is how much coins count.
+    blend?: { push: 'waves' | 'ehp'; coinWeight: number };
 }
 
 // ── Deep Clone Snapshot ───────────────────────────────────────
@@ -249,20 +247,45 @@ function getEDPS(snap: OptimizerSnapshot): number {
 // eDPS for Glass Cannon; relative coins/hour for Farming; relative
 // survival for eHP. Candidates are scored by the % change of whichever
 // metric the snapshot uses.
+export function goalScore(snap: OptimizerSnapshot): number {
+    return getScore(snap);
+}
+
 function getScore(snap: OptimizerSnapshot): number {
+    if (snap.blend && snap.farm) {
+        const w = snap.blend.coinWeight;
+        return coinRate(snap, snap.farm) ** w * pushScore(snap) ** (1 - w);
+    }
     if (snap.metric === 'coins' && snap.farm) return coinRate(snap, snap.farm);
     if (snap.metric === 'ehp' && snap.ehp) return ehpScore(snap, snap.ehp);
-    if (snap.edps) {
-        if (snap.edpsMode !== 'waves') return edpsScore(snap, snap.edps);
-        // Flat damage, with the skip chance counted as the damage it's worth.
-        return edpsSurvivalScore(snap, snap.edps) * Math.exp((snap.skipWorth ?? 0) * scoredSkip(snap));
-    }
-    return getEDPS(snap);
+    if (snap.edps && snap.edpsMode !== 'waves') return edpsScore(snap, snap.edps);
+    return wavesScore(snap);
 }
+
+// Flat damage, with the skip chance counted as the damage it's worth; the
+// uncalibrated model without a run to calibrate from.
+function wavesScore(snap: OptimizerSnapshot): number {
+    if (!snap.edps) return getEDPS(snap);
+    return edpsSurvivalScore(snap, snap.edps) * Math.exp((snap.skipWorth ?? 0) * scoredSkip(snap));
+}
+
+// The push half of "coins and push".
+function pushScore(snap: OptimizerSnapshot): number {
+    if (snap.blend?.push === 'ehp') return snap.ehp ? ehpScore(snap, snap.ehp) : 1;
+    return wavesScore(snap);
+}
+
+// Coins per hour and push score, each relative, for the rows of "coins and push".
+export function scoreParts(snap: OptimizerSnapshot): { coins: number; push: number } {
+    return { coins: snap.farm ? coinRate(snap, snap.farm) : 1, push: pushScore(snap) };
+}
+
+const pushesWaves = (snap: OptimizerSnapshot) =>
+    snap.blend ? snap.blend.push === 'waves' : snap.edpsMode === 'waves';
 
 // Enemy Health Level Skip chance, in waves mode once skip is worth something.
 function scoredSkip(snap: OptimizerSnapshot): number {
-    if (!snap.skipWorth || !snap.edps || snap.edpsMode !== 'waves') return 0;
+    if (!snap.skipWorth || !snap.edps || !pushesWaves(snap)) return 0;
     return healthSkipChance(healthSkipSources(
         snap.wsData[snap.presetIdx], snap.labData, snap.enhData, snap.relicData, snap.modBonuses.subs ?? {},
     ));
@@ -272,10 +295,13 @@ function scoredSkip(snap: OptimizerSnapshot): number {
 const addedSkip = (before: OptimizerSnapshot, after: OptimizerSnapshot) =>
     scoredSkip(after) - scoredSkip(before) || undefined;
 
-// Glass Cannon workshop steps: one level, or 10 on the 1800–6000-level stats
-// (one Damage level is a few hundredths of a percent).
+// Workshop and enhancement steps: one level, or 10 on the 400–6000-level
+// stats (one Damage level is a few hundredths of a percent).
 const LONG_STAT = 300;
 const wsStep = (maxLv: number) => (maxLv > LONG_STAT ? 10 : 1);
+const MODULE_STEP = 5;     // module slot levels per step
+const MODULE_TYPES: ModuleType[] = ['cannon', 'armor', 'generator', 'core'];
+const cap = (word: string) => word.charAt(0).toUpperCase() + word.slice(1);
 
 // ============================================================
 //  BUILD CANDIDATES
@@ -289,6 +315,8 @@ export function buildCandidates(
     const basEDPS = getScore(snap);
     const isEdps = (snap.metric ?? 'edps') === 'edps';
     const excluded = new Set(snap.excludedUWs ?? []);
+    // Coins, gems, medals and shards: rank by gain per unit; free steps first.
+    const perCost = (delta: number, cost: number) => (cost > 0 ? delta / cost : delta > 0 ? Infinity : 0);
 
     // ── UW Stone Upgrades ──────────────────────────────────────
     if (cat === 'uw') {
@@ -606,19 +634,17 @@ export function buildCandidates(
             stats.forEach(([statName, maxLv], idx) => {
                 const curLv = snap.wsData[snap.presetIdx]?.[wsCat]?.[idx] ?? 0;
                 if (curLv >= maxLv) return;
-                const toLv = isEdps ? Math.min(maxLv, curLv + wsStep(maxLv)) : curLv + 1;
+                const toLv = Math.min(maxLv, curLv + wsStep(maxLv));
 
-                // Simulate the step and score the gain in the build's metric.
+                // Simulate the step and score the gain in the goal's score.
                 const after = cloneSnapshot(snap);
                 after.wsData[after.presetIdx][wsCat][idx] = toLv;
                 const delta = edpsDeltaPct(basEDPS, getScore(after));
 
-                // Glass Cannon: the game's cost table, after the discount lab.
-                // Farming/eHP: the wiki curves; other stats show a level proxy.
-                const coinCurve = WS_COST_CURVES[statName] ?? null;
-                const gcCost = isEdps ? workshopCost(statName, curLv, toLv, workshopDiscount(snap.labData, wsCat)) : null;
-                const cost = gcCost ?? (coinCurve ? Math.round(coinCurve.costAt(curLv + 1)) : curLv + 1);
-                const costKnown = isEdps ? gcCost !== null : coinCurve !== null;
+                // The game's cost table, after the section's discount lab.
+                const known = workshopCost(statName, curLv, toLv, workshopDiscount(snap.labData, wsCat));
+                const cost = known ?? curLv + 1;
+                const costKnown = known !== null;
 
                 candidates.push({
                     category: 'workshop',
@@ -662,42 +688,45 @@ export function buildCandidates(
                     ...(research ?? {}),
                     scorePct: delta,
                     skipPoints: addedSkip(snap, after),
-                    // GC: gain per hour of research (at least a minute, for the
-                    // first few levels that take seconds); a level with no known
-                    // time isn't recommended. Farming/eHP: raw gain.
-                    scorePerCost: !isEdps ? delta : research ? delta / Math.max(1 / 60, research.hours) : 0,
+                    // Gain per hour of research (at least a minute, for the first
+                    // few levels that take seconds); a level with no known time
+                    // isn't recommended.
+                    scorePerCost: research ? delta / Math.max(1 / 60, research.hours) : 0,
                 });
             }
         }
     }
 
-    // ── Cards (star upgrades) ──────────────────────────────────
-    // Most card effects only reach eDPS via Mastery (7★, handled by the
-    // 'mast' category), so star bumps below 7★ usually score ~0. The
-    // exceptions surface naturally through simulation: Critical Chance
-    // (per-star bonus) and Berserker (active presence).
+    // ── Cards: slots (gems) ────────────────────────────────────
+    // Card pulls are random, so stars aren't ranked. A slot is: put the best
+    // card you own that isn't in this preset into an empty slot (free), or
+    // into the next slot you buy (wiki Cards: 50 → 10,000 gems, 22 slots).
     if (cat === 'cards') {
-        for (const [cardName] of CARDS) {
-            const entry = snap.cardData.data[cardName];
-            const curStars = entry?.s ?? 0;
-            if (curStars >= 7) continue;
-
-            const after = cloneSnapshot(snap);
-            if (!after.cardData.data[cardName]) after.cardData.data[cardName] = { s: 0, m: 0 };
-            after.cardData.data[cardName]!.s = curStars + 1;
-            const delta = edpsDeltaPct(basEDPS, getScore(after));
-
-            candidates.push({
-                category: 'cards',
-                label: `${cardName} Card`,
-                subLabel: `${curStars}★ → ${curStars + 1}★`,
-                fromLv: curStars,
-                toLv: curStars + 1,
-                cost: curStars + 1,
-                costType: 'coins',
-                scorePct: delta,
-                scorePerCost: delta,   // rank by raw eDPS gain
-            });
+        const inPreset = new Set(snap.cardData.presets[snap.presetIdx] ?? []);
+        const slots = Math.max(1, snap.cardData.slots ?? 1);
+        const free = inPreset.size < slots;
+        if (free || slots < CARD_SLOT_GEMS.length) {
+            const cost = free ? 0 : CARD_SLOT_GEMS[slots];
+            for (const [cardName] of CARDS) {
+                if (inPreset.has(cardName) || !(snap.cardData.data[cardName]?.s)) continue;
+                const after = cloneSnapshot(snap);
+                after.cardData.presets[after.presetIdx] = [...inPreset, cardName];
+                if (!free) after.cardData.slots = slots + 1;
+                const delta = edpsDeltaPct(basEDPS, getScore(after));
+                candidates.push({
+                    category: 'cards',
+                    label: `${cardName} Card`,
+                    subLabel: free ? 'Into an empty card slot' : `In card slot ${slots + 1}`,
+                    fromLv: free ? slots : slots,
+                    toLv: free ? slots : slots + 1,
+                    cost,
+                    costType: 'gems',
+                    costKnown: true,
+                    scorePct: delta,
+                    scorePerCost: perCost(delta, cost),
+                    ref: [cardName],
+                });
+            }
         }
     }
 
@@ -711,85 +740,98 @@ export function buildCandidates(
                 if (!owned) return;
                 const curLv = snap.enhData?.d?.[enhCat]?.[idx] ?? 0;
                 if (curLv >= maxLv) return;
+                const toLv = Math.min(maxLv, curLv + wsStep(maxLv));
 
                 const after = cloneSnapshot(snap);
                 if (!after.enhData.d[enhCat]) after.enhData.d[enhCat] = [];
-                after.enhData.d[enhCat][idx] = curLv + 1;
+                after.enhData.d[enhCat][idx] = toLv;
                 const delta = edpsDeltaPct(basEDPS, getScore(after));
+                const known = enhancementCost(enhName, curLv, toLv, enhancementDiscount(snap.labData, enhCat));
 
                 candidates.push({
                     category: 'enhancements',
-                    label: `Enh ${enhCat.charAt(0).toUpperCase() + enhCat.slice(1)} — ${enhName}`,
-                    subLabel: `Lv ${curLv} → ${curLv + 1}`,
+                    label: `Enh ${cap(enhCat)} — ${enhName}`,
+                    subLabel: `Lv ${curLv} → ${toLv}`,
                     fromLv: curLv,
-                    toLv: curLv + 1,
-                    cost: curLv + 1,
+                    toLv,
+                    cost: known ?? curLv + 1,
+                    costKnown: known !== null,
                     costType: 'coins',
                     scorePct: delta,
-                    scorePerCost: delta,   // rank by raw eDPS gain
+                    skipPoints: addedSkip(snap, after),
+                    scorePerCost: known !== null ? perCost(delta, known) : 0,
                 });
             });
         }
     }
 
-    // ── Bots ────────────────────────────────────────────────────
-    // Amplify Bot contributes to DPS directly.
-    // Echoing Shot (Amplify Bot+) multiplies bullet count.
+    // ── Bots (medals) ──────────────────────────────────────────
+    // Every stat of every owned bot, one level a step. Only the stats a
+    // model reads score (Amplify Bot and Bot Bot bonus for damage, Golden
+    // Bot for coins); the rest show no gain and drop out.
     if (cat === 'bots') {
-        const ampEntry = snap.botData?.['Amplify Bot'];
-        if (ampEntry?.owned) {
-            const medals = ampEntry.medals ?? [];
-
-            // Amplify Bot Bonus upgrades (medal stat index 2)
-            const bonusLv = medals[2] ?? 0;
-            const bonusMaxLv = 30;
-            if (bonusLv < bonusMaxLv) {
+        for (const bot of BOTS_CONFIG) {
+            const entry = snap.botData?.[bot.name];
+            if (!entry?.owned) continue;
+            bot.stats.forEach((stat, i) => {
+                const curLv = entry.medals?.[i] ?? 0;
+                if (curLv >= stat.values.length) return;
                 const after = cloneSnapshot(snap);
-                if (!after.botData['Amplify Bot']) {
-                    after.botData['Amplify Bot'] = { owned: true, medals: [0, 0, 0, 0, 0], plusLv: 0 };
-                }
-                after.botData['Amplify Bot'].medals[2] = bonusLv + 1;
-
+                const medals = [...(after.botData[bot.name].medals ?? [])];
+                medals[i] = curLv + 1;
+                after.botData[bot.name] = { ...after.botData[bot.name], medals };
                 const delta = edpsDeltaPct(basEDPS, getScore(after));
-
+                const cost = botMedalCost(curLv, curLv + 1);
                 candidates.push({
                     category: 'bots',
-                    label: 'Amplify Bot — Bonus',
-                    subLabel: `Lv ${bonusLv} → ${bonusLv + 1}`,
-                    fromLv: bonusLv,
-                    toLv: bonusLv + 1,
-                    cost: 0,
-                    costType: 'coins',
+                    label: `${bot.name} — ${stat.label}`,
+                    subLabel: `Lv ${curLv} → ${curLv + 1}`,
+                    fromLv: curLv,
+                    toLv: curLv + 1,
+                    cost,
+                    costType: 'medals',
+                    costKnown: true,
                     scorePct: delta,
-                    scorePerCost: delta > 0 ? Infinity : 0,
+                    scorePerCost: perCost(delta, cost),
+                    ref: [bot.name, String(i)],
                 });
-            }
+            });
+        }
+    }
 
-            // Echoing Shot upgrades (Amplify Bot+, medal stat index 4)
-            if (ampEntry.plusLv > 0) {
-                const echoingLv = medals[4] ?? 0;
-                const echoingMaxLv = 9;  // Levels 0-9 → 3-12 projectiles
-                if (echoingLv < echoingMaxLv) {
-                    const after = cloneSnapshot(snap);
-                    if (!after.botData['Amplify Bot']) {
-                        after.botData['Amplify Bot'] = { owned: true, medals: [0, 0, 0, 0, 0], plusLv: 1 };
-                    }
-                    after.botData['Amplify Bot'].medals[4] = echoingLv + 1;
-
-                    const delta = edpsDeltaPct(basEDPS, getScore(after));
-
-                    candidates.push({
-                        category: 'bots',
-                        label: 'Echoing Shot',
-                        subLabel: `Lv ${echoingLv} → ${echoingLv + 1} (${3 + echoingLv} → ${4 + echoingLv} projectiles)`,
-                        fromLv: echoingLv,
-                        toLv: echoingLv + 1,
-                        cost: 0,
-                        costType: 'coins',
-                        scorePct: delta,
-                        scorePerCost: delta > 0 ? Infinity : 0,
-                    });
-                }
+    // ── Module slot levels (shards) ────────────────────────────
+    // Main and assist slot of each type, 5 levels a step; a module can't
+    // pass its rarity's cap, so steps past it show no gain.
+    if (cat === 'modules') {
+        for (const type of MODULE_TYPES) {
+            for (const pos of ['main', 'assist'] as const) {
+                if (pos === 'assist' && (snap.moduleState.assistData[type]?.rarity ?? 'locked') === 'locked') continue;
+                const curLv = snap.moduleState.slotLevels?.[type]?.[pos] ?? 0;
+                if (curLv >= MODULE_SLOT_MAX) continue;
+                const toLv = Math.min(MODULE_SLOT_MAX, curLv + MODULE_STEP);
+                const after = cloneSnapshot(snap);
+                const levels = after.moduleState.slotLevels ?? ({} as NonNullable<typeof after.moduleState.slotLevels>);
+                levels[type] = { ...(levels[type] ?? { main: 0, assist: 0 }), [pos]: toLv };
+                after.moduleState.slotLevels = levels;
+                after.modBonuses = readActiveModuleBonuses(
+                    after.moduleState, after.perkData, after.labData, after.cardData, after.modBonuses.run,
+                );
+                const delta = edpsDeltaPct(basEDPS, getScore(after));
+                const { shards, coins } = moduleSlotCost(curLv, toLv, snap.labData);
+                candidates.push({
+                    category: 'modules',
+                    label: `${cap(type)} — ${pos === 'main' ? 'Main' : 'Assist'} slot`,
+                    subLabel: `Lv ${curLv} → ${toLv}`,
+                    fromLv: curLv,
+                    toLv,
+                    cost: shards,
+                    costType: 'shards',
+                    costKnown: true,
+                    coins,
+                    scorePct: delta,
+                    scorePerCost: perCost(delta, shards),
+                    ref: [type, pos],
+                });
             }
         }
     }
@@ -881,11 +923,29 @@ export function applyUpgrade(
         }
 
         case 'cards': {
-            const cardName = c.label.replace(' Card', '');
-            if (!snap.cardData.data[cardName]) {
-                snap.cardData.data[cardName] = { s: 0, m: 0 };
-            }
-            snap.cardData.data[cardName]!.s = c.toLv;
+            const cardName = c.ref?.[0] ?? c.label.replace(' Card', '');
+            const preset = snap.cardData.presets[snap.presetIdx] ?? [];
+            if (!preset.includes(cardName)) snap.cardData.presets[snap.presetIdx] = [...preset, cardName];
+            snap.cardData.slots = Math.max(snap.cardData.slots ?? 1, c.toLv);
+            break;
+        }
+
+        case 'bots': {
+            const [name, stat] = c.ref ?? [];
+            const entry = name !== undefined ? snap.botData[name] : undefined;
+            if (!entry || stat === undefined || name === 'trade') break;
+            const medals = [...(entry.medals ?? [])];
+            medals[Number(stat)] = c.toLv;
+            snap.botData[name] = { ...entry, medals };
+            break;
+        }
+
+        case 'modules': {
+            const [type, pos] = (c.ref ?? []) as [ModuleType, 'main' | 'assist'];
+            if (!type || !pos) break;
+            const levels = snap.moduleState.slotLevels ?? ({} as NonNullable<typeof snap.moduleState.slotLevels>);
+            levels[type] = { ...(levels[type] ?? { main: 0, assist: 0 }), [pos]: c.toLv };
+            snap.moduleState.slotLevels = levels;
             break;
         }
 
@@ -913,7 +973,9 @@ const continues = (row: OptCandidate, c: OptCandidate) =>
 
 function mergeInto(row: OptCandidate, c: OptCandidate) {
     row.toLv = c.toLv;
-    row.subLabel = `Lv ${row.fromLv} → ${c.toLv}`;
+    row.subLabel = row.ref?.[0] === 'trade'
+        ? `Trades ${row.fromLv + 1}–${c.toLv} this event`
+        : `Lv ${row.fromLv} → ${c.toLv}`;
     row.cost += c.cost;
     row.scorePct = ((1 + row.scorePct / 100) * (1 + c.scorePct / 100) - 1) * 100;
     if (row.hours !== undefined && c.hours !== undefined) row.hours += c.hours;
@@ -981,7 +1043,105 @@ export function simulateCategoryPath(
         );
     }
 
-    return cat === 'workshop' || cat === 'labs' ? groupPath(path) : path;
+    return cat === 'stones' ? path : groupPath(path);
+}
+
+// What spending `amount` more of a currency along its ranked path is
+// worth, after `spent` already went into it: the % gain of those steps,
+// with a step only partly paid for counting in proportion.
+export function pathGain(path: OptCandidate[], spent: number, amount: number): number {
+    const logUpTo = (budget: number) => {
+        let left = budget;
+        let log = 0;
+        for (const c of path) {
+            if (left <= 0) break;
+            const step = Math.log(1 + Math.max(0, c.scorePct) / 100);
+            log += c.cost > 0 ? step * Math.min(1, left / c.cost) : step;
+            left -= c.cost;
+        }
+        return log;
+    };
+    return (Math.exp(logUpTo(spent + amount) - logUpTo(spent)) - 1) * 100;
+}
+
+// ============================================================
+//  SIMULATE MEDAL PATH
+//  Medals buy bot levels, or Event Shop trades: 15 Power Stones or 250
+//  Module Shards each, dearer with every trade of a kind in one event
+//  (40, 65, 90, 130, 175, 230, then 380). A trade is worth what those
+//  stones or shards buy next on their own ranked paths (`stonesHeld`
+//  are spent first). Each step takes the most gain per medal.
+// ============================================================
+export function simulateMedalPath(
+    steps: number,
+    snapshot: OptimizerSnapshot,
+    stonePath: OptCandidate[],
+    stonesHeld: number,
+    shardPath: OptCandidate[],
+): OptCandidate[] {
+    const path: OptCandidate[] = [];
+    const state = cloneSnapshot(snapshot);
+    const trades = { stones: 0, shards: 0 };
+    const tradeRow = (kind: 'stones' | 'shards'): OptCandidate | null => {
+        const k = trades[kind];
+        const price = MEDAL_TRADE_PRICES[Math.min(k, MEDAL_TRADE_PRICES.length - 1)];
+        const amount = MEDAL_TRADE_GIVES[kind];
+        const gain = kind === 'stones'
+            ? pathGain(stonePath, stonesHeld + k * amount, amount)
+            : pathGain(shardPath, k * amount, amount);
+        if (!(gain >= GC_SCORING.minGainPct)) return null;
+        return {
+            category: 'bots',
+            label: kind === 'stones' ? `Event Shop — ${amount} Power Stones` : `Event Shop — ${amount} Module Shards`,
+            subLabel: `Trade ${k + 1} this event`,
+            fromLv: k,
+            toLv: k + 1,
+            cost: price,
+            costType: 'medals',
+            costKnown: true,
+            scorePct: gain,
+            scorePerCost: gain / price,
+            ref: ['trade', kind],
+        };
+    };
+    for (let i = 0; i < steps; i++) {
+        const options = [
+            ...buildCandidates(state, 'bots').filter(worthIt).slice(0, 1),
+            tradeRow('stones'),
+            tradeRow('shards'),
+        ].filter((c): c is OptCandidate => c !== null && c.scorePerCost > 0);
+        const best = options.sort((a, b) => b.scorePerCost - a.scorePerCost)[0];
+        if (!best) break;
+        path.push(best);
+        if (best.ref?.[0] === 'trade') {
+            trades[best.ref[1] as 'stones' | 'shards']++;
+        } else {
+            applyUpgrade(state, best);
+        }
+    }
+    return groupPath(path);
+}
+
+// "Coins and push": each step's own gain in coins per hour and in the push
+// score, replayed along the path (rows show both). Trades keep neither.
+export function attachParts(snapshot: OptimizerSnapshot, path: OptCandidate[]): OptCandidate[] {
+    const state = cloneSnapshot(snapshot);
+    let before = scoreParts(state);
+    return path.map(c => {
+        if (c.ref?.[0] === 'trade') return c;
+        applyUpgrade(state, c);
+        state.modBonuses = readActiveModuleBonuses(
+            state.moduleState, state.perkData, state.labData, state.cardData, state.modBonuses.run,
+        );
+        const after = scoreParts(state);
+        const row = {
+            ...c,
+            coinsPct: edpsDeltaPct(before.coins, after.coins),
+            pushPct: edpsDeltaPct(before.push, after.push),
+        };
+        before = after;
+        return row;
+    });
 }
 
 // ============================================================

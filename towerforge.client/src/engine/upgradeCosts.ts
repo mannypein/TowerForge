@@ -9,13 +9,20 @@
 //    Discount; time ÷ (1 + 2% a level of Labs Speed) ÷ (1 + the Lab
 //    Speed relic). Labs Speed doesn't speed up its own research (wiki,
 //    Labs Speed); gem speed-ups aren't counted.
-//  - Enhancements: 0.3% a level of that section's Enhancement Coin
-//    Discount lab (30% at 100).
+//  - Enhancements: the game's table (workshopCosts.ts), less 0.3% a level
+//    of that section's Enhancement Coin Discount lab (30% at 100).
+//  - Module slots: shards and coins a level (moduleCosts.ts), less 1% a
+//    level of the Module Shard Cost / Module Coin Cost labs (30% at 30).
+//  - Bots: every bot stat's level L costs 100 + 40 × (L − 1) medals (wiki
+//    bot Cost pages: 100 for level 1, 1,260 for level 30).
+//  - Card slots (gems), Event Shop trades (medals) and Elite Cell lab
+//    boosts: the wiki's Cards and Currencies pages.
 //  Pure functions — no store imports.
 // ============================================================
 
-import { WS_STATS } from '../constants/gameData';
-import { WS_COIN_COSTS } from '../constants/workshopCosts';
+import { WS_ENH, WS_STATS } from '../constants/gameData';
+import { ENH_COIN_COSTS, WS_COIN_COSTS } from '../constants/workshopCosts';
+import { MODULE_SLOT_COINS, MODULE_SLOT_SHARDS } from '../constants/moduleCosts';
 import { LAB_LEVEL_COSTS } from '../constants/labCosts';
 import type { LabData } from '../types/gameTypes';
 
@@ -39,20 +46,19 @@ export function enhancementDiscount(labs: LabData, section: WorkshopSection): nu
 }
 
 const WS_MAX: Record<string, number> = Object.fromEntries(Object.values(WS_STATS).flat());
-const runningTotals = new Map<string, number[]>();
+const ENH_MAX: Record<string, number> = Object.fromEntries(Object.values(WS_ENH).flat().map(([n, max]) => [n, max]));
+const runningTotals = new Map<[number, number[]], number[]>();
 
 // Coins spent on a stat to reach `level`, before discounts. Long stats list
 // one total per 10 levels; inside one the levels are taken as equal.
-function workshopTotal(stat: string, level: number): number | null {
-    const table = WS_COIN_COSTS[stat];
-    const max = WS_MAX[stat];
+function tableTotal(table: [number, number[]] | undefined, max: number | undefined, level: number): number | null {
     if (!table || max === undefined) return null;
     const [step, costs] = table;
-    let sums = runningTotals.get(stat);
+    let sums = runningTotals.get(table);
     if (!sums) {
         sums = [0];
         for (const c of costs) sums.push(sums[sums.length - 1] + c);
-        runningTotals.set(stat, sums);
+        runningTotals.set(table, sums);
     }
     const l = Math.min(max, Math.max(0, level));
     const k = Math.min(costs.length - 1, Math.floor(l / step));
@@ -62,10 +68,55 @@ function workshopTotal(stat: string, level: number): number | null {
 
 // Coins to take a workshop stat from one level to another, after `discount`.
 export function workshopCost(stat: string, from: number, to: number, discount = 0): number | null {
-    const a = workshopTotal(stat, from);
-    const b = workshopTotal(stat, to);
+    const a = tableTotal(WS_COIN_COSTS[stat], WS_MAX[stat], from);
+    const b = tableTotal(WS_COIN_COSTS[stat], WS_MAX[stat], to);
     return a === null || b === null ? null : Math.max(0, b - a) * (1 - discount);
 }
+
+// Coins to take an enhancement from one level to another, after `discount`.
+export function enhancementCost(name: string, from: number, to: number, discount = 0): number | null {
+    const a = tableTotal(ENH_COIN_COSTS[name], ENH_MAX[name], from);
+    const b = tableTotal(ENH_COIN_COSTS[name], ENH_MAX[name], to);
+    return a === null || b === null ? null : Math.max(0, b - a) * (1 - discount);
+}
+
+export const MODULE_SLOT_MAX = MODULE_SLOT_SHARDS.length;
+
+// Shards and coins to take a module slot from one level to another.
+export function moduleSlotCost(from: number, to: number, labs: LabData): { shards: number; coins: number } {
+    let shards = 0;
+    let coins = 0;
+    for (let l = Math.max(0, from); l < Math.min(MODULE_SLOT_MAX, to); l++) {
+        shards += MODULE_SLOT_SHARDS[l];
+        coins += MODULE_SLOT_COINS[l];
+    }
+    return {
+        shards: shards * (1 - 0.01 * Math.min(30, labs['Module Shard Cost'] ?? 0)),
+        coins: coins * (1 - 0.01 * Math.min(30, labs['Module Coin Cost'] ?? 0)),
+    };
+}
+
+// Medals to take one bot stat from one level to another.
+export function botMedalCost(from: number, to: number): number {
+    let medals = 0;
+    for (let l = from + 1; l <= to; l++) medals += 100 + 40 * (l - 1);
+    return medals;
+}
+
+// Gems for card slot n (index n − 1; slot 1 is free, 22 can be bought).
+export const CARD_SLOT_GEMS = [0, 50, 100, 200, 300, 400, 500, 600, 750, 1000, 1200, 1400, 1600, 1800,
+    2500, 3500, 4500, 5500, 6500, 7500, 8500, 10000];
+
+// Event Shop trades: medals for the 1st, 2nd … trade of one kind in an
+// event (7th and later 380). Each gives 15 Power Stones, 250 Module Shards
+// of one type, or 150 Gems.
+export const MEDAL_TRADE_PRICES = [40, 65, 90, 130, 175, 230, 380];
+export const MEDAL_TRADE_GIVES = { stones: 15, shards: 250, gems: 150 };
+
+// Elite Cell lab boosts: speed and cells per hour, for one lab slot.
+export const CELL_BOOSTS: [number, number][] = [
+    [1.5, 15], [2, 100], [3, 840], [4, 3360], [5, 11900], [6, 60000], [7, 250000], [8, 1e6],
+];
 
 export interface LabLevelCost {
     coins: number;

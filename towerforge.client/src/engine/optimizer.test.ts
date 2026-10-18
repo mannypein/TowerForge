@@ -7,7 +7,8 @@ import { useGameStore } from '../store/useGameStore';
 import { readActiveModuleBonuses } from './modBonuses';
 import { runRatesFrom } from './runRates';
 import { parseGameExport } from './gameExport';
-import { buildCandidates, groupPath, mergeRepeats, simulateStonePath } from './optimizer';
+import { buildCandidates, goalScore, groupPath, mergeRepeats, pathGain, simulateMedalPath, simulateStonePath } from './optimizer';
+import { buildFarmCalibration } from './farming';
 import type { OptimizerSnapshot } from './optimizer';
 import { buildEdpsCalibration, edpsScore, edpsSurvivalScore } from './edps';
 import { UWS, UW_STAT_VALUES, UW_STONE_COSTS } from '../constants/gameData';
@@ -250,6 +251,86 @@ describe('Glass Cannon workshop and labs', () => {
             ['CC', 40, 45], ['CF', 40, 45], ['CC', 45, 46], ['CF', 45, 46],
         ]);
         expect(rows[0].cost).toBe(50);
+    });
+});
+
+describe('every currency', () => {
+    const find = (snap: OptimizerSnapshot, cat: Parameters<typeof buildCandidates>[1], label: string) =>
+        buildCandidates(snap, cat).find(c => c.label === label);
+
+    it('prices bot levels in medals: 100 + 40 a level', () => {
+        const snap = snapshot(run(), s => { s.botData = { 'Amplify Bot': { owned: true, medals: [0, 0, 5, 0], plusLv: 0 } }; });
+        snap.edps = buildEdpsCalibration(snap, run())!;
+        const bonus = find(snap, 'bots', 'Amplify Bot — Bonus')!;
+        expect(bonus).toMatchObject({ fromLv: 5, toLv: 6, cost: 300, costType: 'medals' });
+        expect(bonus.scorePct).toBeGreaterThan(0);           // ×5.9 → ×6.3 on tower damage
+        expect(find(snap, 'bots', 'Amplify Bot — Duration')!.scorePct).toBeCloseTo(0, 9);   // not modeled
+    });
+
+    it('prices module slot levels in shards and coins (wiki Modules/Cost)', () => {
+        const slot = find(snapshot(), 'modules', 'Cannon — Main slot')!;
+        expect(slot).toMatchObject({ fromLv: 0, toLv: 5, cost: 35, coins: 50000, costType: 'shards' });
+        const labbed = find(snapshot(null, s => { s.labData = { 'Module Shard Cost': 30 }; }), 'modules', 'Cannon — Main slot')!;
+        expect(labbed.cost).toBeCloseTo(35 * 0.7, 9);
+    });
+
+    it('fills an empty card slot for free, then prices the next slot in gems', () => {
+        const cards = (preset: string[]) => snapshot(run(), s => {
+            s.cardData = { data: { Damage: { s: 7, m: 0 }, 'Attack Speed': { s: 3, m: 0 } }, slots: 2, presets: { 0: preset } };
+        });
+        const empty = buildCandidates(cards(['Damage']), 'cards');
+        expect(empty.map(c => [c.label, c.cost])).toEqual([['Attack Speed Card', 0]]);
+        // A card only counts while it's equipped (Critical Chance used to count anyway).
+        const crit = (preset: string[]) => snapshot(null, s => {
+            s.cardData = { data: { 'Critical Chance': { s: 4, m: 0 } }, slots: 1, presets: { 0: preset } };
+        });
+        expect(buildCandidates(crit([]), 'cards')[0].scorePct).toBeGreaterThan(0);
+        const full = buildCandidates(cards(['Damage', 'Coins']), 'cards').find(c => c.label === 'Attack Speed Card')!;
+        expect(full).toMatchObject({ cost: 100, costType: 'gems', toLv: 3 });  // slot 3 is 100 gems
+    });
+
+    it('prices enhancements from the game table, 10 levels a step on the 400-level ones', () => {
+        const snap = snapshot(null, s => { s.enhData = { d: { attack: [0] }, u: { attack: [true] } }; });
+        const dmg = find(snap, 'enhancements', 'Enh Attack — Damage')!;
+        expect(dmg.toLv).toBe(10);
+        expect(dmg.cost / 55.54e9).toBeCloseTo(1, 3);        // levels 1–10: 5B, 5.04B, … (wiki)
+    });
+
+    it('blends coins and push by the coin weight', () => {
+        const report = run();
+        const base = snapshot(report);
+        base.farm = buildFarmCalibration(base, report);
+        base.edps = buildEdpsCalibration(base, report)!;
+        const after = snapshot(report, s => { s.uwData.data.CL!.sv[0] = 11; });
+        Object.assign(after, { farm: base.farm, edps: base.edps });
+        const score = (s: OptimizerSnapshot, coinWeight: number) =>
+            goalScore({ ...s, blend: { push: 'waves', coinWeight } });
+        const pushGain = score(after, 0) / score(base, 0);
+        const coinGain = score(after, 1) / score(base, 1);
+        expect(pushGain).toBeCloseTo(edpsSurvivalScore(after, base.edps) / edpsSurvivalScore(base, base.edps), 9);
+        expect(score(after, 0.5) / score(base, 0.5)).toBeCloseTo(Math.sqrt(pushGain * coinGain), 9);
+    });
+
+    it('values a budget along a ranked path, part-paid steps in proportion', () => {
+        const step = (cost: number, scorePct: number) => ({
+            category: 'uw' as const, label: '', subLabel: '', fromLv: 0, toLv: 1,
+            cost, costType: 'stones' as const, scorePct, scorePerCost: scorePct / cost,
+        });
+        const path = [step(10, 10), step(10, 10)];
+        expect(pathGain(path, 0, 10)).toBeCloseTo(10, 9);
+        expect(pathGain(path, 5, 10)).toBeCloseTo(10, 9);     // half of each step
+        expect(pathGain(path, 0, 30)).toBeCloseTo(21, 9);     // the path runs out
+    });
+
+    it('spends medals on Event Shop trades when bots give nothing, dearer each trade', () => {
+        const stonePath = Array.from({ length: 20 }, () => ({
+            category: 'uw' as const, label: 'x', subLabel: '', fromLv: 0, toLv: 1,
+            cost: 15, costType: 'stones' as const, scorePct: 1, scorePerCost: 1 / 15,
+        }));
+        const rows = simulateMedalPath(5, snapshot(), stonePath, 0, []);
+        expect(rows).toHaveLength(1);
+        expect(rows[0]).toMatchObject({ label: 'Event Shop — 15 Power Stones', subLabel: 'Trades 1–5 this event' });
+        expect(rows[0].cost).toBe(40 + 65 + 90 + 130 + 175);
     });
 });
 

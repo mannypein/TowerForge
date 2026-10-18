@@ -2103,6 +2103,49 @@
     color: var(--gold);
 }
 
+/* Optimizer goal "coins and push": the balance slider. */
+.opt-blend {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.opt-blend input[type='range'] {
+    width: 120px;
+    accent-color: var(--accent);
+}
+
+.opt-blend-end {
+    font-size: 11px;
+    color: var(--text-dim);
+}
+
+.opt-blend-val {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--gold);
+    min-width: 64px;
+}
+
+/* Elite Cells: lab boost prices. */
+.opt-cells {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px 10px;
+    padding: 8px 12px 12px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-bright);
+}
+
+.opt-cells-head {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+    color: var(--text-dim);
+}
+
 /* Workshop and Labs rows: the badge only repeats the panel's name, so a
    phone gives its room to the upgrade's name instead. */
 @media (max-width: 520px) {
@@ -2654,3 +2697,90 @@
         font-size: 16px;
         color: var(--gold);
     }
+
+/* ── What If (wi-) ─────────────────────────────────────────── */
+.wi-picker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.wi-picker select {
+    font-size: 13px;
+    max-width: 100%;
+}
+
+.wi-level {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+}
+
+.wi-level input {
+    width: 90px;
+    font-size: 13px;
+}
+
+.wi-hint {
+    margin: 8px 0 0;
+    font-size: 12px;
+    color: var(--text-dim);
+}
+
+.wi-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 12px;
+    align-items: flex-start;
+}
+
+.wi-item {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    width: 100%;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg3);
+}
+
+.wi-item-name {
+    flex: 1;
+    min-width: 0;
+    font-size: 13px;
+    color: var(--text-bright);
+}
+
+.wi-item-lv {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--gold);
+    white-space: nowrap;
+}
+
+.wi-remove {
+    padding: 2px 8px;
+}
+
+.wi-results {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px 16px;
+    align-items: baseline;
+}
+
+.wi-k {
+    font-size: 13px;
+    color: var(--text-dim);
+}
+
+.wi-v {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--text-bright);
+    text-align: right;
+}

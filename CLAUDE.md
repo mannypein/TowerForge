@@ -9,13 +9,13 @@ suggests what to upgrade next.
 
 - `towerforge.client/` — React 19 + TypeScript + Vite, state in Zustand (`src/store/useGameStore.ts`, saved to localStorage under `tc_*` keys).
   - `src/engine/` — calculations and the game-export importer. **Pure functions, no store imports.**
-  - `src/constants/` — game data tables (`gameData.ts`, `moduleData.ts`, `botData.ts`), the export index maps (`gameExportMaps.ts`), and the Creator Codes list (`creatorCodes.ts` — add a creator's link only when it's confirmed as theirs). `workshopCosts.ts` and `labCosts.ts` are generated from TheTowerSDK — don't edit them by hand.
+  - `src/constants/` — game data tables (`gameData.ts`, `moduleData.ts`, `botData.ts`), the export index maps (`gameExportMaps.ts`), and the Creator Codes list (`creatorCodes.ts` — add a creator's link only when it's confirmed as theirs). `workshopCosts.ts`, `labCosts.ts` and `moduleCosts.ts` are generated from TheTowerSDK — don't edit them by hand.
   - `src/components/tabs/` — one component per tab; styles in `tabs.css`, theme tokens in `src/styles/variables.css`.
   - `src/assets/{modules,bots}/` — game icons, looked up by slug in `constants/gameIcons.ts`.
 - `TowerForge.Server/` — ASP.NET Core 8 API (accounts, saves, share links). On the server its data lives in `/var/lib/towerforge` (SQLite), outside the deploy folder.
 - `docs/game-export-format.md` — field-by-field notes on the game's `tool_export.json` and how each mapping was confirmed. `docs/module-effects.md` — unique module formulas and assumptions.
 - `docs/analytics.md` — Umami visitor analytics (self-hosted on the VPS at /analytics): what's tracked, where it runs, how to open the dashboard and update it. Setup scripts in `ops/umami/`.
-- `docs/ultimate-weapons.md` — every UW and UW+ mechanic checked against the wiki (values, costs, labs, perks) and how the model uses it. `docs/optimizer.md` — how each build scores upgrades, calibration from battle reports, and the verified stone rules (card mastery, assist modules, primary module labs).
+- `docs/ultimate-weapons.md` — every UW and UW+ mechanic checked against the wiki (values, costs, labs, perks) and how the model uses it. `docs/optimizer.md` — the Optimizer's goals and how each scores upgrades, what every currency is ranked by and where its prices come from, the What If page, calibration from battle reports, and the verified stone rules (card mastery, assist modules, primary module labs).
 - `docs/run-simulation.md` — research for the planned run simulator: enemy scaling, spawning, elites/fleets, battle conditions, level skip, in-run cash/perks/free upgrades, survival, what battle reports hold, the gaps, and the disagreements between sources. TheTowerSDK (MIT, npm `thetowersdk`) is the main formula source.
 
 ## Commands
@@ -31,7 +31,7 @@ Run from `towerforge.client/` unless noted.
 | Deploy (repo root) | `powershell -ExecutionPolicy Bypass -File deploy.ps1` — runs the tests first and stops if any fail |
 | Import game icons (repo root) | `powershell -ExecutionPolicy Bypass -File import-icons.ps1` — trims, centers and resizes PNGs from `Desktop\Tower-Forge-Assets` |
 | Creator profile pictures | `npm run creator-avatars` — downloads each YouTube-linked creator's picture into `src/assets/creators/`; run after adding a YouTube link to `creatorCodes.ts` (a test fails until you do) |
-| Workshop and lab cost tables | `npm run upgrade-costs -- <unpacked thetowersdk package>` — rewrites `workshopCosts.ts` and `labCosts.ts` (steps in the script header) |
+| Cost tables | `npm run upgrade-costs -- <unpacked thetowersdk package>` — rewrites `workshopCosts.ts`, `labCosts.ts` and `moduleCosts.ts` (steps in the script header) |
 
 `npx eslint src` shows older `no-explicit-any` errors in LoginModal, moduleDefinitions,
 saveParser, towerAuth and gameTypes (`CloudSaveData`). Lint the files you change instead.

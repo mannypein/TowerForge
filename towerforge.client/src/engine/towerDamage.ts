@@ -470,10 +470,9 @@ export function calcCritChance(
     modBonuses?: ModBonuses,
 ): number {
     const wsCrit = wsData[presetIdx]?.attack[2] ?? 0; // level → % directly (1%/level)
-    const critCard = cardData.data['Critical Chance'];
-    const critCardBonus = (critCard?.s ?? 0) > 0
-        ? [5, 6, 7, 8, 9, 10, 11][critCard!.s - 1] ?? 0
-        : 0;
+    // The card counts only while it's in the preset, like every card.
+    const critCard = activeCard(cardData, presetIdx, 'Critical Chance');
+    const critCardBonus = critCard ? [5, 6, 7, 8, 9, 10, 11][critCard.stars - 1] ?? 0 : 0;
     const cardMastery = calcCardMasteryBonuses(presetIdx, cardData);
     const relicCrit = relicData['rCrit'] ?? 0; // Crit Chance relic (max +9%, additive pts)
     const moduleSub = modBonuses?.subs?.['Crit Chance'] ?? 0;      // +% points

@@ -5,30 +5,26 @@
 //  eHP/Hybrid/Farming are placeholder until formulas are built.
 // ============================================================
 
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { Fragment, useState, useCallback, useEffect, useMemo } from 'react';
 import { useGameStore } from '../../store/useGameStore';
 import {
-    OPT_PANELS, OPT_GAIN_THRESHOLDS, OPT_DEFAULT_SHOW, BUILD_SUPPORT, RESEARCH_PANELS, GC_RESEARCH_PANELS,
+    OPT_PANELS, OPT_GAIN_THRESHOLDS, OPT_DEFAULT_SHOW, BUILD_SUPPORT, BUILD_GOALS, GOAL_LABELS,
+    CURRENCY_PANELS, CURRENCY_CATS, pushGoalOf,
 } from '../../constants/optimizerConfig';
-import { presetLabel, UWS, WS_STATS, WS_ENH } from '../../constants/gameData';
+import type { OptGoal } from '../../constants/optimizerConfig';
+import { presetLabel, UWS, WS_STATS, WS_ENH, MEDAL_SYMBOL } from '../../constants/gameData';
 import stoneIcon from '../../assets/stone.png';
-import { simulateStonePath, simulateCategoryPath } from '../../engine/optimizer';
-import { readActiveModuleBonuses } from '../../engine/modBonuses';
-import { calcTTT, calcTTTDisplayStats, packageChancePct } from '../../engine/ttt';
-import { runRatesFrom } from '../../engine/runRates';
+import { simulateStonePath, simulateCategoryPath, simulateMedalPath, attachParts } from '../../engine/optimizer';
+import { calcTTT, calcTTTDisplayStats } from '../../engine/ttt';
 import { calcTowerEDPS, calcSmiteWaveHPFraction } from '../../engine/uwdps';
-import type { OptCandidate, OptCategory, BuildType } from '../../types/gameTypes';
+import type { OptCandidate, OptCategory, OptCurrency, BuildType, ModuleType } from '../../types/gameTypes';
 import type { OptimizerSnapshot } from '../../engine/optimizer';
 import type { TTTDisplayStats } from '../../engine/ttt';
-import { activeBattleReport } from '../../engine/battleReport';
-import { buildFarmCalibration } from '../../engine/farming';
 import type { FarmCalibration } from '../../engine/farming';
-import { buildEhpCalibration } from '../../engine/ehp';
-import { enhForPreset } from '../../engine/statHelpers';
-import { botsForPreset } from '../../constants/botData';
 import type { EhpCalibration } from '../../engine/ehp';
-import { buildEdpsCalibration } from '../../engine/edps';
 import type { EdpsCalibration } from '../../engine/edps';
+import { applyGoal, chosenReport, runModels, snapshotFromState } from '../../engine/accountModels';
+import { CELL_BOOSTS } from '../../engine/upgradeCosts';
 import { BattleReportPanel, EconomyStats, EhpStats } from './BuildPanels';
 import { buildRunLengthModel, pathRunGains, pathSkipGains, skipWorth } from '../../engine/runLength';
 import { formatLabTime } from '../../engine/upgradeCosts';
@@ -39,22 +35,32 @@ import type { StepRunGain } from '../../engine/runLength';
 import { buildRunModel, projectRun, runSettingsFromCards } from '../../engine/runCoins';
 import { defaultBattleIndex } from '../../engine/gameExport';
 
-// Glass Cannon ranking: all damage, or the flat damage that decides how far
-// a run gets (shown as waves and coins per run). Remembered per browser.
-type RankBy = 'damage' | 'waves';
-const RANK_KEY = 'tc_opt_rank';
-const loadRankBy = (): RankBy => {
-    try { return localStorage.getItem(RANK_KEY) === 'waves' ? 'waves' : 'damage'; } catch { return 'damage'; }
+// The goal every panel ranks by, and how much coins count in "coins and
+// push". Remembered per browser (the old Rank by "waves" carries over).
+const GOAL_KEY = 'tc_opt_goal';
+const WEIGHT_KEY = 'tc_opt_coin_weight';
+const loadGoal = (): OptGoal | null => {
+    try {
+        const g = localStorage.getItem(GOAL_KEY);
+        if (g && g in GOAL_LABELS) return g as OptGoal;
+        return localStorage.getItem('tc_opt_rank') === 'waves' ? 'waves' : null;
+    } catch { return null; }
+};
+const loadWeight = (): number => {
+    try {
+        const v = localStorage.getItem(WEIGHT_KEY);
+        return v !== null && Number(v) >= 0 && Number(v) <= 1 ? Number(v) : 0.5;
+    } catch { return 0.5; }
 };
 
 const EMPTY_RESULTS: Record<OptCategory, OptCandidate[]> = {
     uw: [], uwp: [], mast: [], assist: [], stones: [],
-    workshop: [], labs: [], cards: [], enhancements: [], bots: [],
+    workshop: [], labs: [], cards: [], enhancements: [], bots: [], modules: [],
 };
 
 const EMPTY_SHOW_MORE: Record<OptCategory, boolean> = {
     uw: false, uwp: false, mast: false, assist: false, stones: false,
-    workshop: false, labs: false, cards: false, enhancements: false, bots: false,
+    workshop: false, labs: false, cards: false, enhancements: false, bots: false, modules: false,
 };
 
 export default function OptimizerTab() {
@@ -81,12 +87,17 @@ export default function OptimizerTab() {
     const updateProfile = useGameStore(s => s.updateProfile);
     const importedBattles = useGameStore(s => s.importedBattles);
     const cardData = useGameStore(s => s.cardData);
-    const [rankBy, setRankBy] = useState<RankBy>(loadRankBy);
-    const [resultsRankBy, setResultsRankBy] = useState<RankBy>('damage');
+    const currencies = useGameStore(s => s.currencies);
+    const [savedGoal, setSavedGoal] = useState<OptGoal | null>(loadGoal);
+    const [coinWeight, setCoinWeight] = useState<number>(loadWeight);
+    const [resultsGoal, setResultsGoal] = useState<OptGoal | null>(null);
     const [skipPath, setSkipPath] = useState<SkipUpgrade[]>([]);
     useEffect(() => {
-        try { localStorage.setItem(RANK_KEY, rankBy); } catch { /* storage unavailable */ }
-    }, [rankBy]);
+        try {
+            if (savedGoal) localStorage.setItem(GOAL_KEY, savedGoal);
+            localStorage.setItem(WEIGHT_KEY, String(coinWeight));
+        } catch { /* storage unavailable */ }
+    }, [savedGoal, coinWeight]);
     const activePreset = useGameStore(s => s.activePreset);
     const setActivePreset = useGameStore(s => s.setActivePreset);
 
@@ -97,8 +108,15 @@ export default function OptimizerTab() {
     const buildSupport = BUILD_SUPPORT[buildType] ?? BUILD_SUPPORT['Glass Cannon'];
     const isFarming = buildType === 'Farming';
     const isEhp = buildType === 'eHP';
-    const wavesMode = !isFarming && !isEhp && resultsRankBy === 'waves';
-    const metricLabel = isFarming ? 'coins' : isEhp ? 'survival' : wavesMode ? 'waves' : 'eDPS';
+    const goals = BUILD_GOALS[buildType] ?? [];
+    const goal: OptGoal = savedGoal && goals.includes(savedGoal) ? savedGoal : goals[0] ?? 'damage';
+    const shown = resultsGoal ?? goal;
+    const blendMode = shown === 'blend';
+    const pushWaves = pushGoalOf(buildType) === 'waves';
+    const wavesMode = shown === 'waves' || (blendMode && pushWaves);
+    const metricLabel = {
+        damage: 'eDPS', waves: 'waves', coins: 'coins', survival: 'survival', blend: 'coins and push',
+    }[shown];
 
     // Run Length (waves) and Coins per Run (coins), from the saved runs.
     const runModel = useMemo(() => buildRunLengthModel(importedBattles), [importedBattles]);
@@ -112,42 +130,17 @@ export default function OptimizerTab() {
     const runGains = (cat: OptCategory): StepRunGain[] | undefined => {
         if (!wavesMode || !runModel) return undefined;
         const path = results[cat] ?? [];
-        return pathRunGains(runModel, path.map(c => c.scorePct), coinsAt, path.map(c => c.skipPoints ?? 0), worth);
+        const gains = path.map(c => (blendMode ? c.pushPct ?? 0 : c.scorePct));
+        return pathRunGains(runModel, gains, coinsAt, path.map(c => c.skipPoints ?? 0), worth);
     };
 
     // ── Build snapshot from current store state ───────────────
     // Reads fresh state via getState() so a re-run triggered right after
     // applying an upgrade sees the just-committed store values (closures
     // captured at render time would be stale).
-    const buildSnapshot = useCallback((): OptimizerSnapshot => {
-        const s = useGameStore.getState();
-        // Run rates (boss/elite kills, packages, cash…) from the active Battle
-        // Report drive several unique module effects.
-        const report = activeBattleReport(s.battleReportText, s.importedBattles, s.battleReportChoice);
-        const modBonuses = readActiveModuleBonuses(
-            s.moduleState, s.perkData, s.labData, s.cardData, runRatesFrom(report),
-        );
-        // The report's package rate belongs to today's package chance.
-        modBonuses.run = {
-            ...modBonuses.run,
-            pkgChanceAtRun: packageChancePct(s.activePreset, s.wsData, s.labData, s.cardData, modBonuses),
-        };
-        return {
-            presetIdx: s.activePreset,
-            wsData: JSON.parse(JSON.stringify(s.wsData)),
-            enhData: JSON.parse(JSON.stringify(enhForPreset(s.enhData, s.activePreset))),
-            labData: JSON.parse(JSON.stringify(s.labData)),
-            cardData: JSON.parse(JSON.stringify(s.cardData)),
-            perkData: JSON.parse(JSON.stringify(s.perkData)),
-            uwData: JSON.parse(JSON.stringify(s.uwData)),
-            relicData: JSON.parse(JSON.stringify(s.relicData)),
-            modBonuses,
-            moduleState: JSON.parse(JSON.stringify(s.moduleState)),
-            botData: botsForPreset(s.botData, s.activePreset),
-            excludedUWs: [...(s.profile.excludedUWs ?? [])],
-            metric: s.profile.build === 'Farming' ? 'coins' : s.profile.build === 'eHP' ? 'ehp' : 'edps',
-        };
-    }, []);
+    const buildSnapshot = useCallback(
+        (): OptimizerSnapshot => snapshotFromState(useGameStore.getState()), [],
+    );
 
     // ── Run optimizer ─────────────────────────────────────────
     function runOptimizer() {
@@ -178,19 +171,14 @@ export default function OptimizerTab() {
                 );
                 setTTStats(stats);
 
-                // Calibrate the build's model from the chosen Battle Report: coins
-                // and survival always; eDPS when the report has damage by source.
+                // Set the snapshot up for the goal: the calibrations it needs from
+                // the chosen Battle Report, Run Length and Coins per Run.
                 const st = useGameStore.getState();
-                const report = activeBattleReport(st.battleReportText, st.importedBattles, st.battleReportChoice);
-                snap.farm = snap.metric === 'coins' ? buildFarmCalibration(snap, report) : undefined;
-                snap.ehp = snap.metric === 'ehp' ? buildEhpCalibration(snap, report) : undefined;
-                snap.edps = snap.metric === 'edps' ? buildEdpsCalibration(snap, report) ?? undefined : undefined;
-                snap.edpsMode = snap.edps ? rankBy : 'damage';
-                setResultsRankBy(snap.edpsMode);
-                const deaths = snap.edpsMode === 'waves' ? buildRunLengthModel(st.importedBattles) : null;
-                snap.skipWorth = deaths ? skipWorth(deaths) : undefined;
-                // Waves mode: the Enemy Health Level Skip coin upgrades, most skip per coin first.
-                setSkipPath(snap.edpsMode === 'waves'
+                applyGoal(snap, goal, buildType, chosenReport(st), runModels(st), coinWeight);
+                setResultsGoal(goal);
+                const pushingWaves = snap.edpsMode === 'waves' || snap.blend?.push === 'waves';
+                // Pushing waves: the Enemy Health Level Skip coin upgrades, most skip per coin first.
+                setSkipPath(pushingWaves
                     ? skipUpgradePath(healthSkipSources(
                         snap.wsData[snap.presetIdx], snap.labData, snap.enhData, snap.relicData, snap.modBonuses.subs ?? {},
                     ), SKIP_PATH_STEPS)
@@ -206,20 +194,21 @@ export default function OptimizerTab() {
                 // Only run the simulation for builds with verified scoring.
                 if (buildSupport.ready) {
                     const newResults: Record<OptCategory, OptCandidate[]> = { ...EMPTY_RESULTS };
-                    const research = snap.metric === 'edps' ? GC_RESEARCH_PANELS : RESEARCH_PANELS;
-                    for (const panel of OPT_PANELS) {
-                        if (research.includes(panel.cat)) {
-                            newResults[panel.cat] = simulateCategoryPath(panel.cat, panel.maxSteps, snap);
-                            continue;
+                    const steps = (cat: OptCategory) => OPT_PANELS.find(p => p.cat === cat)?.maxSteps ?? 50;
+                    // Stones: one path across UW stats, UW+, Card Mastery and Assist.
+                    newResults.stones = simulateStonePath(steps('stones'), snap);
+                    for (const cat of CURRENCY_CATS) {
+                        if (cat !== 'bots') newResults[cat] = simulateCategoryPath(cat, steps(cat), snap);
+                    }
+                    // Medals weigh bot levels against Event Shop trades, valued by
+                    // what the stones (after the ones you hold) and shards buy next.
+                    newResults.bots = simulateMedalPath(
+                        steps('bots'), snap, newResults.stones, st.currencies.stones ?? 0, newResults.modules,
+                    );
+                    if (snap.blend) {
+                        for (const cat of ['stones', ...CURRENCY_CATS] as OptCategory[]) {
+                            newResults[cat] = attachParts(snap, newResults[cat]);
                         }
-                        if (panel.cat === 'stones') {
-                            // Row 1: ranked stone upgrade path (all stone categories merged)
-                            newResults[panel.cat] = simulateStonePath(panel.maxSteps, snap);
-                        } else if (panel.cat === 'bots') {
-                            // Bots only: free upgrade ranking (single category)
-                            newResults[panel.cat] = simulateCategoryPath('bots', panel.maxSteps, snap);
-                        }
-                        // GC cards and enhancements: still under construction
                     }
                     setResults(newResults);
                 } else {
@@ -239,7 +228,7 @@ export default function OptimizerTab() {
     // uses c.fromLv. Returns true if the write succeeded.
     // For UW+ unlock candidates, fromLv === -1 means "not unlocked":
     //   level -1 → un-unlock, level 0 → unlock at level 0.
-    function writeCandidate(c: OptCandidate, level: number): boolean {
+    function writeCandidate(c: OptCandidate, level: number, undo = false): boolean {
         const st = useGameStore.getState();
 
         switch (c.category) {
@@ -289,7 +278,12 @@ export default function OptimizerTab() {
                 return true;
             }
             case 'cards': {
-                st.setCardStars(c.label.replace(' Card', ''), level);
+                // A card slot row: the card goes into the preset (and the slot is bought).
+                const card = c.ref?.[0];
+                if (!card) return false;
+                const preset = st.cardData.presets[st.activePreset] ?? [];
+                st.setCardPreset(st.activePreset, undo ? preset.filter(n => n !== card) : [...preset, card]);
+                st.setCardSlots(undo ? c.fromLv : c.toLv);
                 return true;
             }
             case 'enhancements': {
@@ -298,6 +292,18 @@ export default function OptimizerTab() {
                 const idx = (WS_ENH[enhCat] ?? []).findIndex(([n]) => n === parts[1]);
                 if (idx < 0) return false;
                 st.setEnhLevel(enhCat, idx, level);
+                return true;
+            }
+            case 'bots': {
+                const [name, stat] = c.ref ?? [];
+                if (!name || name === 'trade' || stat === undefined) return false;   // trades happen in game
+                st.setBotMedal(name, st.activePreset, Number(stat), level);
+                return true;
+            }
+            case 'modules': {
+                const [type, pos] = c.ref ?? [];
+                if (!type || (pos !== 'main' && pos !== 'assist')) return false;
+                st.setSlotLevel(type as ModuleType, pos, level);
                 return true;
             }
             default:
@@ -319,7 +325,7 @@ export default function OptimizerTab() {
     function undoLast() {
         if (!undoStack.length) return;
         const last = undoStack[undoStack.length - 1];
-        if (writeCandidate(last, last.fromLv)) {
+        if (writeCandidate(last, last.fromLv, true)) {
             setAppliedMsg(`↩ Undone: ${last.label} — ${last.subLabel}`);
             runOptimizer();
         }
@@ -355,6 +361,7 @@ export default function OptimizerTab() {
             cards: { bg: 'rgba(186,117,23,.15)', color: 'var(--gold)' },
             enhancements: { bg: 'rgba(147,51,234,.15)', color: '#e040fb' },
             bots: { bg: 'rgba(231,76,60,.15)', color: '#e74c3c' },
+            modules: { bg: 'rgba(79,195,247,.15)', color: '#4fc3f7' },
         };
         return {
             background: map[cat]?.bg ?? 'var(--bg4)',
@@ -411,18 +418,36 @@ export default function OptimizerTab() {
                             </select>
                         </div>
 
-                        {!isFarming && !isEhp && (
+                        {goals.length > 0 && (
                             <div>
-                                <span className="opt-control-label">Rank by</span>
+                                <span className="opt-control-label">Goal</span>
                                 <select
-                                    value={rankBy}
-                                    onChange={e => setRankBy(e.target.value as RankBy)}
+                                    value={goal}
+                                    onChange={e => setSavedGoal(e.target.value as OptGoal)}
                                     style={{ fontSize: '13px' }}
-                                    title="Waves counts only the flat damage that decides how far a Glass Cannon run gets"
+                                    title="Every panel below ranks upgrades by this"
                                 >
-                                    <option value="damage">All damage (eDPS)</option>
-                                    <option value="waves">How far runs get (waves)</option>
+                                    {goals.map(g => (
+                                        <option key={g} value={g}>
+                                            {g === 'blend' && !pushWaves ? 'Coins and survival together' : GOAL_LABELS[g]}
+                                        </option>
+                                    ))}
                                 </select>
+                            </div>
+                        )}
+
+                        {goal === 'blend' && (
+                            <div className="opt-blend">
+                                <span className="opt-control-label">Balance</span>
+                                <span className="opt-blend-end">{pushWaves ? 'Push' : 'Survival'}</span>
+                                <input
+                                    type="range" min={0} max={100} step={10}
+                                    value={Math.round(coinWeight * 100)}
+                                    onChange={e => setCoinWeight(Number(e.target.value) / 100)}
+                                    aria-label="How much coins count against pushing"
+                                />
+                                <span className="opt-blend-end">Coins</span>
+                                <span className="opt-blend-val">{Math.round(coinWeight * 100)}% coins</span>
                             </div>
                         )}
 
@@ -510,9 +535,11 @@ export default function OptimizerTab() {
             )}
 
             {/* ── Battle Report (calibrates every build) + build breakdown ── */}
-            {buildSupport.ready && <BattleReportPanel purpose={isEhp ? 'ehp' : isFarming ? 'farming' : 'edps'} />}
-            {isFarming && farmCalib && <EconomyStats calib={farmCalib} />}
-            {isEhp && ehpCalib && <EhpStats calib={ehpCalib} />}
+            {buildSupport.ready && (
+                <BattleReportPanel purpose={goal === 'coins' || goal === 'blend' ? 'farming' : goal === 'survival' ? 'ehp' : 'edps'} />
+            )}
+            {farmCalib && <EconomyStats calib={farmCalib} />}
+            {ehpCalib && <EhpStats calib={ehpCalib} />}
 
             {/* ── TTT Stats Panel ── */}
             {ttStats && !isFarming && !isEhp && (
@@ -607,61 +634,45 @@ export default function OptimizerTab() {
                 </div>
             )}
 
-            {/* ── Farming coins-only note ── */}
-            {isFarming && hasResults && (
+            {/* ── What the ranking counts ── */}
+            {buildSupport.ready && hasResults && (
                 <div className="opt-warning-banner">
                     <span className="opt-warning-icon">⚠️</span>
                     <div>
-                        <strong>These upgrades are ranked for coins only.</strong> They don&apos;t account
-                        for survival or damage — a farming setup still has to reach the waves you
-                        farm. Workshop upgrades are ranked by coins gained per coin spent; labs and
-                        enhancements by gain per level, since their costs and lab times aren&apos;t
-                        compared yet.
-                    </div>
-                </div>
-            )}
-
-            {/* ── eHP survival-only note ── */}
-            {isEhp && hasResults && (
-                <div className="opt-warning-banner">
-                    <span className="opt-warning-icon">⚠️</span>
-                    <div>
-                        <strong>These upgrades are ranked for survival only.</strong> Damage and coins
-                        aren&apos;t counted (thorns are the exception). Workshop upgrades are ranked by
-                        survival gained per coin; labs and enhancements by survival gained per level,
-                        since their costs and lab times aren&apos;t compared yet.
-                    </div>
-                </div>
-            )}
-
-            {/* ── GC eDPS-only warning ── */}
-            {buildSupport.ready && hasResults && !isFarming && !isEhp && (
-                <div className="opt-warning-banner">
-                    <span className="opt-warning-icon">⚠️</span>
-                    <div>
-                        {wavesMode ? (
-                            <>
-                                <strong>Ranked by how far your runs get.</strong> Only flat damage counts — Chain
-                                Lightning, Smart Missiles, Death Wave, Inner Land Mines, Poison Swamp and tower
-                                shots. Orbs, Black Hole, Smite and Consume deal a share of enemy health, so they
-                                don&apos;t fall behind as waves get harder, and the enemies that end Glass Cannon runs
-                                ignore orbs and Black Hole. Enemy Health Level Skip counts as the damage that gains
-                                the same waves. Waves come from Run Length and coins per run from Coins
-                                per Run{runModel ? '' : ' — import runs that ended in a death to see them'}. Workshop
-                                upgrades are ranked by gain per coin, labs by gain per hour of research. Each
-                                step builds on the ones above it; totals far past where your runs end now are rough.
-                            </>
-                        ) : (<>
-                        <strong>These upgrades are ranked for pure eDPS.</strong>{' '}
-                        {edpsCalib
-                            ? 'Gains are a share of all the damage in your chosen run, so sources stones can’t change (like orbs) keep their real weight.'
-                            : 'Without a run that has damage data, gains come from the model alone and can over- or under-value some sources (Black Hole especially).'}
-                        {' '}Workshop upgrades are ranked by gain per coin, labs by gain per hour of research.
-                        {' '}They don&apos;t account for coin income: some upgrades that boost eDPS can
-                        hurt your economy — for example, heavily investing in Poison Swamp or stacking
-                        too much slow/stun can reduce coin generation even though eDPS goes up.
-                        Use your judgment alongside these suggestions.
+                        {shown === 'waves' && (<>
+                            <strong>Ranked by how far your runs get</strong> — milestones and tournaments. Only flat
+                            damage counts — Chain Lightning, Smart Missiles, Death Wave, Inner Land Mines, Poison
+                            Swamp and tower shots. Orbs, Black Hole, Smite and Consume deal a share of enemy health,
+                            so they don&apos;t fall behind as waves get harder, and the enemies that end Glass Cannon
+                            runs ignore orbs and Black Hole. Enemy Health Level Skip counts as the damage that gains
+                            the same waves. Waves come from Run Length and coins per run from Coins
+                            per Run{runModel ? '' : ' — import runs that ended in a death to see them'}.
                         </>)}
+                        {shown === 'damage' && (<>
+                            <strong>Ranked for all damage (eDPS).</strong>{' '}
+                            {edpsCalib
+                                ? 'Gains are a share of all the damage in your chosen run, so sources stones can’t change (like orbs) keep their real weight.'
+                                : 'Without a run that has damage data, gains come from the model alone and can over- or under-value some sources (Black Hole especially).'}
+                            {' '}Coin income isn&apos;t counted — pick “More coins” or “Coins and push” for that.
+                        </>)}
+                        {shown === 'coins' && (<>
+                            <strong>Ranked for coins per hour</strong>, at the same run length. Survival and damage
+                            aren&apos;t counted — a farming setup still has to reach the waves you farm.
+                        </>)}
+                        {shown === 'survival' && (<>
+                            <strong>Ranked for survival.</strong> Damage and coins aren&apos;t counted (thorns are
+                            the exception).
+                        </>)}
+                        {shown === 'blend' && (<>
+                            <strong>Ranked for coins and {pushWaves ? 'push' : 'survival'} together</strong>, at
+                            {' '}{Math.round(coinWeight * 100)}% coins: each upgrade scores (coins per hour gain)
+                            {' '}<sup>{Math.round(coinWeight * 100)}%</sup> × ({pushWaves ? 'push' : 'survival'} gain)
+                            {' '}<sup>{100 - Math.round(coinWeight * 100)}%</sup>, so ones that help both rise to the
+                            top. Each row shows both halves.{pushWaves && ' Push counts flat damage and level skip, as in “Push further”.'}
+                        </>)}
+                        {' '}Stones and medals are ranked by gain per stone or medal, coins by gain per coin,
+                        labs by gain per hour of research, shards per shard and gems per gem. Each step
+                        builds on the ones above it.
                     </div>
                 </div>
             )}
@@ -709,6 +720,7 @@ export default function OptimizerTab() {
                             panel={panel}
                             candidates={results[panel.cat] ?? []}
                             runGains={runGains(panel.cat)}
+                            blend={blendMode ? (pushWaves ? 'waves' : 'survival') : undefined}
                             showAll={showMore[panel.cat] ?? false}
                             onShowMore={() => setShowMore(s => ({ ...s, [panel.cat]: true }))}
                             gainColor={gainColor}
@@ -717,36 +729,90 @@ export default function OptimizerTab() {
                         />
                     ))}
 
-                    <div className="opt-row-label" style={{ marginTop: '14px' }}>
-                        Coin / Research Upgrades
-                    </div>
-                    {wavesMode && skipPath.length > 0 && runModel && (
-                        <SkipPanel path={skipPath} runModel={runModel} coinsAt={coinsAt} />
-                    )}
-                    {OPT_PANELS.filter(p => (isFarming || isEhp ? RESEARCH_PANELS : GC_RESEARCH_PANELS).includes(p.cat)).map(panel => (
-                        <OptPanel
-                            key={panel.cat}
-                            panel={panel}
-                            candidates={results[panel.cat] ?? []}
-                            runGains={runGains(panel.cat)}
-                            showAll={showMore[panel.cat] ?? false}
-                            onShowMore={() => setShowMore(s => ({ ...s, [panel.cat]: true }))}
-                            gainColor={gainColor}
-                            catStyle={catStyle}
-                            onApply={applyCandidate}
-                        />
+                    {CURRENCY_PANELS.map(group => (
+                        <div key={group.currency}>
+                            <div className="opt-row-label" style={{ marginTop: '14px' }}>
+                                {group.label}
+                            </div>
+                            {group.currency === 'coins' && wavesMode && skipPath.length > 0 && runModel && (
+                                <SkipPanel path={skipPath} runModel={runModel} coinsAt={coinsAt} />
+                            )}
+                            {OPT_PANELS.filter(p => group.cats.includes(p.cat)).map(panel => (
+                                <OptPanel
+                                    key={panel.cat}
+                                    panel={panel}
+                                    candidates={results[panel.cat] ?? []}
+                                    runGains={runGains(panel.cat)}
+                                    blend={blendMode ? (pushWaves ? 'waves' : 'survival') : undefined}
+                                    showAll={showMore[panel.cat] ?? false}
+                                    onShowMore={() => setShowMore(s => ({ ...s, [panel.cat]: true }))}
+                                    gainColor={gainColor}
+                                    catStyle={catStyle}
+                                    onApply={applyCandidate}
+                                />
+                            ))}
+                            {group.currency === 'research' && (
+                                <CellsPanel topLab={results.labs[0]} cells={currencies.cells ?? 0} />
+                            )}
+                            {group.currency === 'medals' && (
+                                <p className="opt-row-explainer">
+                                    Medals also buy 150 Gems a trade. Trade prices reset each event; relics and
+                                    cosmetics aren&apos;t ranked.
+                                </p>
+                            )}
+                            {group.currency === 'gems' && (
+                                <p className="opt-row-explainer">
+                                    Card pulls are random (80% Common, 17% Rare, 3% Epic), so they aren&apos;t
+                                    ranked; neither are lab slots, rushes or tickets.
+                                </p>
+                            )}
+                        </div>
                     ))}
-                    {!isFarming && !isEhp && (
-                    <div className="opt-construction">
-                        <span className="opt-construction-icon">🚧</span>
+
+                    <div className="opt-construction" style={{ marginTop: '14px' }}>
+                        <span className="opt-construction-icon">ℹ️</span>
                         <div>
-                            <strong>Coming soon</strong>
-                            <p>Ranking for Cards and Enhancements is still under construction.</p>
+                            <strong>Not ranked yet</strong>
+                            <p>
+                                Keys (the Vault), Bits (Guardian chips) and Guild Tokens — the Guild Store sells
+                                gems, bits, cells, shards and relics, so value tokens by what those buy above.
+                            </p>
                         </div>
                     </div>
-                    )}
                 </div>
             )}
+        </div>
+    );
+}
+
+// ── Elite Cells: lab boosts ───────────────────────────────────
+// A boost speeds one lab slot. Cheap boosts give the most research per
+// cell; the wiki's price per hour, and the extra lab-hours each buys.
+function CellsPanel({ topLab, cells }: { topLab?: OptCandidate; cells: number }) {
+    return (
+        <div className="opt-section">
+            <div className="opt-section-head">
+                <span className="opt-section-title">Elite Cells — lab boosts</span>
+            </div>
+            <p className="opt-row-explainer" style={{ padding: '6px 12px 0' }}>
+                Boost your top lab{topLab ? <> — <strong>{topLab.label}</strong></> : ''}. The cheapest boost gives
+                the most research per cell; step up only when cells pile up.
+                {cells > 0 && <> You have {formatGameNumber(cells)} cells.</>}
+            </p>
+            <div className="opt-cells">
+                <span className="opt-cells-head">Boost</span>
+                <span className="opt-cells-head">Cells / hour</span>
+                <span className="opt-cells-head">Per extra lab hour</span>
+                <span className="opt-cells-head">Hours you can run</span>
+                {CELL_BOOSTS.map(([speed, perHour]) => (
+                    <Fragment key={speed}>
+                        <span>×{speed}</span>
+                        <span>{formatGameNumber(perHour)}</span>
+                        <span>{formatGameNumber(perHour / (speed - 1))}</span>
+                        <span>{cells > 0 ? Math.floor(cells / perHour).toLocaleString() : '—'}</span>
+                    </Fragment>
+                ))}
+            </div>
         </div>
     );
 }
@@ -761,10 +827,20 @@ interface OptPanelProps {
     catStyle: (cat: OptCategory) => React.CSSProperties;
     onApply: (c: OptCandidate) => void;
     runGains?: StepRunGain[];     // waves mode: waves and coins per run each step adds
+    blend?: 'waves' | 'survival'; // "coins and push": rows show both halves
 }
 
+const COST_UNIT: Record<OptCurrency, string> = {
+    stones: '', coins: ' 🪙', research: ' 🔬', medals: ` ${MEDAL_SYMBOL}`, shards: ' shards', gems: ' 💎',
+};
+const pct = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`;
+// Coin prices: whole coins below 1,000 (discounts leave fractions).
+const coinsText = (v: number) => formatGameNumber(v < 1000 ? Math.round(v) : v);
+
 // Short badges, so the name keeps its room on a phone.
-const CAT_BADGE: Partial<Record<OptCategory, string>> = { workshop: 'WS', labs: 'LAB', enhancements: 'ENH', cards: 'CARD' };
+const CAT_BADGE: Partial<Record<OptCategory, string>> = {
+    workshop: 'WS', labs: 'LAB', enhancements: 'ENH', cards: 'CARD', bots: 'BOT', modules: 'MOD',
+};
 
 const fmtWaves = (w: number) => (w < 10 ? w.toFixed(1) : Math.round(w).toLocaleString());
 
@@ -818,7 +894,7 @@ function SkipPanel({ path, runModel, coinsAt }: {
 }
 
 function OptPanel({
-    panel, candidates, showAll, onShowMore, gainColor, catStyle, onApply, runGains,
+    panel, candidates, showAll, onShowMore, gainColor, catStyle, onApply, runGains, blend,
 }: OptPanelProps) {
     const totalWaves = runGains?.reduce((s, g) => s + g.waves, 0) ?? 0;
     const visible = showAll
@@ -854,7 +930,14 @@ function OptPanel({
                             <div className="opt-name-col">
                                 <span className="opt-name">{c.category === 'workshop' ? c.label.replace(/^WS /, '') : c.label}</span>
                                 <span className="opt-sub">{c.subLabel}</span>
-                                {runGains?.[idx] && (
+                                {blend && c.coinsPct !== undefined ? (
+                                    <span className="opt-waves">
+                                        {blend === 'waves' && runGains?.[idx]
+                                            ? `+${fmtWaves(runGains[idx].waves)} waves`
+                                            : `${pct(c.pushPct ?? 0)} ${blend === 'waves' ? 'push' : 'survival'}`}
+                                        {' · '}{pct(c.coinsPct)} coins/hr
+                                    </span>
+                                ) : !blend && runGains?.[idx] && (
                                     <span className="opt-waves">
                                         +{fmtWaves(runGains[idx].waves)} waves
                                         {runGains[idx].coins !== null && (
@@ -867,16 +950,21 @@ function OptPanel({
                                 <span className="opt-cost" title="Research time after your lab speed, and coins">
                                     {formatLabTime(c.hours)}<span className="opt-cost-type"> 🔬</span>
                                     {c.coins !== undefined && (
-                                        <span className="opt-sub" style={{ display: 'block' }}>{formatGameNumber(c.coins)} 🪙</span>
+                                        <span className="opt-sub" style={{ display: 'block' }}>{coinsText(c.coins)} 🪙</span>
                                     )}
                                 </span>
                             ) : (
-                            <span className="opt-cost" title={c.costType !== 'stones' && !c.costKnown ? 'Cost not modeled yet — ranked by gain per level' : undefined}>
-                                {c.costType === 'stones' ? c.cost.toLocaleString() : c.costKnown ? formatGameNumber(c.cost) : '—'}
-                                <span className="opt-cost-type">
-                                    {c.costType === 'stones' ? <img src={stoneIcon} alt="stones" className="cost-icon" /> :
-                                        c.costType === 'research' ? ' 🔬' : ' 🪙'}
-                                </span>
+                            <span className="opt-cost" title={c.costType !== 'stones' && !c.costKnown ? 'Cost not known — not ranked by price' : undefined}>
+                                {c.costType === 'stones' ? c.cost.toLocaleString()
+                                    : !c.costKnown ? '—' : c.cost === 0 ? 'Free' : coinsText(c.cost)}
+                                {c.cost !== 0 && (
+                                    <span className="opt-cost-type">
+                                        {c.costType === 'stones' ? <img src={stoneIcon} alt="stones" className="cost-icon" /> : COST_UNIT[c.costType]}
+                                    </span>
+                                )}
+                                {c.costType === 'shards' && c.coins !== undefined && (
+                                    <span className="opt-sub" style={{ display: 'block' }}>{coinsText(c.coins)} 🪙</span>
+                                )}
                             </span>
                             )}
                             <span className="opt-gain" style={{ color: gainColor(c.scorePct) }}>

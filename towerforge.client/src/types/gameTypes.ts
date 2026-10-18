@@ -25,7 +25,7 @@ export type UWAbbr = 'CL' | 'SM' | 'DW' | 'CF' | 'ILM' | 'GT' | 'PS' | 'BH' | 'S
 export type TabName =
     | 'profile' | 'perks' | 'tiers' | 'workshop'
     | 'labs' | 'cards' | 'uw' | 'puws' | 'relics'
-    | 'bots' | 'modules' | 'optimizer' | 'enemies' | 'runcoins' | 'runlength' | 'creators' | 'share' | 'account';
+    | 'bots' | 'modules' | 'optimizer' | 'enemies' | 'runcoins' | 'runlength' | 'whatif' | 'creators' | 'share' | 'account';
 
 // ── Workshop Types ────────────────────────────────────────────
 export type WSCategory = 'attack' | 'defense' | 'utility';
@@ -301,7 +301,10 @@ export interface TTTData {
 // values stay as 'uw'/'uwp'/'mast'/'assist' for badge display.
 export type OptCategory =
     | 'uw' | 'uwp' | 'mast' | 'assist' | 'stones'
-    | 'workshop' | 'labs' | 'cards' | 'enhancements' | 'bots';
+    | 'workshop' | 'labs' | 'cards' | 'enhancements' | 'bots' | 'modules';
+
+// What a cost is paid in.
+export type OptCurrency = 'stones' | 'coins' | 'research' | 'medals' | 'shards' | 'gems';
 
 export interface OptCandidate {
     category: OptCategory;
@@ -310,7 +313,7 @@ export interface OptCandidate {
     fromLv: number;
     toLv: number;
     cost: number;
-    costType: 'stones' | 'coins' | 'research';
+    costType: OptCurrency;
     costKnown?: boolean;   // false/omitted for coin/research rows where `cost` is only a level proxy
     scorePct: number;   // eDPS delta %
     scorePerCost: number;   // eDPS delta % per stone/coin
@@ -321,6 +324,12 @@ export interface OptCandidate {
     // Glass Cannon waves mode: Enemy Health Level Skip points the step adds
     // (counted in scorePct as the damage they're worth).
     skipPoints?: number;
+    // "Coins and push" goal: the step's gain in coins per hour and in the
+    // push score (flat damage for Glass Cannon, survival otherwise), in %.
+    coinsPct?: number;
+    pushPct?: number;
+    // Which bot stat, module slot, card or Event Shop trade the row is.
+    ref?: string[];
     alts?: OptAlt[];
 }
 

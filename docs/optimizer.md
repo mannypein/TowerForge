@@ -4,21 +4,81 @@ Reference for `engine/optimizer.ts` and the build models it calls. Verified
 facts about the UWs themselves are in [ultimate-weapons.md](ultimate-weapons.md);
 module effects in [module-effects.md](module-effects.md).
 
+## Goals (2026-10-18)
+
+The Optimizer asks what the player wants, and every panel ranks by it
+(`OptGoal` in constants/optimizerConfig.ts, set up by
+`engine/accountModels.ts → applyGoal`):
+
+| Goal | Score | Builds |
+|---|---|---|
+| Push further (milestones, tournaments) | flat damage × e^(skipWorth × skip%) | Glass Cannon |
+| More damage | calibrated eDPS | Glass Cannon |
+| More coins | coins per hour (`farming.ts`) | all |
+| Survive longer | eHP (`ehp.ts`) | eHP, Farming |
+| Coins and push together | coins^w × push^(1 − w), w on a slider (default 50%) | all (push = waves for GC, survival otherwise) |
+
+- The blend is a weighted geometric mean, so an upgrade that helps both
+  halves beats one that helps only one at the same price; rows show both
+  halves (`attachParts`). The code's assumption: a 1% coin gain and a 1%
+  push gain count the same at 50%.
+- Tournaments use the push ranking. Their battle conditions scale enemies
+  the same for every upgrade, so the order holds — an assumption, not
+  checked against tournament runs.
+
+## Every currency (2026-10-18)
+
+What each currency buys (wiki Currencies page) and how it's ranked:
+
+| Currency | Ranked | Price source |
+|---|---|---|
+| Power Stones | UW stats, UW+, card mastery unlocks, assist modules — one path | wiki (see ultimate-weapons.md) |
+| Coins | workshop (per coin), enhancements (per coin) | game table via TheTowerSDK; discount labs |
+| Lab time | labs (per hour of research) | SDK lab catalog; Labs Speed, relic, Labs Coin Discount |
+| Module Shards | module slot levels, 5 at a time (per shard; coins shown) | SDK module tables + wiki level 1; Module Shard/Coin Cost labs (1% a level) |
+| Medals | bot stat levels vs Event Shop trades (per medal) | bots: 100 + 40 × (L − 1) a level (wiki bot Cost pages, every bot); trades 40, 65, 90, 130, 175, 230, then 380 |
+| Gems | card slots: the best owned card not in the preset, into a free slot or the next one bought (per gem) | wiki Cards: 50 → 10,000 gems, 22 slots |
+| Elite Cells | not a path: a table of lab boosts (×1.5 at 15/h … ×8 at 1M/h) and the extra lab hours per cell, on the top lab | wiki Currencies |
+| Keys, Bits, Guild Tokens | not ranked (Vault, Guardian chips, Guild Store) | — |
+
+- **Medal trades** are worth what 15 stones / 250 shards buy next on their own
+  paths (`pathGain`): stones after the ones already held, shards from zero
+  (shards held aren't saved). Prices reset each event; the path assumes one
+  event. 150-gem trades aren't valued (gems have no single use to price them).
+- **Bots**: only stats a model reads score — Amplify Bot and Bot Bot bonus
+  (damage), Golden Bot (coins). Flame and Thunder Bot aren't modeled, so
+  their levels show no gain. Bot+ (stones) isn't offered.
+- **Card pulls** are random (80/17/3% by rarity), so stars aren't ranked;
+  lab slots, rushes and tickets aren't either.
+- Enhancement costs match every wiki level (the SDK prices up to 600 levels,
+  the wiki and the site 400 — newer caps aren't confirmed).
+- Module slot shards: SDK's table starts at level 2; the wiki's Modules/Cost
+  gives level 1 as 7 shards + 10K coins, and its totals then match
+  (3,136,095 shards to 300).
+- Fixed 2026-10-18: the Critical Chance card counted even when not in the
+  preset; like every card it now counts only while equipped.
+
+## What If (2026-10-18)
+
+`engine/whatIf.ts`, Optimizer → What If: any UW, UW+, workshop, lab,
+enhancement, module slot or bot level set on a copy of the account. Each
+score is calibrated on the account as it is (the chosen Battle Report) and
+read on the copy: all damage, push (flat damage + skip), waves reached and
+coins per run (Run Length, Coins per Run; GC), coins per hour, survival
+(not GC) — plus the cost in every currency. Coins per run = coins for a run
+to the new wave × the coins-per-hour gain.
+
 ## Paths
 
 - **Stone path** (`simulateStonePath`): UW stats, UW+, card mastery unlocks
   and assist modules ranked together by gain per stone — one shared stone
   pool. Greedy: buy the best, re-score, repeat.
 - **Coin / research paths**:
-  - Farming and eHP: workshop (gain per coin where the wiki curves have
-    costs), labs and enhancements (gain per level).
-  - Glass Cannon (since 2026-10-18): workshop by gain per coin, from the
-    game's cost table after the Workshop Discount lab; stats over 300
-    levels move 10 levels a step. Labs by gain per hour of research, since
-    lab slots run out before coins do. Cards and enhancements still show
-    "coming soon".
-  - Every build's lab rows now show research time and coins (after Labs
-    Speed and Labs Coin Discount).
+  - Since 2026-10-18, for every build: workshop by gain per coin, from the
+    game's cost table after the Workshop Discount lab (stats over 300
+    levels move 10 levels a step); labs by gain per hour of research, since
+    lab slots run out before coins do. The other currencies: see Every
+    currency above.
   - Shown in blocks of 10 steps, one row per stat or lab in each, so
     one-level steps that take turns (Crit Chance, Crit Factor, Crit Chance…)
     read as "Crit Chance 40 → 45, Crit Factor 40 → 44".

@@ -4,7 +4,7 @@
 //  All tuning lives here — nothing hardcoded in engine files.
 // ============================================================
 
-import type { OptCategory } from '../types/gameTypes';
+import type { BuildType, OptCategory, OptCurrency } from '../types/gameTypes';
 
 // ── Build Type Support Status ─────────────────────────────────
 // Glass Cannon scores eDPS; Farming scores coins/hour (engine/farming.ts);
@@ -17,11 +17,44 @@ export const BUILD_SUPPORT: Record<string, { ready: boolean; label: string }> = 
     'Farming': { ready: true, label: 'Farming / Econ' },
 };
 
-// Coin/research panels shown for Farming and eHP (cards are gem draws, so skipped).
-export const RESEARCH_PANELS: OptCategory[] = ['labs', 'workshop', 'enhancements'];
-// Glass Cannon: workshop by coins, labs by research time (cards and
-// enhancements still to come).
-export const GC_RESEARCH_PANELS: OptCategory[] = ['workshop', 'labs'];
+// ── Goals ─────────────────────────────────────────────────────
+// What the player wants from their next upgrades. Every panel ranks by it.
+//   damage   — calibrated eDPS (all damage)
+//   waves    — how far runs get: flat damage + Enemy Health Level Skip
+//              (Glass Cannon; milestones and tournaments)
+//   coins    — coins per hour (engine/farming.ts)
+//   survival — eHP (engine/ehp.ts)
+//   blend    — coins and push together: coins^w × push^(1 − w), push being
+//              waves for Glass Cannon and survival otherwise
+export type OptGoal = 'damage' | 'waves' | 'coins' | 'survival' | 'blend';
+
+export const GOAL_LABELS: Record<OptGoal, string> = {
+    damage: 'More damage (eDPS)',
+    waves: 'Push further — milestones and tournaments',
+    coins: 'More coins (econ)',
+    survival: 'Survive longer (eHP)',
+    blend: 'Coins and push together',
+};
+
+export const BUILD_GOALS: Record<BuildType, OptGoal[]> = {
+    'Glass Cannon': ['waves', 'damage', 'coins', 'blend'],
+    'eHP': ['survival', 'coins', 'blend'],
+    'Farming': ['coins', 'survival', 'blend'],
+    'Hybrid': [],
+};
+
+// The push half of "coins and push" for a build.
+export const pushGoalOf = (build: BuildType): 'waves' | 'survival' => (build === 'Glass Cannon' ? 'waves' : 'survival');
+
+// Every currency's panels, in the order shown (stones are the row above).
+export const CURRENCY_PANELS: { currency: OptCurrency; label: string; cats: OptCategory[] }[] = [
+    { currency: 'coins', label: 'Coins', cats: ['workshop', 'enhancements'] },
+    { currency: 'research', label: 'Lab research', cats: ['labs'] },
+    { currency: 'shards', label: 'Module Shards', cats: ['modules'] },
+    { currency: 'medals', label: 'Medals', cats: ['bots'] },
+    { currency: 'gems', label: 'Gems', cats: ['cards'] },
+];
+export const CURRENCY_CATS: OptCategory[] = CURRENCY_PANELS.flatMap(p => p.cats);
 
 // ── Optimizer Panel Definitions ───────────────────────────────
 // Defines the 8 panels, their display labels, cost type,
@@ -29,20 +62,20 @@ export const GC_RESEARCH_PANELS: OptCategory[] = ['workshop', 'labs'];
 export const OPT_PANELS: {
     cat: OptCategory;
     label: string;
-    costType: 'stones' | 'coins' | 'research';
+    costType: OptCurrency;
     row: 1 | 2;
     maxSteps: number;
 }[] = [
         // Row 1 — single ranked path across all stone-spending categories
         // (UW stats, UW+, Card Mastery, Assist) — see simulateStonePath.
         { cat: 'stones', label: 'Ranked Stone Upgrades', costType: 'stones', row: 1, maxSteps: 800 },
-        // Row 2 — Coin/Research panels (coming soon)
+        // Row 2 — the other currencies (CURRENCY_PANELS groups them).
         { cat: 'workshop', label: 'Workshop', costType: 'coins', row: 2, maxSteps: 100 },
-        { cat: 'labs', label: 'Labs', costType: 'research', row: 2, maxSteps: 100 },
-        { cat: 'cards', label: 'Cards', costType: 'coins', row: 2, maxSteps: 100 },
         { cat: 'enhancements', label: 'Enhancements', costType: 'coins', row: 2, maxSteps: 100 },
-        // TODO: Bots section (needs debugging)
-        // { cat: 'bots', label: 'Bots (Free Upgrades)', costType: 'coins', row: 1, maxSteps: 100 },
+        { cat: 'labs', label: 'Labs', costType: 'research', row: 2, maxSteps: 100 },
+        { cat: 'modules', label: 'Module slot levels', costType: 'shards', row: 2, maxSteps: 60 },
+        { cat: 'bots', label: 'Bots and Event Shop trades', costType: 'medals', row: 2, maxSteps: 40 },
+        { cat: 'cards', label: 'Card slots', costType: 'gems', row: 2, maxSteps: 21 },
     ];
 
 // ── GC Scoring ────────────────────────────────────────────────

@@ -32,7 +32,7 @@ describe('the next upgrade of each source', () => {
         expect(ups.workshop.cost / 3.0755e15).toBeCloseTo(1, 3);
         expect(ups.lab.cost).toBe(32.03e9);                               // lab level 13
         expect(ups.lab.time).toBe('7d 3h');
-        expect(ups.enhancement.cost).toBe(337.06e15);                    // enhancement level 31
+        expect(ups.enhancement.cost / 337.06e15).toBeCloseTo(1, 3);     // enhancement level 31
     });
 
     it('takes the discount labs and lab speed off', () => {
@@ -41,7 +41,7 @@ describe('the next upgrade of each source', () => {
         expect(ups.workshop.cost / (3.0755e15 * 0.505)).toBeCloseTo(1, 3);
         expect(ups.lab.cost).toBeCloseTo(32.03e9 * (1 - 0.297), 0);
         expect(ups.lab.time).toBe('1d 22h');      // 171h 53m ÷ (2.98 × 1.25)
-        expect(ups.enhancement.cost).toBeCloseTo(337.06e15 * 0.7, -10);
+        expect(ups.enhancement.cost / (337.06e15 * 0.7)).toBeCloseTo(1, 3);
     });
 
     it('offers nothing past the max, and no enhancement until it’s unlocked', () => {

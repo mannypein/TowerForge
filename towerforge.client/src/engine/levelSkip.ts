@@ -12,29 +12,23 @@
 //    - Lab: 0.1% a level (20 levels).
 //    - Enhancement: ×1 + 0.01 a level (60 levels, ×1.6) — it multiplies
 //      everything else, so one level is worth several workshop levels.
-//  Costs: the workshop and lab tables (engine/upgradeCosts.ts), after the
-//  player's discount labs and lab speed; the enhancement's from the wiki
-//  (Workshop Enhancement/Utility/Enemy Level Skips), less its discount lab.
+//  Costs: the workshop, lab and enhancement tables (engine/upgradeCosts.ts),
+//  after the player's discount labs and lab speed.
 //  Pure functions — no store imports.
 // ============================================================
 
 import type { EnhData, LabData, WSPreset } from '../types/gameTypes';
 import { WS_ENH, WS_STATS } from '../constants/gameData';
-import { enhancementDiscount, formatLabTime, labLevelCost, workshopCost, workshopDiscount } from './upgradeCosts';
-
-// Enhancement Enemy Level Skips: coins for each level.
-const ENH_COST = [5e9, 15.5e9, 202.98e9, 1.13e12, 3.89e12, 10.14e12, 22.19e12, 43.05e12, 76.44e12,
-    126.85e12, 199.54e12, 300.61e12, 437.01e12, 616.54e12, 847.92e12, 1.14e15, 1.51e15, 3.91e15, 7.5e15,
-    12.61e15, 19.65e15, 29.09e15, 41.45e15, 57.35e15, 77.47e15, 102.6e15, 133.59e15, 171.41e15, 217.13e15,
-    271.92e15, 337.06e15, 496.77e15, 705.87e15, 975e15, 1.32e18, 1.74e18, 2.27e18, 2.92e18, 3.71e18,
-    4.67e18, 5.81e18, 7.16e18, 8.77e18, 10.65e18, 12.85e18, 15.42e18, 18.39e18, 21.81e18, 25.74e18,
-    30.24e18, 35.37e18, 47.38e18, 62.14e18, 80.12e18, 101.84e18, 127.88e18, 158.91e18, 195.63e18,
-    238.88e18, 289.53e18];
+import {
+    enhancementCost, enhancementDiscount, formatLabTime, labLevelCost, workshopCost, workshopDiscount,
+} from './upgradeCosts';
 
 const WORKSHOP_STAT = 'Enemy HP Level Skip';
 const LAB = 'Enemy HP Lvl Skip Lab';
 const WORKSHOP_MAX = 699;
 const LAB_MAX = 20;
+const ENH = 'Enemy Level Skips';
+const ENH_MAX = 60;
 const WORKSHOP_STEP = 10;     // offered in steps of 10 levels — one level is 0.05%
 
 export interface SkipSources {
@@ -50,7 +44,7 @@ export interface SkipSources {
 }
 
 const WS_IDX = WS_STATS.utility.findIndex(([n]) => n === WORKSHOP_STAT);
-const ENH_IDX = WS_ENH.utility.findIndex(([n]) => n === 'Enemy Level Skips');
+const ENH_IDX = WS_ENH.utility.findIndex(([n]) => n === ENH);
 
 export function healthSkipSources(
     ws: WSPreset | undefined, labs: LabData, enh: EnhData, relics: Record<string, number>,
@@ -102,11 +96,11 @@ export function nextSkipUpgrades(s: SkipSources): SkipUpgrade[] {
             cost: lab.coins, time: formatLabTime(lab.hours),
         });
     }
-    if (s.enhancementOwned && s.enhancement < ENH_COST.length) {
+    if (s.enhancementOwned && s.enhancement < ENH_MAX) {
         out.push({
             source: 'enhancement', from: s.enhancement, to: s.enhancement + 1,
             points: healthSkipChance({ ...s, enhancement: s.enhancement + 1 }) - now,
-            cost: ENH_COST[s.enhancement] * (1 - enhancementDiscount(labs, 'utility')),
+            cost: enhancementCost(ENH, s.enhancement, s.enhancement + 1, enhancementDiscount(labs, 'utility')) ?? 0,
         });
     }
     return out.filter(u => u.points > 0);
