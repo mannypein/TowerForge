@@ -25,7 +25,7 @@ export type UWAbbr = 'CL' | 'SM' | 'DW' | 'CF' | 'ILM' | 'GT' | 'PS' | 'BH' | 'S
 export type TabName =
     | 'profile' | 'perks' | 'tiers' | 'workshop'
     | 'labs' | 'cards' | 'uw' | 'puws' | 'relics'
-    | 'bots' | 'modules' | 'optimizer' | 'enemies' | 'creators' | 'share' | 'account';
+    | 'bots' | 'modules' | 'optimizer' | 'enemies' | 'runcoins' | 'creators' | 'share' | 'account';
 
 // ── Workshop Types ────────────────────────────────────────────
 export type WSCategory = 'attack' | 'defense' | 'utility';

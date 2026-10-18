@@ -6,8 +6,25 @@ run gets** and **coins / cells per run**, before and after an upgrade.
 
 Status: **first piece built — the Enemy Stats page** (Optimizer → Enemy
 Stats, `engine/enemyStats.ts`), which recreates the in-game Wave Info panel
-and matches the checked screenshot digit for digit. The simulator itself
-isn't built yet. Facts below say where they
+and matches the checked screenshot digit for digit. **Step 1 of the
+simulator — Coins per Run** (Optimizer → Coins per Run, `engine/runCoins.ts`):
+plays a run wave by wave for kills and coins, tuned to one saved run, and
+shows how well it predicts the player's other runs. Survival (how far a run
+gets) and upgrades aren't in yet.
+
+### Coins per run (step 1)
+
+- Kills per wave = spawn rate (Wave Accelerator chart: 37 at wave 1000 → 56
+  at 6500, earlier with mastery) × a per-player factor fitted to the tuning
+  run's kills (stands for 3.25 per spawn tick × Enemy Balance × waves played).
+  Intro Sprint waves pay nothing (default from the card in the current
+  preset, editable).
+- Coins = kill coins + Coins / Wave + Golden Combo and Critical Coin (shares
+  of kill coins) + Wave Skip and fetch (shares of the rest), as the tuning run
+  shows them; another tier scales by its coin multiplier.
+- **Open question the player's runs decide:** coins per kill fixed per enemy
+  (wiki) or × the wave number (TheTowerSDK's coin simulation). The page fits
+  both and reports which predicts the other runs better. Facts below say where they
 come from. "SDK" = TheTowerSDK (below); "wiki" = the Fandom wiki; "GV" = the
 Game Vault wiki. Where sources disagree it says so (see [Disagreements](#disagreements-to-settle)).
 Game version at the time: **v29.1**.

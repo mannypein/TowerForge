@@ -2603,3 +2603,36 @@
     .en-table { font-size: 11px; }
     .en-table th, .en-table td { padding: 5px 2px; }
 }
+
+/* ── Coins per Run Tab (shares the en- form and table styles) ── */
+.rc-table td {
+    vertical-align: top;
+}
+
+.rc-result {
+    flex-basis: 100%;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 8px;
+}
+
+    .rc-result div {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding: 8px 10px;
+        background: var(--bg3);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+    }
+
+    .rc-result span {
+        font-size: 11px;
+        color: var(--text-dim);
+    }
+
+    .rc-result strong {
+        font-family: var(--font-mono);
+        font-size: 16px;
+        color: var(--gold);
+    }

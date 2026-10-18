@@ -1,0 +1,181 @@
+// ============================================================
+//  TowerForge Companion — Coins per Run Tab
+//  Run simulator, step 1: tunes the wave-by-wave coin model to one of
+//  the player's saved runs, shows how well it predicts their other
+//  runs, and projects coins for a run to any wave or tier
+//  (engine/runCoins.ts, docs/run-simulation.md).
+// ============================================================
+
+import { useMemo, useState } from 'react';
+import { useGameStore } from '../../store/useGameStore';
+import { defaultBattleIndex, isRealRun } from '../../engine/gameExport';
+import { buildRunModel, projectRun } from '../../engine/runCoins';
+import type { RunModelSettings } from '../../engine/runCoins';
+import { activeCard, cardValue } from '../../engine/statHelpers';
+import { formatGameNumber } from '../../engine/gameNumbers';
+import NumericInput from '../common/NumericInput';
+
+const fmt = (n: number) => (n >= 1000 ? formatGameNumber(n) : Math.round(n).toLocaleString());
+const signedPct = (x: number) => `${x >= 0 ? '+' : '−'}${Math.abs(x * 100).toFixed(1)}%`;
+
+export default function RunCoinsTab() {
+    const battles = useGameStore(s => s.importedBattles);
+    const cardData = useGameStore(s => s.cardData);
+    const preset = useGameStore(s => s.activePreset);
+
+    // Card defaults from the current preset; the run may have used another, so both are editable.
+    const sprint = activeCard(cardData, preset, 'Intro Sprint');
+    const defaultSprint = sprint ? Math.round(cardValue('Intro Sprint', sprint.stars) * (sprint.mastery ?? 1)) : 0;
+    const wa = cardData.data['Wave Accelerator'];
+    const defaultWa = activeCard(cardData, preset, 'Wave Accelerator') && wa && wa.s >= 7 && wa.mu ? wa.m ?? 0 : null;
+
+    const candidates = battles.map((b, i) => ({ b, i })).filter(({ b }) => isRealRun(b) && !b.tournament);
+    const [tuning, setTuning] = useState(() => defaultBattleIndex(battles));
+    const [introSprint, setIntroSprint] = useState(defaultSprint);
+    const [waMastery, setWaMastery] = useState<number | null>(defaultWa);
+    const tuningRun = battles[tuning];
+    const [target, setTarget] = useState({ tier: tuningRun?.tier ?? 1, wave: tuningRun?.wave ?? 1000 });
+
+    const settings: RunModelSettings = useMemo(() => ({ introSprintWaves: introSprint, waMastery }), [introSprint, waMastery]);
+    const model = useMemo(() => buildRunModel(battles, tuning, settings), [battles, tuning, settings]);
+    const projection = model ? projectRun(model.calibration, settings, target.wave, target.tier) : null;
+
+    if (candidates.length === 0) {
+        return (
+            <div className="relics-note">
+                <strong>Coins per Run</strong> needs your battle history. Use <em>Import Game Data</em> — each
+                import adds your latest runs, and every run you add makes the predictions better to check.
+            </div>
+        );
+    }
+
+    const growth = model?.calibration.growth;
+    const fit = model?.fit;
+
+    return (
+        <div>
+            <div className="relics-note">
+                <strong>Run simulator, step 1 — coins.</strong> The model plays a run wave by wave (enemies per
+                wave from the Wave Accelerator chart, coins per kill, Coins / Wave, Golden Combo, Wave Skip),
+                tuned to one of your runs. Then it predicts your <em>other</em> runs: the closer those are, the
+                more you can trust the projection below. Upgrades and how far a run gets come next.
+            </div>
+
+            <div className="section" style={{ marginBottom: '12px' }}>
+                <div className="section-head"><h3>Tune on</h3></div>
+                <div className="section-body en-inputs">
+                    <label className="en-field" style={{ flexBasis: '100%' }}>
+                        <span>Run</span>
+                        <select value={tuning} onChange={e => {
+                            const i = parseInt(e.target.value);
+                            setTuning(i);
+                            if (battles[i]) setTarget({ tier: battles[i].tier, wave: battles[i].wave });
+                        }}>
+                            {candidates.slice().reverse().map(({ b, i }) => (
+                                <option key={i} value={i}>{b.date} · T{b.tier} W{b.wave.toLocaleString()} · {fmt(b.coinsEarned)} coins</option>
+                            ))}
+                        </select>
+                    </label>
+                    <label className="en-field">
+                        <span>Intro Sprint waves</span>
+                        <NumericInput value={introSprint} min={0} step={10} onChange={v => setIntroSprint(Math.max(0, Math.floor(v)))} />
+                    </label>
+                    <label className="en-field">
+                        <span>Wave Accelerator mastery</span>
+                        <select value={waMastery ?? -1} onChange={e => { const v = parseInt(e.target.value); setWaMastery(v < 0 ? null : v); }}>
+                            <option value={-1}>None</option>
+                            {Array.from({ length: 10 }, (_, i) => <option key={i} value={i}>Level {i}</option>)}
+                        </select>
+                    </label>
+                    <p className="en-note">
+                        Both start from the cards in your current preset; set them to what the runs used.
+                        Intro Sprint waves pay no coins.
+                    </p>
+                </div>
+            </div>
+
+            {!model ? (
+                <div className="relics-note">That run can&apos;t be used — it ended inside Intro Sprint or has no coins.</div>
+            ) : (
+                <>
+                    <div className="section" style={{ marginBottom: '12px' }}>
+                        <div className="section-head">
+                            <h3>Your other runs</h3>
+                            {model.checks.length > 0 && (
+                                <span className="s-badge">
+                                    avg {(100 * (growth === 'wave' ? fit!.wave! : fit!.flat!)).toFixed(1)}% off
+                                </span>
+                            )}
+                        </div>
+                        <div className="section-body en-table-wrap">
+                            {model.checks.length === 0 ? (
+                                <p className="en-note">
+                                    No other campaign run to check against yet. Import again after a few runs.
+                                </p>
+                            ) : (
+                                <>
+                                    <table className="en-table rc-table">
+                                        <thead><tr><th>Run</th><th>Kills</th><th>Coins</th></tr></thead>
+                                        <tbody>
+                                            {model.checks.slice().reverse().map(c => (
+                                                <tr key={c.index}>
+                                                    <td>
+                                                        T{c.run.tier} W{c.run.wave.toLocaleString()}
+                                                        <span className="en-sub">{c.run.date}</span>
+                                                    </td>
+                                                    <td>
+                                                        {fmt(c.run.totalEnemies)}
+                                                        <span className="en-sub">model {fmt(c.predictedKills)} ({signedPct(c.killError)})</span>
+                                                    </td>
+                                                    <td>
+                                                        {fmt(c.run.coinsEarned)}
+                                                        <span className="en-sub">model {fmt(c.predictedCoins)} ({signedPct(c.coinError)})</span>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                    <p className="en-note">
+                                        Coins per kill: {growth === 'wave'
+                                            ? 'growing with the wave fits your runs better'
+                                            : 'a fixed value per enemy fits your runs better'}
+                                        {' '}({(100 * fit!.flat!).toFixed(1)}% off with fixed values, {(100 * fit!.wave!).toFixed(1)}% growing with the wave).
+                                    </p>
+                                </>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="section">
+                        <div className="section-head"><h3>A run to wave …</h3></div>
+                        <div className="section-body en-inputs">
+                            <label className="en-field">
+                                <span>Tier</span>
+                                <select value={target.tier} onChange={e => setTarget({ ...target, tier: parseInt(e.target.value) })}>
+                                    {Array.from({ length: 24 }, (_, i) => i + 1).map(t => <option key={t} value={t}>{t}</option>)}
+                                </select>
+                            </label>
+                            <label className="en-field">
+                                <span>Wave</span>
+                                <NumericInput value={target.wave} min={1} step={100} onChange={v => setTarget({ ...target, wave: Math.max(1, Math.floor(v)) })} />
+                            </label>
+                            {projection && (
+                                <div className="rc-result">
+                                    <div><span>Coins</span><strong>{fmt(projection.coins)}</strong></div>
+                                    <div><span>Coins / hour</span><strong>{fmt(projection.coinsPerHour)}</strong></div>
+                                    <div><span>Kills</span><strong>{fmt(projection.kills)}</strong></div>
+                                    <div><span>Time</span><strong>{projection.hours.toFixed(1)} h</strong></div>
+                                </div>
+                            )}
+                            <p className="en-note">
+                                At the tuning run&apos;s pace ({model.calibration.secondsPerWave.toFixed(1)} s a wave, real time) and
+                                with the coin bonuses that run had. Another tier scales coins by its coin multiplier; it
+                                doesn&apos;t yet change how far you&apos;d get.
+                            </p>
+                        </div>
+                    </div>
+                </>
+            )}
+        </div>
+    );
+}
