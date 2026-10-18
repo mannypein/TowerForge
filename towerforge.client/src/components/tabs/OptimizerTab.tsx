@@ -5,7 +5,7 @@
 //  eHP/Hybrid/Farming are placeholder until formulas are built.
 // ============================================================
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useGameStore } from '../../store/useGameStore';
 import { OPT_PANELS, OPT_GAIN_THRESHOLDS, OPT_DEFAULT_SHOW, BUILD_SUPPORT, RESEARCH_PANELS } from '../../constants/optimizerConfig';
 import { presetLabel, UWS, WS_STATS, WS_ENH } from '../../constants/gameData';
@@ -28,6 +28,18 @@ import type { EhpCalibration } from '../../engine/ehp';
 import { buildEdpsCalibration } from '../../engine/edps';
 import type { EdpsCalibration } from '../../engine/edps';
 import { BattleReportPanel, EconomyStats, EhpStats } from './BuildPanels';
+import { buildRunLengthModel, pathRunGains } from '../../engine/runLength';
+import type { StepRunGain } from '../../engine/runLength';
+import { buildRunModel, projectRun, runSettingsFromCards } from '../../engine/runCoins';
+import { defaultBattleIndex } from '../../engine/gameExport';
+
+// Glass Cannon ranking: all damage, or the flat damage that decides how far
+// a run gets (shown as waves and coins per run). Remembered per browser.
+type RankBy = 'damage' | 'waves';
+const RANK_KEY = 'tc_opt_rank';
+const loadRankBy = (): RankBy => {
+    try { return localStorage.getItem(RANK_KEY) === 'waves' ? 'waves' : 'damage'; } catch { return 'damage'; }
+};
 
 const EMPTY_RESULTS: Record<OptCategory, OptCandidate[]> = {
     uw: [], uwp: [], mast: [], assist: [], stones: [],
@@ -61,6 +73,13 @@ export default function OptimizerTab() {
 
     const profile = useGameStore(s => s.profile);
     const updateProfile = useGameStore(s => s.updateProfile);
+    const importedBattles = useGameStore(s => s.importedBattles);
+    const cardData = useGameStore(s => s.cardData);
+    const [rankBy, setRankBy] = useState<RankBy>(loadRankBy);
+    const [resultsRankBy, setResultsRankBy] = useState<RankBy>('damage');
+    useEffect(() => {
+        try { localStorage.setItem(RANK_KEY, rankBy); } catch { /* storage unavailable */ }
+    }, [rankBy]);
     const activePreset = useGameStore(s => s.activePreset);
     const setActivePreset = useGameStore(s => s.setActivePreset);
 
@@ -71,7 +90,19 @@ export default function OptimizerTab() {
     const buildSupport = BUILD_SUPPORT[buildType] ?? BUILD_SUPPORT['Glass Cannon'];
     const isFarming = buildType === 'Farming';
     const isEhp = buildType === 'eHP';
-    const metricLabel = isFarming ? 'coins' : isEhp ? 'survival' : 'eDPS';
+    const wavesMode = !isFarming && !isEhp && resultsRankBy === 'waves';
+    const metricLabel = isFarming ? 'coins' : isEhp ? 'survival' : wavesMode ? 'waves' : 'eDPS';
+
+    // Run Length (waves) and Coins per Run (coins), from the saved runs.
+    const runModel = useMemo(() => buildRunLengthModel(importedBattles), [importedBattles]);
+    const coinsAt = useMemo(() => {
+        const settings = runSettingsFromCards(cardData, activePreset);
+        const model = buildRunModel(importedBattles, defaultBattleIndex(importedBattles), settings);
+        if (!model || !runModel) return undefined;
+        return (wave: number) => projectRun(model.calibration, settings, wave, runModel.tier).coins;
+    }, [importedBattles, cardData, activePreset, runModel]);
+    const runGains = (cat: OptCategory): StepRunGain[] | undefined =>
+        wavesMode && runModel ? pathRunGains(runModel, (results[cat] ?? []).map(c => c.scorePct), coinsAt) : undefined;
 
     // ── Build snapshot from current store state ───────────────
     // Reads fresh state via getState() so a re-run triggered right after
@@ -143,6 +174,8 @@ export default function OptimizerTab() {
                 snap.farm = snap.metric === 'coins' ? buildFarmCalibration(snap, report) : undefined;
                 snap.ehp = snap.metric === 'ehp' ? buildEhpCalibration(snap, report) : undefined;
                 snap.edps = snap.metric === 'edps' ? buildEdpsCalibration(snap, report) ?? undefined : undefined;
+                snap.edpsMode = snap.edps ? rankBy : 'damage';
+                setResultsRankBy(snap.edpsMode);
                 setFarmCalib(snap.farm ?? null);
                 setEhpCalib(snap.ehp ?? null);
                 setEdpsCalib(snap.edps ?? null);
@@ -358,6 +391,21 @@ export default function OptimizerTab() {
                             </select>
                         </div>
 
+                        {!isFarming && !isEhp && (
+                            <div>
+                                <span className="opt-control-label">Rank by</span>
+                                <select
+                                    value={rankBy}
+                                    onChange={e => setRankBy(e.target.value as RankBy)}
+                                    style={{ fontSize: '13px' }}
+                                    title="Waves counts only the flat damage that decides how far a Glass Cannon run gets"
+                                >
+                                    <option value="damage">All damage (eDPS)</option>
+                                    <option value="waves">How far runs get (waves)</option>
+                                </select>
+                            </div>
+                        )}
+
                         <button
                             className="btn btn-dim"
                             onClick={undoLast}
@@ -571,6 +619,17 @@ export default function OptimizerTab() {
                 <div className="opt-warning-banner">
                     <span className="opt-warning-icon">⚠️</span>
                     <div>
+                        {wavesMode ? (
+                            <>
+                                <strong>Ranked by how far your runs get.</strong> Only flat damage counts — Chain
+                                Lightning, Smart Missiles, Death Wave, Inner Land Mines, Poison Swamp and tower
+                                shots. Orbs, Black Hole, Smite and Consume deal a share of enemy health, so they
+                                don&apos;t fall behind as waves get harder, and the enemies that end Glass Cannon runs
+                                ignore orbs and Black Hole. Waves come from Run Length and coins per run from Coins
+                                per Run{runModel ? '' : ' — import runs that ended in a death to see them'}. Each
+                                step builds on the ones above it; totals far past where your runs end now are rough.
+                            </>
+                        ) : (<>
                         <strong>These upgrades are ranked for pure eDPS.</strong>{' '}
                         {edpsCalib
                             ? 'Gains are a share of all the damage in your chosen run, so sources stones can’t change (like orbs) keep their real weight.'
@@ -579,6 +638,7 @@ export default function OptimizerTab() {
                         hurt your economy — for example, heavily investing in Poison Swamp or stacking
                         too much slow/stun can reduce coin generation even though eDPS goes up.
                         Use your judgment alongside these suggestions.
+                        </>)}
                     </div>
                 </div>
             )}
@@ -625,6 +685,7 @@ export default function OptimizerTab() {
                             key={panel.cat}
                             panel={panel}
                             candidates={results[panel.cat] ?? []}
+                            runGains={runGains(panel.cat)}
                             showAll={showMore[panel.cat] ?? false}
                             onShowMore={() => setShowMore(s => ({ ...s, [panel.cat]: true }))}
                             gainColor={gainColor}
@@ -675,11 +736,15 @@ interface OptPanelProps {
     gainColor: (score: number) => string;
     catStyle: (cat: OptCategory) => React.CSSProperties;
     onApply: (c: OptCandidate) => void;
+    runGains?: StepRunGain[];     // waves mode: waves and coins per run each step adds
 }
 
+const fmtWaves = (w: number) => (w < 10 ? w.toFixed(1) : Math.round(w).toLocaleString());
+
 function OptPanel({
-    panel, candidates, showAll, onShowMore, gainColor, catStyle, onApply,
+    panel, candidates, showAll, onShowMore, gainColor, catStyle, onApply, runGains,
 }: OptPanelProps) {
+    const totalWaves = runGains?.reduce((s, g) => s + g.waves, 0) ?? 0;
     const visible = showAll
         ? candidates
         : candidates.slice(0, OPT_DEFAULT_SHOW);
@@ -688,7 +753,9 @@ function OptPanel({
         <div className="opt-section">
             <div className="opt-section-head">
                 <span className="opt-section-title">{panel.label}</span>
-                <span className="s-badge">{candidates.length} upgrades</span>
+                <span className="s-badge">
+                    {candidates.length} upgrades{runGains && totalWaves > 0 ? ` · +${fmtWaves(totalWaves)} waves` : ''}
+                </span>
             </div>
 
             {candidates.length === 0 ? (
@@ -711,6 +778,14 @@ function OptPanel({
                             <div className="opt-name-col">
                                 <span className="opt-name">{c.label}</span>
                                 <span className="opt-sub">{c.subLabel}</span>
+                                {runGains?.[idx] && (
+                                    <span className="opt-waves">
+                                        +{fmtWaves(runGains[idx].waves)} waves
+                                        {runGains[idx].coins !== null && (
+                                            <> · +{(runGains[idx].coins! * 100).toFixed(2)}% coins</>
+                                        )}
+                                    </span>
+                                )}
                             </div>
                             <span className="opt-cost" title={c.costType !== 'stones' && !c.costKnown ? 'Cost not modeled yet — ranked by gain per level' : undefined}>
                                 {c.costType === 'stones' || c.costKnown ? c.cost.toLocaleString() : '—'}

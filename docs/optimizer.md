@@ -33,6 +33,12 @@ module effects in [module-effects.md](module-effects.md).
     Black Hole.
   Without damage data the old uncalibrated model is used (its absolute eDPS
   isn't meaningful; the tab says so).
+- **Glass Cannon, ranked by waves** (Rank by → "How far runs get") —
+  `edpsSurvivalScore`: only the flat-damage sources (CL, SM, DW, ILM, PS,
+  tower shots), renormalised to their share of the run's damage; orbs, Black
+  Hole, Smite and Consume deal a share of enemy health so they don't move the
+  death wave. Gains become waves and coins per run through Run Length and
+  Coins per Run ([run-simulation.md](run-simulation.md)).
 - **Farming** — `engine/farming.ts`, calibrated by the run's coin breakdown
   and "killed with effect active" coverage. Golden Combo uses the wiki's
   compounding formula.

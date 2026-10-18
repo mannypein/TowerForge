@@ -123,7 +123,7 @@ import { coinRate } from './farming';
 import type { FarmCalibration } from './farming';
 import { ehpScore } from './ehp';
 import type { EhpCalibration } from './ehp';
-import { edpsScore } from './edps';
+import { edpsScore, edpsSurvivalScore } from './edps';
 import type { EdpsCalibration } from './edps';
 import {
     WS_COIN_PER_KILL, WS_COIN_PER_WAVE, WS_HEALTH, WS_HEALTH_REGEN, WS_DEFENSE_PCT,
@@ -184,6 +184,9 @@ export interface OptimizerSnapshot {
     // eDPS weighted by a run's real damage by source (engine/edps.ts). Without
     // it, eDPS is the uncalibrated UW model.
     edps?: EdpsCalibration;
+    // Glass Cannon, calibrated: rank by all damage, or by the flat damage
+    // that decides how far a run gets ('waves', engine/runLength.ts).
+    edpsMode?: 'damage' | 'waves';
 }
 
 // ── Deep Clone Snapshot ───────────────────────────────────────
@@ -234,7 +237,7 @@ function getEDPS(snap: OptimizerSnapshot): number {
 function getScore(snap: OptimizerSnapshot): number {
     if (snap.metric === 'coins' && snap.farm) return coinRate(snap, snap.farm);
     if (snap.metric === 'ehp' && snap.ehp) return ehpScore(snap, snap.ehp);
-    if (snap.edps) return edpsScore(snap, snap.edps);
+    if (snap.edps) return snap.edpsMode === 'waves' ? edpsSurvivalScore(snap, snap.edps) : edpsScore(snap, snap.edps);
     return getEDPS(snap);
 }
 

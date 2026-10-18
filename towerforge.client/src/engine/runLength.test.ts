@@ -4,7 +4,7 @@
 // (Ray, Tank, Vampire, Overcharge, and blank for a run ended by hand).
 
 import { describe, expect, it } from 'vitest';
-import { buildRunLengthModel, deathWave, killedBy, runEnds, wavesFromDamage, wavesFromSkip } from './runLength';
+import { buildRunLengthModel, deathWave, killedBy, pathRunGains, runEnds, wavesFromDamage, wavesFromSkip } from './runLength';
 import { baseEnemyHealth } from './enemyStats';
 import { parseGameExport } from './gameExport';
 import { battle, makeExport } from '../test/makeExport';
@@ -67,5 +67,16 @@ describe('death wave', () => {
         const gains = [0.01, 0.05, 0.1, 0.25, 0.5, 1].map(g => wavesFromDamage(model, g));
         expect(gains[0]).toBeGreaterThan(0);
         gains.slice(1).forEach((g, i) => expect(g).toBeGreaterThanOrEqual(gains[i]));
+    });
+});
+
+describe('waves along an upgrade path', () => {
+    it('adds up to the waves of the whole path, and turns waves into coins', () => {
+        const model = buildRunLengthModel(runs(death(8100, 10), death(8200, 11), death(8402, 12), death(8500, 13), death(8501, 14)))!;
+        const steps = pathRunGains(model, [2, 3, 5], w => w * 1e15);
+        const total = steps.reduce((s, x) => s + x.waves, 0);
+        expect(total).toBeCloseTo(wavesFromDamage(model, 1.02 * 1.03 * 1.05 - 1), 9);
+        steps.forEach(s => expect(s.coins).toBeGreaterThanOrEqual(0));
+        expect(pathRunGains(model, [1])[0].coins).toBeNull();
     });
 });

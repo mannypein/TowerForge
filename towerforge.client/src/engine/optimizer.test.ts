@@ -9,7 +9,7 @@ import { runRatesFrom } from './runRates';
 import { parseGameExport } from './gameExport';
 import { buildCandidates, simulateStonePath } from './optimizer';
 import type { OptimizerSnapshot } from './optimizer';
-import { buildEdpsCalibration, edpsScore } from './edps';
+import { buildEdpsCalibration, edpsScore, edpsSurvivalScore } from './edps';
 import { UWS, UW_STAT_VALUES, UW_STONE_COSTS } from '../constants/gameData';
 import { GC_SCORING } from '../constants/optimizerConfig';
 import type { BattleReport } from './battleReport';
@@ -85,6 +85,20 @@ describe('calibrated eDPS', () => {
         expect(calib.smiteProcs).toBeCloseTo(11.1 * 0.185, 6);
         const after = snapshot(report, s => { s.uwData.data.CL!.upOwn = true; });   // Smite Lv 1 = 0.05%
         expect(edpsScore(after, calib)).toBeCloseTo(1 + 0.0005 * 11.1 * 0.185 * 0.5, 8);
+    });
+
+    it('counts only flat damage for how far a Glass Cannon run gets', () => {
+        // Flat sources in the run: CL 100, SM 5, PS 5, tower shots 10 = 0.12 of the damage.
+        const report = run();
+        const snap = snapshot(report);
+        const calib = buildEdpsCalibration(snap, report)!;
+        expect(edpsSurvivalScore(snap, calib)).toBeCloseTo(1, 10);
+        const cl = snapshot(report, s => { s.uwData.data.CL!.sv[0] = 11; });
+        expect(edpsSurvivalScore(cl, calib)).toBeCloseTo(1 + (0.1 / 0.12) * (113 / 85 - 1), 6);
+        // Consume deals a share of enemy health: more eDPS, no extra waves.
+        const consume = snapshot(report, s => { s.uwData.data.BH!.upOwn = true; });
+        expect(edpsScore(consume, calib)).toBeGreaterThan(1);
+        expect(edpsSurvivalScore(consume, calib)).toBeCloseTo(1, 10);
     });
 
     it('needs damage by source to calibrate', () => {

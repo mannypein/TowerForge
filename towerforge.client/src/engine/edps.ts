@@ -164,3 +164,25 @@ export function edpsScore(snap: OptimizerSnapshot, calib: EdpsCalibration, ttt?:
         + Math.min(1, x.smite * smiteProcs(x, a, calib.smiteProcs)) * calib.clReach
         + x.consume * clamp01(calib.bhKills * bhRatio);
 }
+
+// How far a Glass Cannon run gets depends only on FLAT damage — Chain
+// Lightning, Smart Missiles, Death Wave, Inner Land Mines, Poison Swamp and
+// tower shots. Orbs (on Orb Resistance tiers), Black Hole, Smite and Consume
+// deal a share of an enemy's health, so they don't fall behind as enemies get
+// tougher; and the enemies that end GC runs (elites, fleets, bosses) are
+// immune to orbs and Black Hole anyway (docs/run-simulation.md).
+// Relative flat damage, 1 at the anchor; feeds runLength's waves gained.
+export function edpsSurvivalScore(snap: OptimizerSnapshot, calib: EdpsCalibration, ttt?: number): number {
+    const x = edpsParts(snap, ttt);
+    const a = calib.anchor;
+    const s = calib.shares;
+    const flat = s.cl + s.sm + s.dw + s.ilm + s.ps + s.tower;
+    if (flat <= 0) return 1;
+    const r = (now: number, then: number) => (then > 0 ? now / then : 1);
+    return (s.cl * r(x.cl, a.cl)
+        + s.sm * r(x.sm, a.sm)
+        + s.dw * r(x.dw, a.dw)
+        + s.ilm * r(x.ilm, a.ilm)
+        + s.ps * r(x.ps, a.ps)
+        + s.tower * r(x.tower, a.tower)) / flat;
+}

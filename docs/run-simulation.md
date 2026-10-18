@@ -32,6 +32,18 @@ gets) and upgrades aren't in yet.
   Two short runs (W3418 +46%, W4060 +29%) don't fit any rule — likely runs
   ended by hand or played differently.
 
+### Upgrades → waves and coins (step 3)
+
+Optimizer → Rank by → "How far runs get (waves)" (Glass Cannon, calibrated
+eDPS). Ranks stone upgrades by **flat damage** only (`edpsSurvivalScore`:
+CL, SM, DW, ILM, PS, tower shots, each by its share of the run's damage),
+because on Orb Resistance tiers (T18: orbs deal 10% of health per hit) orbs,
+Black Hole, Smite and Consume deal a share of enemy health and don't fall
+behind as enemies get tougher, and the enemies that end GC runs (elites,
+fleets, bosses) are immune to orbs and BH anyway. Each step's gain compounds
+along the path and becomes waves (`pathRunGains` → Run Length) and coins per
+run (Coins per Run). Totals far past the current death wave are rough.
+
 ### Run length, Glass Cannon (step 2)
 
 `engine/runLength.ts`, Optimizer → Run Length. Owner plays GC: one enemy hit

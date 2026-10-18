@@ -139,3 +139,31 @@ export function wavesFromDamage(m: RunLengthModel, gain: number): number {
 export function wavesFromSkip(m: RunLengthModel, points: number): number {
     return averageMove(m, 1, points / 100);
 }
+
+// Waves (and coins per run, when `coinsAt` gives coins for a run to a wave)
+// each step of an upgrade path adds. `gainsPct` are the steps' flat-damage
+// gains in %, each on top of the steps before it, so they compound.
+export interface StepRunGain {
+    waves: number;
+    coins: number | null;     // fractional change in coins per run
+}
+
+export function pathRunGains(
+    m: RunLengthModel, gainsPct: number[], coinsAt?: (wave: number) => number,
+): StepRunGain[] {
+    let factor = 1;
+    let prevWaves = 0;
+    let prevCoins = coinsAt ? coinsAt(m.typicalWave) : 0;
+    return gainsPct.map(g => {
+        factor *= 1 + Math.max(0, g) / 100;
+        const waves = wavesFromDamage(m, factor - 1);
+        const coins = coinsAt ? coinsAt(m.typicalWave + Math.round(waves)) : 0;
+        const step = {
+            waves: waves - prevWaves,
+            coins: coinsAt && prevCoins > 0 ? coins / prevCoins - 1 : null,
+        };
+        prevWaves = waves;
+        prevCoins = coins;
+        return step;
+    });
+}
