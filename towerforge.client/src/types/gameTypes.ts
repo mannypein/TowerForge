@@ -314,6 +314,13 @@ export interface OptCandidate {
     costKnown?: boolean;   // false/omitted for coin/research rows where `cost` is only a level proxy
     scorePct: number;   // eDPS delta %
     scorePerCost: number;   // eDPS delta % per stone/coin
+    // Labs: coins and hours of research for the level(s), after the player's
+    // discount and lab speed (when the lab catalog has them).
+    coins?: number;
+    hours?: number;
+    // Glass Cannon waves mode: Enemy Health Level Skip points the step adds
+    // (counted in scorePct as the damage they're worth).
+    skipPoints?: number;
     alts?: OptAlt[];
 }
 

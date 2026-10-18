@@ -26,7 +26,6 @@ import PUWsTab from './components/tabs/pUWsTab';
 import RelicsTab from './components/tabs/RelicsTab';
 import BotsTab from './components/tabs/BotsTab';
 import ModulesTab from './components/tabs/ModulesTab';
-import OptimizerTab from './components/tabs/OptimizerTab';
 import ShareTab from './components/tabs/ShareTab';
 import AccountTab from './components/tabs/AccountTab';
 import { useAccountStore } from './store/useAccountStore';
@@ -35,6 +34,7 @@ import SharedView from './components/share/SharedView';
 import './styles/app.css';
 
 // Pages most visits never open load on first use, keeping the main bundle small.
+const OptimizerTab = lazy(() => import('./components/tabs/OptimizerTab'));
 const CreatorCodesTab = lazy(() => import('./components/tabs/CreatorCodesTab'));
 const EnemyStatsTab = lazy(() => import('./components/tabs/EnemyStatsTab'));
 const RunCoinsTab = lazy(() => import('./components/tabs/RunCoinsTab'));

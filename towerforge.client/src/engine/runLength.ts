@@ -121,11 +121,17 @@ export function buildRunLengthModel(runs: BattleReport[]): RunLengthModel | null
 // So each death is moved from where it really was, at that run's own skip
 // rate, and the moves are averaged — rather than from one averaged limit,
 // which could sit right on a wall.
+const startWaves = new WeakMap<RunLengthModel, number[]>();
+
 function averageMove(m: RunLengthModel, healthFactor: number, extraSkip: number): number {
-    const moves = m.used.map(d => {
+    let from = startWaves.get(m);
+    if (!from) {
+        from = m.used.map(d => deathWave(d.enemyHealth!, m.tier, 1 - d.healthLevel! / d.run.wave));
+        startWaves.set(m, from);
+    }
+    const moves = m.used.map((d, i) => {
         const rate = 1 - d.healthLevel! / d.run.wave;
-        const from = deathWave(d.enemyHealth!, m.tier, rate);
-        return deathWave(d.enemyHealth! * healthFactor, m.tier, Math.min(0.99, rate + extraSkip)) - from;
+        return deathWave(d.enemyHealth! * healthFactor, m.tier, Math.min(0.99, rate + extraSkip)) - from[i];
     });
     return moves.reduce((a, b) => a + b, 0) / moves.length;
 }
@@ -140,9 +146,41 @@ export function wavesFromSkip(m: RunLengthModel, points: number): number {
     return averageMove(m, 1, points / 100);
 }
 
+// What one point of Enemy Health Level Skip is worth in flat damage: the log
+// of the damage factor that gains the same waves. Both move the death wave,
+// so this puts skip and damage upgrades on one scale (the optimizer ranks
+// workshop and labs by it). Measured over +50% damage and 2 skip points, so
+// single health walls don't swing it.
+const WORTH_DAMAGE = 0.5;
+const WORTH_SKIP = 2;
+
+export function skipWorth(m: RunLengthModel): number {
+    const perLogDamage = wavesFromDamage(m, WORTH_DAMAGE) / Math.log(1 + WORTH_DAMAGE);
+    return perLogDamage > 0 ? wavesFromSkip(m, WORTH_SKIP) / WORTH_SKIP / perLogDamage : 0;
+}
+
+// A run's limit varies a little with luck, so along an upgrade path the
+// death wave is averaged over ±10% damage (9 points): a single step then
+// shows its share of the waves, not 0 short of a wall and a whole wall once
+// across it. A whole path's total barely changes.
+const LUCK = Math.log(1.1);
+const LUCK_POINTS = 9;
+
+function luckyWaves(m: RunLengthModel, logGain: number, points: number): number {
+    let sum = 0;
+    for (let k = 0; k < LUCK_POINTS; k++) {
+        const spread = -LUCK + (2 * LUCK * k) / (LUCK_POINTS - 1);
+        sum += averageMove(m, Math.exp(logGain + spread), points / 100);
+    }
+    return sum / LUCK_POINTS;
+}
+
 // Waves (and coins per run, when `coinsAt` gives coins for a run to a wave)
 // each step of an upgrade path adds. `gainsPct` are the steps' flat-damage
 // gains in %, each on top of the steps before it, so they compound.
+// A step that also adds skip (`skipPoints`) had it counted in its gain at
+// `worth` (skipWorth); that part comes back out and moves the death wave as
+// skip, so it shows the same waves as in the level skip path.
 export interface StepRunGain {
     waves: number;
     coins: number | null;     // fractional change in coins per run
@@ -150,13 +188,18 @@ export interface StepRunGain {
 
 export function pathRunGains(
     m: RunLengthModel, gainsPct: number[], coinsAt?: (wave: number) => number,
+    skipPoints: number[] = [], worth = 0,
 ): StepRunGain[] {
-    let factor = 1;
+    let logGain = 0;
+    let points = 0;
+    const start = luckyWaves(m, 0, 0);
     let prevWaves = 0;
     let prevCoins = coinsAt ? coinsAt(m.typicalWave) : 0;
-    return gainsPct.map(g => {
-        factor *= 1 + Math.max(0, g) / 100;
-        const waves = wavesFromDamage(m, factor - 1);
+    return gainsPct.map((g, i) => {
+        const skip = Math.max(0, skipPoints[i] ?? 0);
+        logGain += Math.max(0, Math.log(1 + Math.max(0, g) / 100) - worth * skip);
+        points += skip;
+        const waves = luckyWaves(m, logGain, points) - start;
         const coins = coinsAt ? coinsAt(m.typicalWave + Math.round(waves)) : 0;
         const step = {
             waves: waves - prevWaves,

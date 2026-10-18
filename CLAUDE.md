@@ -9,7 +9,7 @@ suggests what to upgrade next.
 
 - `towerforge.client/` — React 19 + TypeScript + Vite, state in Zustand (`src/store/useGameStore.ts`, saved to localStorage under `tc_*` keys).
   - `src/engine/` — calculations and the game-export importer. **Pure functions, no store imports.**
-  - `src/constants/` — game data tables (`gameData.ts`, `moduleData.ts`, `botData.ts`), the export index maps (`gameExportMaps.ts`), and the Creator Codes list (`creatorCodes.ts` — add a creator's link only when it's confirmed as theirs).
+  - `src/constants/` — game data tables (`gameData.ts`, `moduleData.ts`, `botData.ts`), the export index maps (`gameExportMaps.ts`), and the Creator Codes list (`creatorCodes.ts` — add a creator's link only when it's confirmed as theirs). `workshopCosts.ts` and `labCosts.ts` are generated from TheTowerSDK — don't edit them by hand.
   - `src/components/tabs/` — one component per tab; styles in `tabs.css`, theme tokens in `src/styles/variables.css`.
   - `src/assets/{modules,bots}/` — game icons, looked up by slug in `constants/gameIcons.ts`.
 - `TowerForge.Server/` — ASP.NET Core 8 API (accounts, saves, share links). On the server its data lives in `/var/lib/towerforge` (SQLite), outside the deploy folder.
@@ -31,6 +31,7 @@ Run from `towerforge.client/` unless noted.
 | Deploy (repo root) | `powershell -ExecutionPolicy Bypass -File deploy.ps1` — runs the tests first and stops if any fail |
 | Import game icons (repo root) | `powershell -ExecutionPolicy Bypass -File import-icons.ps1` — trims, centers and resizes PNGs from `Desktop\Tower-Forge-Assets` |
 | Creator profile pictures | `npm run creator-avatars` — downloads each YouTube-linked creator's picture into `src/assets/creators/`; run after adding a YouTube link to `creatorCodes.ts` (a test fails until you do) |
+| Workshop and lab cost tables | `npm run upgrade-costs -- <unpacked thetowersdk package>` — rewrites `workshopCosts.ts` and `labCosts.ts` (steps in the script header) |
 
 `npx eslint src` shows older `no-explicit-any` errors in LoginModal, moduleDefinitions,
 saveParser, towerAuth and gameTypes (`CloudSaveData`). Lint the files you change instead.

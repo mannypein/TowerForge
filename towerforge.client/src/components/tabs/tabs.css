@@ -2103,6 +2103,14 @@
     color: var(--gold);
 }
 
+/* Workshop and Labs rows: the badge only repeats the panel's name, so a
+   phone gives its room to the upgrade's name instead. */
+@media (max-width: 520px) {
+    .opt-cat-badge.opt-badge-panel {
+        display: none;
+    }
+}
+
 .opt-show-more {
     padding: 10px;
     text-align: center;

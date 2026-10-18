@@ -26,12 +26,22 @@ describe('the next upgrade of each source', () => {
         expect(ups.enhancement.points).toBeCloseTo(base * 0.01, 9);     // one level multiplies everything
     });
 
-    it('prices each step from the wiki tables', () => {
+    it('prices each step from the cost tables', () => {
         const ups = Object.fromEntries(nextSkipUpgrades(mid).map(u => [u.source, u]));
-        expect(ups.workshop.cost).toBeCloseTo(11.09e15 - 8.01e15, -12);  // levels 450 → 460
+        // Levels 450 → 460: the wiki's running totals 8.01q → 11.09q, exactly 3.0755q.
+        expect(ups.workshop.cost / 3.0755e15).toBeCloseTo(1, 3);
         expect(ups.lab.cost).toBe(32.03e9);                               // lab level 13
         expect(ups.lab.time).toBe('7d 3h');
         expect(ups.enhancement.cost).toBe(337.06e15);                    // enhancement level 31
+    });
+
+    it('takes the discount labs and lab speed off', () => {
+        const labs = { 'WS Util Discount': 99, 'Labs Coin Discount': 99, 'Labs Speed': 99, 'Enh Util Discount': 100 };
+        const ups = Object.fromEntries(nextSkipUpgrades({ ...mid, labs, relics: { rLabSpd: 25 } }).map(u => [u.source, u]));
+        expect(ups.workshop.cost / (3.0755e15 * 0.505)).toBeCloseTo(1, 3);
+        expect(ups.lab.cost).toBeCloseTo(32.03e9 * (1 - 0.297), 0);
+        expect(ups.lab.time).toBe('1d 22h');      // 171h 53m ÷ (2.98 × 1.25)
+        expect(ups.enhancement.cost).toBeCloseTo(337.06e15 * 0.7, -10);
     });
 
     it('offers nothing past the max, and no enhancement until it’s unlocked', () => {

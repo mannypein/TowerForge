@@ -7,7 +7,9 @@
 
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useGameStore } from '../../store/useGameStore';
-import { OPT_PANELS, OPT_GAIN_THRESHOLDS, OPT_DEFAULT_SHOW, BUILD_SUPPORT, RESEARCH_PANELS } from '../../constants/optimizerConfig';
+import {
+    OPT_PANELS, OPT_GAIN_THRESHOLDS, OPT_DEFAULT_SHOW, BUILD_SUPPORT, RESEARCH_PANELS, GC_RESEARCH_PANELS,
+} from '../../constants/optimizerConfig';
 import { presetLabel, UWS, WS_STATS, WS_ENH } from '../../constants/gameData';
 import stoneIcon from '../../assets/stone.png';
 import { simulateStonePath, simulateCategoryPath } from '../../engine/optimizer';
@@ -28,7 +30,8 @@ import type { EhpCalibration } from '../../engine/ehp';
 import { buildEdpsCalibration } from '../../engine/edps';
 import type { EdpsCalibration } from '../../engine/edps';
 import { BattleReportPanel, EconomyStats, EhpStats } from './BuildPanels';
-import { buildRunLengthModel, pathRunGains, pathSkipGains } from '../../engine/runLength';
+import { buildRunLengthModel, pathRunGains, pathSkipGains, skipWorth } from '../../engine/runLength';
+import { formatLabTime } from '../../engine/upgradeCosts';
 import { healthSkipSources, skipUpgradePath } from '../../engine/levelSkip';
 import type { SkipUpgrade } from '../../engine/levelSkip';
 import { formatGameNumber } from '../../engine/gameNumbers';
@@ -105,8 +108,12 @@ export default function OptimizerTab() {
         if (!model || !runModel) return undefined;
         return (wave: number) => projectRun(model.calibration, settings, wave, runModel.tier).coins;
     }, [importedBattles, cardData, activePreset, runModel]);
-    const runGains = (cat: OptCategory): StepRunGain[] | undefined =>
-        wavesMode && runModel ? pathRunGains(runModel, (results[cat] ?? []).map(c => c.scorePct), coinsAt) : undefined;
+    const worth = useMemo(() => (runModel ? skipWorth(runModel) : 0), [runModel]);
+    const runGains = (cat: OptCategory): StepRunGain[] | undefined => {
+        if (!wavesMode || !runModel) return undefined;
+        const path = results[cat] ?? [];
+        return pathRunGains(runModel, path.map(c => c.scorePct), coinsAt, path.map(c => c.skipPoints ?? 0), worth);
+    };
 
     // ── Build snapshot from current store state ───────────────
     // Reads fresh state via getState() so a re-run triggered right after
@@ -180,6 +187,8 @@ export default function OptimizerTab() {
                 snap.edps = snap.metric === 'edps' ? buildEdpsCalibration(snap, report) ?? undefined : undefined;
                 snap.edpsMode = snap.edps ? rankBy : 'damage';
                 setResultsRankBy(snap.edpsMode);
+                const deaths = snap.edpsMode === 'waves' ? buildRunLengthModel(st.importedBattles) : null;
+                snap.skipWorth = deaths ? skipWorth(deaths) : undefined;
                 // Waves mode: the Enemy Health Level Skip coin upgrades, most skip per coin first.
                 setSkipPath(snap.edpsMode === 'waves'
                     ? skipUpgradePath(healthSkipSources(
@@ -197,8 +206,9 @@ export default function OptimizerTab() {
                 // Only run the simulation for builds with verified scoring.
                 if (buildSupport.ready) {
                     const newResults: Record<OptCategory, OptCandidate[]> = { ...EMPTY_RESULTS };
+                    const research = snap.metric === 'edps' ? GC_RESEARCH_PANELS : RESEARCH_PANELS;
                     for (const panel of OPT_PANELS) {
-                        if (snap.metric !== 'edps' && RESEARCH_PANELS.includes(panel.cat)) {
+                        if (research.includes(panel.cat)) {
                             newResults[panel.cat] = simulateCategoryPath(panel.cat, panel.maxSteps, snap);
                             continue;
                         }
@@ -209,7 +219,7 @@ export default function OptimizerTab() {
                             // Bots only: free upgrade ranking (single category)
                             newResults[panel.cat] = simulateCategoryPath('bots', panel.maxSteps, snap);
                         }
-                        // Row 2 (workshop, labs, cards, enhancements) still under construction
+                        // GC cards and enhancements: still under construction
                     }
                     setResults(newResults);
                 } else {
@@ -635,8 +645,10 @@ export default function OptimizerTab() {
                                 Lightning, Smart Missiles, Death Wave, Inner Land Mines, Poison Swamp and tower
                                 shots. Orbs, Black Hole, Smite and Consume deal a share of enemy health, so they
                                 don&apos;t fall behind as waves get harder, and the enemies that end Glass Cannon runs
-                                ignore orbs and Black Hole. Waves come from Run Length and coins per run from Coins
-                                per Run{runModel ? '' : ' — import runs that ended in a death to see them'}. Each
+                                ignore orbs and Black Hole. Enemy Health Level Skip counts as the damage that gains
+                                the same waves. Waves come from Run Length and coins per run from Coins
+                                per Run{runModel ? '' : ' — import runs that ended in a death to see them'}. Workshop
+                                upgrades are ranked by gain per coin, labs by gain per hour of research. Each
                                 step builds on the ones above it; totals far past where your runs end now are rough.
                             </>
                         ) : (<>
@@ -644,6 +656,7 @@ export default function OptimizerTab() {
                         {edpsCalib
                             ? 'Gains are a share of all the damage in your chosen run, so sources stones can’t change (like orbs) keep their real weight.'
                             : 'Without a run that has damage data, gains come from the model alone and can over- or under-value some sources (Black Hole especially).'}
+                        {' '}Workshop upgrades are ranked by gain per coin, labs by gain per hour of research.
                         {' '}They don&apos;t account for coin income: some upgrades that boost eDPS can
                         hurt your economy — for example, heavily investing in Poison Swamp or stacking
                         too much slow/stun can reduce coin generation even though eDPS goes up.
@@ -710,27 +723,25 @@ export default function OptimizerTab() {
                     {wavesMode && skipPath.length > 0 && runModel && (
                         <SkipPanel path={skipPath} runModel={runModel} coinsAt={coinsAt} />
                     )}
-                    {isFarming || isEhp ? OPT_PANELS.filter(p => RESEARCH_PANELS.includes(p.cat)).map(panel => (
+                    {OPT_PANELS.filter(p => (isFarming || isEhp ? RESEARCH_PANELS : GC_RESEARCH_PANELS).includes(p.cat)).map(panel => (
                         <OptPanel
                             key={panel.cat}
                             panel={panel}
                             candidates={results[panel.cat] ?? []}
+                            runGains={runGains(panel.cat)}
                             showAll={showMore[panel.cat] ?? false}
                             onShowMore={() => setShowMore(s => ({ ...s, [panel.cat]: true }))}
                             gainColor={gainColor}
                             catStyle={catStyle}
                             onApply={applyCandidate}
                         />
-                    )) : (
+                    ))}
+                    {!isFarming && !isEhp && (
                     <div className="opt-construction">
                         <span className="opt-construction-icon">🚧</span>
                         <div>
                             <strong>Coming soon</strong>
-                            <p>
-                                Ranking for Workshop, Labs, Cards, and Enhancements is
-                                still under construction. For now, the optimizer focuses
-                                on stone upgrades above.
-                            </p>
+                            <p>Ranking for Cards and Enhancements is still under construction.</p>
                         </div>
                     </div>
                     )}
@@ -751,6 +762,9 @@ interface OptPanelProps {
     onApply: (c: OptCandidate) => void;
     runGains?: StepRunGain[];     // waves mode: waves and coins per run each step adds
 }
+
+// Short badges, so the name keeps its room on a phone.
+const CAT_BADGE: Partial<Record<OptCategory, string>> = { workshop: 'WS', labs: 'LAB', enhancements: 'ENH', cards: 'CARD' };
 
 const fmtWaves = (w: number) => (w < 10 ? w.toFixed(1) : Math.round(w).toLocaleString());
 
@@ -834,11 +848,11 @@ function OptPanel({
                             title="Double-click to apply this upgrade to your tower"
                         >
                             <span className="opt-rank">#{idx + 1}</span>
-                            <span className="opt-cat-badge" style={catStyle(c.category)}>
-                                {c.category.toUpperCase()}
+                            <span className={`opt-cat-badge${CAT_BADGE[c.category] ? ' opt-badge-panel' : ''}`} style={catStyle(c.category)}>
+                                {CAT_BADGE[c.category] ?? c.category.toUpperCase()}
                             </span>
                             <div className="opt-name-col">
-                                <span className="opt-name">{c.label}</span>
+                                <span className="opt-name">{c.category === 'workshop' ? c.label.replace(/^WS /, '') : c.label}</span>
                                 <span className="opt-sub">{c.subLabel}</span>
                                 {runGains?.[idx] && (
                                     <span className="opt-waves">
@@ -849,13 +863,22 @@ function OptPanel({
                                     </span>
                                 )}
                             </div>
+                            {c.hours !== undefined ? (
+                                <span className="opt-cost" title="Research time after your lab speed, and coins">
+                                    {formatLabTime(c.hours)}<span className="opt-cost-type"> 🔬</span>
+                                    {c.coins !== undefined && (
+                                        <span className="opt-sub" style={{ display: 'block' }}>{formatGameNumber(c.coins)} 🪙</span>
+                                    )}
+                                </span>
+                            ) : (
                             <span className="opt-cost" title={c.costType !== 'stones' && !c.costKnown ? 'Cost not modeled yet — ranked by gain per level' : undefined}>
-                                {c.costType === 'stones' || c.costKnown ? c.cost.toLocaleString() : '—'}
+                                {c.costType === 'stones' ? c.cost.toLocaleString() : c.costKnown ? formatGameNumber(c.cost) : '—'}
                                 <span className="opt-cost-type">
                                     {c.costType === 'stones' ? <img src={stoneIcon} alt="stones" className="cost-icon" /> :
                                         c.costType === 'research' ? ' 🔬' : ' 🪙'}
                                 </span>
                             </span>
+                            )}
                             <span className="opt-gain" style={{ color: gainColor(c.scorePct) }}>
                                 {c.scorePct > 0 ? `+${c.scorePct.toFixed(3)}%` : '—'}
                             </span>

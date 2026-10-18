@@ -9,9 +9,19 @@ module effects in [module-effects.md](module-effects.md).
 - **Stone path** (`simulateStonePath`): UW stats, UW+, card mastery unlocks
   and assist modules ranked together by gain per stone — one shared stone
   pool. Greedy: buy the best, re-score, repeat.
-- **Coin / research paths** (Farming and eHP only): workshop (gain per coin
-  where costs are known), labs and enhancements (gain per level — costs and
-  lab times aren't compared yet). Glass Cannon shows "coming soon" for these.
+- **Coin / research paths**:
+  - Farming and eHP: workshop (gain per coin where the wiki curves have
+    costs), labs and enhancements (gain per level).
+  - Glass Cannon (since 2026-10-18): workshop by gain per coin, from the
+    game's cost table after the Workshop Discount lab; stats over 300
+    levels move 10 levels a step. Labs by gain per hour of research, since
+    lab slots run out before coins do. Cards and enhancements still show
+    "coming soon".
+  - Every build's lab rows now show research time and coins (after Labs
+    Speed and Labs Coin Discount).
+  - Shown in blocks of 10 steps, one row per stat or lab in each, so
+    one-level steps that take turns (Crit Chance, Crit Factor, Crit Chance…)
+    read as "Crit Chance 40 → 45, Crit Factor 40 → 44".
 - Paths skip anything worth under `GC_SCORING.minGainPct` (0.001%).
 
 ## Build scores (all relative: the player's current setup = 1)
@@ -39,6 +49,19 @@ module effects in [module-effects.md](module-effects.md).
   Hole, Smite and Consume deal a share of enemy health so they don't move the
   death wave. Gains become waves and coins per run through Run Length and
   Coins per Run ([run-simulation.md](run-simulation.md)).
+  - Enemy Health Level Skip (workshop stat and lab) is scored too: the skip
+    chance counts as the flat damage that gains the same waves
+    (`runLength.skipWorth`, score × e^(worth × skip%)). In the owner-like test
+    runs (T18 ~W8300, 58% skip) one point of skip ≈ 205 waves ≈ +90% damage.
+    That rate uses +50% damage, past the nearest health wall; the first +10%
+    alone can buy more (53 waves there), which is why small probes mislead.
+  - On the rows, a step's skip moves the death wave as skip (not as its
+    damage equivalent), so the skip lab shows the same waves in the Labs
+    panel as in the Enemy Health Level Skip panel.
+  - Not scored yet: the enemy health labs (Common/Tank/Ray/… Enemy Health,
+    −0.4% a level). They'd act like damage against that enemy type only, so
+    they need a rule for which types end runs — the code's assumption would
+    be the KilledBy mix, not yet built.
 - **Farming** — `engine/farming.ts`, calibrated by the run's coin breakdown
   and "killed with effect active" coverage. Golden Combo uses the wiki's
   compounding formula.
@@ -71,6 +94,42 @@ module effects in [module-effects.md](module-effects.md).
   1 + (×value − 1) × (1 + lab%). Site names `Primary-<Type> Mult`; their game
   lab numbers aren't known yet.
 - UW stat / UW+ costs: see [ultimate-weapons.md](ultimate-weapons.md).
+
+## Workshop and lab costs (checked 2026-10-18)
+
+Source: TheTowerSDK 0.12.0 (MIT, npm `thetowersdk`) — `data/workshop/table.json`
+(the game's own workshop table: value, cash and coins at every level) and
+`data/labs/catalog.data.js` (every lab's coins and time per level, which its
+author checks against the community Effective Paths sheet). Generated into
+`constants/workshopCosts.ts` and `constants/labCosts.ts` by
+`npm run upgrade-costs -- <unpacked package>` (scripts/upgrade-costs.mjs).
+
+- **Workshop vs the wiki** (every row of every Fandom cost page): 46 of 48
+  stats match level for level (cost of level L = table entry L − 1; e.g.
+  Super Crit Chance 50K at Lv 1, 355.49B at Lv 100; Damage 5.10T at Lv 6000,
+  816.09T in all; Enemy Health Level Skip 3.72B to Lv 10). Two don't:
+  - Rend Armor Mult: the wiki's table is a row-for-row copy of Rend Armor
+    Chance's. The game table's Mult costs run up to ~30× higher late
+    (Lv 299: 595q vs the wiki's 19.83q). We use the game table — unconfirmed
+    in game.
+  - Wall Health: the game table costs more from Lv 100 on (Lv 100: 56.4M vs
+    31.91M; Lv 1800: 108T vs 23.48T). The eHP model still uses the wiki's
+    curve (`WS_WALL_HEALTH`); Glass Cannon doesn't score walls. One in-game
+    price would settle which is right.
+- **Labs vs the wiki** (2,695 rows): times match everywhere except Death Wave
+  Armor Stripping (wiki "10d 10h 52m", catalog "10:53:00" — one of them
+  dropped the days). Costs match except single-row differences in Battle
+  Condition Reduction, Cash Bonus, Double Death Ray, Labs Coin Discount,
+  Protector Health/Radius, Recovery Package Max, Super Crit Chance (Lv 31:
+  8.77B vs 8.70B) and Super Tower Bonus. We use the catalog. Max levels
+  differ for Swamp Rend – Additional Enemies (site 11, catalog 9; levels
+  10–11 have no price, so they're never recommended).
+- **Discounts** (wiki lab pages): Workshop Attack/Defense/Utility Discount
+  0.5% a level (49.5% at 99); Labs Coin Discount 0.3% a level (29.7% at 99);
+  Enhancement Coin Discount 0.3% a level (30% at 100); Labs Speed ×(1 + 2% a
+  level), times the Lab Speed relic, but not for its own research (the
+  relic does count there). Gem speed-ups and the Vault's enhancement
+  discount aren't counted.
 
 ## Battle history facts used for calibration
 

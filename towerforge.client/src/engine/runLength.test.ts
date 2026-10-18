@@ -4,7 +4,10 @@
 // (Ray, Tank, Vampire, Overcharge, and blank for a run ended by hand).
 
 import { describe, expect, it } from 'vitest';
-import { buildRunLengthModel, deathWave, killedBy, pathRunGains, pathSkipGains, runEnds, wavesFromDamage, wavesFromSkip } from './runLength';
+import {
+    buildRunLengthModel, deathWave, killedBy, pathRunGains, pathSkipGains, runEnds, skipWorth,
+    wavesFromDamage, wavesFromSkip,
+} from './runLength';
 import { baseEnemyHealth } from './enemyStats';
 import { parseGameExport } from './gameExport';
 import { battle, makeExport } from '../test/makeExport';
@@ -70,14 +73,48 @@ describe('death wave', () => {
     });
 });
 
+describe('what a point of level skip is worth in damage', () => {
+    it('matches the waves of the damage it stands for', () => {
+        const model = buildRunLengthModel(runs(death(8100, 10), death(8200, 11), death(8402, 12), death(8500, 13), death(8501, 14)))!;
+        const worth = skipWorth(model);
+        // Near W8300 at 58% skip a point of skip is ~205 waves and +100% damage
+        // ~225, so one point is worth about +90% damage. (The first +10% buys
+        // more than its share, 53 waves: these runs died just short of a wall.)
+        expect(Math.exp(worth) - 1).toBeGreaterThan(0.7);
+        expect(Math.exp(worth) - 1).toBeLessThan(1.1);
+        const asDamage = wavesFromDamage(model, Math.exp(2 * worth) - 1);
+        expect(asDamage / wavesFromSkip(model, 2)).toBeCloseTo(1, 1);
+    });
+});
+
 describe('waves along an upgrade path', () => {
     it('adds up to the waves of the whole path, and turns waves into coins', () => {
         const model = buildRunLengthModel(runs(death(8100, 10), death(8200, 11), death(8402, 12), death(8500, 13), death(8501, 14)))!;
         const steps = pathRunGains(model, [2, 3, 5], w => w * 1e15);
         const total = steps.reduce((s, x) => s + x.waves, 0);
-        expect(total).toBeCloseTo(wavesFromDamage(model, 1.02 * 1.03 * 1.05 - 1), 9);
+        const whole = (1.02 * 1.03 * 1.05 - 1) * 100;
+        expect(total).toBeCloseTo(pathRunGains(model, [whole])[0].waves, 9);
         steps.forEach(s => expect(s.coins).toBeGreaterThanOrEqual(0));
         expect(pathRunGains(model, [1])[0].coins).toBeNull();
+    });
+
+    it('averages over run-to-run luck, so small steps aren’t 0 or a whole wall', () => {
+        const model = buildRunLengthModel(runs(death(8100, 10), death(8200, 11), death(8402, 12), death(8500, 13), death(8501, 14)))!;
+        const steps = pathRunGains(model, Array(20).fill(1)).map(s => s.waves);
+        for (const w of steps) expect(w).toBeGreaterThan(0);
+        expect(Math.max(...steps) / Math.min(...steps)).toBeLessThan(3);
+        // A big gain lands about where it does without the averaging.
+        const big = pathRunGains(model, [100])[0].waves;
+        expect(big / wavesFromDamage(model, 1)).toBeCloseTo(1, 1);
+    });
+
+    it('moves a step’s level skip as skip, not as the damage it was ranked at', () => {
+        const model = buildRunLengthModel(runs(death(8100, 10), death(8200, 11), death(8402, 12), death(8500, 13), death(8501, 14)))!;
+        const worth = skipWorth(model);
+        const asSkip = (Math.exp(worth * 0.1) - 1) * 100;          // 0.1 points, ranked as damage
+        const [skip, dmg] = pathRunGains(model, [asSkip, 2], undefined, [0.1, 0], worth);
+        expect(Math.abs(skip.waves - wavesFromSkip(model, 0.1))).toBeLessThan(1);
+        expect(dmg.waves).toBeGreaterThan(0);
     });
 });
 

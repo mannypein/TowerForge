@@ -19,6 +19,9 @@ export const BUILD_SUPPORT: Record<string, { ready: boolean; label: string }> = 
 
 // Coin/research panels shown for Farming and eHP (cards are gem draws, so skipped).
 export const RESEARCH_PANELS: OptCategory[] = ['labs', 'workshop', 'enhancements'];
+// Glass Cannon: workshop by coins, labs by research time (cards and
+// enhancements still to come).
+export const GC_RESEARCH_PANELS: OptCategory[] = ['workshop', 'labs'];
 
 // ── Optimizer Panel Definitions ───────────────────────────────
 // Defines the 8 panels, their display labels, cost type,

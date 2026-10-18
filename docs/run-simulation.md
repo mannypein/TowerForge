@@ -43,16 +43,28 @@ behind as enemies get tougher, and the enemies that end GC runs (elites,
 fleets, bosses) are immune to orbs and BH anyway. Each step's gain compounds
 along the path and becomes waves (`pathRunGains` → Run Length) and coins per
 run (Coins per Run). Totals far past the current death wave are rough.
+- **Run-to-run luck on path rows** (code's assumption): along a path the
+  death wave is averaged over ±10% damage (9 points), as a run's limit varies
+  a little with luck. Without it, single small steps showed 0 waves short of
+  a health wall and a whole wall once across it. Whole-path totals barely
+  change; the Run Length page itself is unaveraged.
+- **Workshop and labs** (2026-10-18): ranked the same way — workshop by gain
+  per coin, labs by gain per hour of research ([optimizer.md](optimizer.md)
+  has the cost sources). Enemy Health Level Skip is folded in at
+  `skipWorth`: the log of the damage factor that gains the waves one skip
+  point does, measured over +50% damage and 2 points (≈ +90% damage a point
+  near W8300 at 58% skip).
 
 **Enemy Health Level Skip** (same mode, `engine/levelSkip.ts`): chance =
 (workshop 0.05%/level + lab 0.1%/level + relic + module substats) ×
 enhancement (×1 + 0.01/level), capped at 100% before the tier's battle
 conditions subtract a fixed amount — so an upgrade adds to the real chance
 exactly what it adds here. A 10-step path of the most skip points per coin
-(costs from the wiki: workshop every 10th level, interpolated on the running
-total; all 20 lab levels with times; all 60 enhancement levels), each step
-turned into waves (`pathSkipGains`) and coins per run. Lab time isn't
-weighed — it's shown next to the cost.
+(workshop and lab prices from the shared cost tables after the player's
+discount labs and lab speed — they match the wiki's skip tables; all 60
+enhancement levels from the wiki, less its discount lab), each step turned
+into waves (`pathSkipGains`) and coins per run. Lab time isn't weighed in
+this panel — it's shown next to the cost; the Labs panel weighs it.
 
 ### Run length, Glass Cannon (step 2)
 
@@ -73,7 +85,9 @@ is capped by then).
   gains read as 0 waves).
 - Near W8300 at 58% skip: +10% damage ≈ +50 waves; +1 point of effective
   health level skip ≈ +200 waves (83 fewer enemy levels). Attack level skip
-  doesn't matter for GC (any hit is lethal).
+  doesn't matter for GC (any hit is lethal). Past the nearest wall damage
+  buys less: +50% ≈ 130 waves, +100% ≈ 225 (the test runs in
+  runLength.test.ts), so a point of skip ≈ +90% damage over that range.
 - **KilledBy, to confirm:** the owner's in-game battle reports show W8100
   Ray, W8200 Tank, W8500 Vampire, W8501 Overcharge and W5125 blank (run ended
   by hand). The page decodes the stored numbers with the SDK order (2 Tank,

@@ -7,7 +7,7 @@ import { useGameStore } from '../store/useGameStore';
 import { readActiveModuleBonuses } from './modBonuses';
 import { runRatesFrom } from './runRates';
 import { parseGameExport } from './gameExport';
-import { buildCandidates, simulateStonePath } from './optimizer';
+import { buildCandidates, groupPath, mergeRepeats, simulateStonePath } from './optimizer';
 import type { OptimizerSnapshot } from './optimizer';
 import { buildEdpsCalibration, edpsScore, edpsSurvivalScore } from './edps';
 import { UWS, UW_STAT_VALUES, UW_STONE_COSTS } from '../constants/gameData';
@@ -178,6 +178,78 @@ describe('UW stone tables', () => {
                 expect(UW_STONE_COSTS[uw.a][i].length, `${uw.a} ${i} costs`).toBeGreaterThanOrEqual(maxLv - 1);
             });
         }
+    });
+});
+
+describe('Glass Cannon workshop and labs', () => {
+    const calibrated = (edit?: (s: OptimizerSnapshot) => void) => {
+        const report = run();
+        const snap = snapshot(report, edit);
+        snap.edps = buildEdpsCalibration(snap, report)!;
+        return snap;
+    };
+    const ws = (snap: OptimizerSnapshot, stat: string) =>
+        buildCandidates(snap, 'workshop').find(c => c.label.endsWith(`— ${stat}`));
+
+    it('prices workshop steps in coins after the discount lab, and ranks by gain per coin', () => {
+        const snap = calibrated(s => { s.labData = { 'WS Atk Discount': 99 }; });
+        const as = ws(snap, 'Attack Speed')!;
+        expect(as).toMatchObject({ fromLv: 0, toLv: 1, costKnown: true });
+        expect(as.cost).toBeCloseTo(30 * 0.505, 6);                       // level 1 is 30 coins
+        expect(as.scorePerCost).toBeCloseTo(as.scorePct / as.cost, 9);
+        const dmg = ws(snap, 'Damage')!;
+        expect(dmg.toLv - dmg.fromLv).toBe(10);                           // 6000-level stats move 10 at a time
+    });
+
+    it('counts Enemy Health Level Skip in waves mode, at what a point is worth', () => {
+        const skip = (worth?: number) => ws(calibrated(s => {
+            s.edpsMode = 'waves';
+            s.skipWorth = worth;
+            s.wsData[0].utility[12] = 100;                                // Enemy HP Level Skip
+        }), 'Enemy HP Level Skip');
+        expect(skip()).toBeDefined();
+        expect(skip()!.scorePct).toBeCloseTo(0, 9);
+        // Lv 100 → 110 adds 0.5 points: worth 0.6 a point → e^0.3 − 1.
+        expect(skip(0.6)!.toLv).toBe(110);
+        expect(skip(0.6)!.scorePct).toBeCloseTo((Math.exp(0.6 * 0.5) - 1) * 100, 6);
+        expect(skip(0.6)!.skipPoints).toBeCloseTo(0.5, 9);           // so its waves count it as skip
+        expect(skip()!.skipPoints).toBeUndefined();
+    });
+
+    it('ranks labs by gain per hour of research, with coins and time', () => {
+        const snap = calibrated(s => { s.labData = { 'Damage Lab': 40 }; });
+        const lab = buildCandidates(snap, 'labs').find(c => c.label === 'Damage Lab')!;
+        expect(lab.coins).toBe(357390);                                   // level 41: 5d 19h 24m (wiki)
+        expect(lab.hours).toBeCloseTo(139.4, 6);
+        expect(lab.scorePct).toBeGreaterThan(0);
+        expect(lab.scorePerCost).toBeCloseTo(lab.scorePct / Math.max(1 / 60, lab.hours!), 9);
+    });
+
+    it('merges back-to-back steps on one stat into one row', () => {
+        const step = (from: number, gain: number, label = 'WS Attack — Damage') => ({
+            category: 'workshop' as const, label, subLabel: '', fromLv: from, toLv: from + 10,
+            cost: 100, costType: 'coins' as const, scorePct: gain, scorePerCost: gain / 100,
+        });
+        const rows = mergeRepeats([step(0, 1), step(10, 2), step(0, 5, 'WS Attack — Range'), step(20, 1)]);
+        expect(rows.map(r => [r.label, r.fromLv, r.toLv, r.cost])).toEqual([
+            ['WS Attack — Damage', 0, 20, 200], ['WS Attack — Range', 0, 10, 100], ['WS Attack — Damage', 20, 30, 100],
+        ]);
+        expect(rows[0].scorePct).toBeCloseTo((1.01 * 1.02 - 1) * 100, 9);
+        expect(rows[0].subLabel).toBe('Lv 0 → 20');
+    });
+
+    it('reads a path in blocks, one row per stat in each', () => {
+        const step = (label: string, from: number) => ({
+            category: 'workshop' as const, label, subLabel: '', fromLv: from, toLv: from + 1,
+            cost: 10, costType: 'coins' as const, scorePct: 1, scorePerCost: 0.1,
+        });
+        // CC, CF, CC, CF … for 12 steps: blocks of 10 and 2.
+        const path = Array.from({ length: 12 }, (_, i) => step(i % 2 ? 'CF' : 'CC', 40 + Math.floor(i / 2)));
+        const rows = groupPath(path);
+        expect(rows.map(r => [r.label, r.fromLv, r.toLv])).toEqual([
+            ['CC', 40, 45], ['CF', 40, 45], ['CC', 45, 46], ['CF', 45, 46],
+        ]);
+        expect(rows[0].cost).toBe(50);
     });
 });
 

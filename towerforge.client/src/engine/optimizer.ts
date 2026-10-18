@@ -24,6 +24,17 @@
 //  • UW stat values and stone costs match the wiki for all 27 stats.
 //  • Paths skip upgrades worth < GC_SCORING.minGainPct.
 //
+// 2026-10-18, Glass Cannon workshop and labs:
+//  • Workshop steps cost real coins (engine/upgradeCosts.ts — the game's
+//    table, less the Workshop Discount labs) and are ranked by gain per
+//    coin; stats over 300 levels move 10 levels a step.
+//  • Labs are ranked by gain per hour of research (the lab catalog's
+//    time ÷ lab speed), since lab slots, not coins, are what runs out.
+//  • Waves mode also counts Enemy Health Level Skip, at the flat damage
+//    one point of skip is worth in waves (`skipWorth`, engine/runLength.ts).
+//  • The path is shown in blocks of 10 steps, one row per stat or lab in
+//    each, so one-level steps that take turns don't fill the list.
+//
 // ┌──────────────────────────────────────────────────────────┐
 // │  GLASS CANNON OPTIMIZER — STATUS & HANDOFF (2026-06-25)   │
 // └──────────────────────────────────────────────────────────┘
@@ -56,11 +67,9 @@
 //    value now REQUIRES the module to be in the loadout assist slot
 //    with its main ×value entered.
 //  • Assist stone cost = curPct×3, capped at 70% (labs supply 30%).
-//  • Workshop / Cards / Enhancements / Labs are eDPS-scored (raw
-//    ΔeDPS%), BUT the Coin/Research panels are hidden behind a
-//    "coming soon" placeholder in OptimizerTab (runOptimizer only
-//    computes the 'stones' path). Re-enable by restoring the row-2
-//    panels + computing those cats.
+//  • Workshop and Labs: ranked by gain per coin / per hour of research
+//    since 2026-10-18 (see the note at the top). Cards and Enhancements
+//    are still behind the "coming soon" box in OptimizerTab.
 //  • Standalone "Modules" optimizer panel was added then REMOVED.
 //
 //  ── DONE (cont'd) ──────────────────────────────────────────
@@ -124,6 +133,8 @@ import type { FarmCalibration } from './farming';
 import { ehpScore } from './ehp';
 import type { EhpCalibration } from './ehp';
 import { edpsScore, edpsSurvivalScore } from './edps';
+import { healthSkipChance, healthSkipSources } from './levelSkip';
+import { labLevelCost, workshopCost, workshopDiscount } from './upgradeCosts';
 import type { EdpsCalibration } from './edps';
 import {
     WS_COIN_PER_KILL, WS_COIN_PER_WAVE, WS_HEALTH, WS_HEALTH_REGEN, WS_DEFENSE_PCT,
@@ -187,6 +198,10 @@ export interface OptimizerSnapshot {
     // Glass Cannon, calibrated: rank by all damage, or by the flat damage
     // that decides how far a run gets ('waves', engine/runLength.ts).
     edpsMode?: 'damage' | 'waves';
+    // Waves mode: the flat damage one point of Enemy Health Level Skip is
+    // worth, as the log of the damage factor that gains the same waves
+    // (runLength.skipWorth). Omitted = skip isn't scored.
+    skipWorth?: number;
 }
 
 // ── Deep Clone Snapshot ───────────────────────────────────────
@@ -237,9 +252,30 @@ function getEDPS(snap: OptimizerSnapshot): number {
 function getScore(snap: OptimizerSnapshot): number {
     if (snap.metric === 'coins' && snap.farm) return coinRate(snap, snap.farm);
     if (snap.metric === 'ehp' && snap.ehp) return ehpScore(snap, snap.ehp);
-    if (snap.edps) return snap.edpsMode === 'waves' ? edpsSurvivalScore(snap, snap.edps) : edpsScore(snap, snap.edps);
+    if (snap.edps) {
+        if (snap.edpsMode !== 'waves') return edpsScore(snap, snap.edps);
+        // Flat damage, with the skip chance counted as the damage it's worth.
+        return edpsSurvivalScore(snap, snap.edps) * Math.exp((snap.skipWorth ?? 0) * scoredSkip(snap));
+    }
     return getEDPS(snap);
 }
+
+// Enemy Health Level Skip chance, in waves mode once skip is worth something.
+function scoredSkip(snap: OptimizerSnapshot): number {
+    if (!snap.skipWorth || !snap.edps || snap.edpsMode !== 'waves') return 0;
+    return healthSkipChance(healthSkipSources(
+        snap.wsData[snap.presetIdx], snap.labData, snap.enhData, snap.relicData, snap.modBonuses.subs ?? {},
+    ));
+}
+
+// Skip points a step adds (waves mode), so its waves can count them as skip.
+const addedSkip = (before: OptimizerSnapshot, after: OptimizerSnapshot) =>
+    scoredSkip(after) - scoredSkip(before) || undefined;
+
+// Glass Cannon workshop steps: one level, or 10 on the 1800–6000-level stats
+// (one Damage level is a few hundredths of a percent).
+const LONG_STAT = 300;
+const wsStep = (maxLv: number) => (maxLv > LONG_STAT ? 10 : 1);
 
 // ============================================================
 //  BUILD CANDIDATES
@@ -570,29 +606,33 @@ export function buildCandidates(
             stats.forEach(([statName, maxLv], idx) => {
                 const curLv = snap.wsData[snap.presetIdx]?.[wsCat]?.[idx] ?? 0;
                 if (curLv >= maxLv) return;
+                const toLv = isEdps ? Math.min(maxLv, curLv + wsStep(maxLv)) : curLv + 1;
 
-                // Simulate the +1 and score the gain in the build's metric.
+                // Simulate the step and score the gain in the build's metric.
                 const after = cloneSnapshot(snap);
-                after.wsData[after.presetIdx][wsCat][idx] = curLv + 1;
+                after.wsData[after.presetIdx][wsCat][idx] = toLv;
                 const delta = edpsDeltaPct(basEDPS, getScore(after));
 
-                // Real coin costs are known for some stats; others show a level proxy.
+                // Glass Cannon: the game's cost table, after the discount lab.
+                // Farming/eHP: the wiki curves; other stats show a level proxy.
                 const coinCurve = WS_COST_CURVES[statName] ?? null;
-                const cost = coinCurve ? Math.round(coinCurve.costAt(curLv + 1)) : curLv + 1;
+                const gcCost = isEdps ? workshopCost(statName, curLv, toLv, workshopDiscount(snap.labData, wsCat)) : null;
+                const cost = gcCost ?? (coinCurve ? Math.round(coinCurve.costAt(curLv + 1)) : curLv + 1);
+                const costKnown = isEdps ? gcCost !== null : coinCurve !== null;
 
                 candidates.push({
                     category: 'workshop',
                     label: `WS ${wsCat.charAt(0).toUpperCase() + wsCat.slice(1)} — ${statName}`,
-                    subLabel: `Lv ${curLv} → ${curLv + 1}`,
+                    subLabel: `Lv ${curLv} → ${toLv}`,
                     fromLv: curLv,
-                    toLv: curLv + 1,
+                    toLv,
                     cost,
-                    costKnown: coinCurve !== null,
+                    costKnown,
                     costType: 'coins',
                     scorePct: delta,
-                    // Farming/eHP: rank by gain per coin (every stat those models score
-                    // has a known cost). GC keeps raw gain (attack stat costs aren't modeled).
-                    scorePerCost: isEdps ? delta : coinCurve ? delta / Math.max(1, cost) : 0,
+                    skipPoints: addedSkip(snap, after),
+                    // Rank by gain per coin; a stat without a known cost isn't recommended.
+                    scorePerCost: costKnown ? delta / Math.max(1, cost) : 0,
                 });
             });
         }
@@ -609,6 +649,7 @@ export function buildCandidates(
                 after.labData[labName] = curLv + 1;
                 const afterEDPS = getScore(after);
                 const delta = edpsDeltaPct(basEDPS, afterEDPS);
+                const research = labLevelCost(labName, curLv + 1, snap.labData, snap.relicData);
 
                 candidates.push({
                     category: 'labs',
@@ -618,8 +659,13 @@ export function buildCandidates(
                     toLv: curLv + 1,
                     cost: curLv + 1,
                     costType: 'research',
+                    ...(research ?? {}),
                     scorePct: delta,
-                    scorePerCost: delta,   // rank by raw eDPS gain
+                    skipPoints: addedSkip(snap, after),
+                    // GC: gain per hour of research (at least a minute, for the
+                    // first few levels that take seconds); a level with no known
+                    // time isn't recommended. Farming/eHP: raw gain.
+                    scorePerCost: !isEdps ? delta : research ? delta / Math.max(1 / 60, research.hours) : 0,
                 });
             }
         }
@@ -860,6 +906,52 @@ export function applyUpgrade(
 // An upgrade worth recommending: a real gain, not rounding noise.
 const worthIt = (c: OptCandidate) => c.scorePct >= GC_SCORING.minGainPct;
 
+// Steps on one stat or lab as one row: levels, cost and research add up
+// and the gains compound.
+const continues = (row: OptCandidate, c: OptCandidate) =>
+    row.category === c.category && row.label === c.label && row.toLv === c.fromLv;
+
+function mergeInto(row: OptCandidate, c: OptCandidate) {
+    row.toLv = c.toLv;
+    row.subLabel = `Lv ${row.fromLv} → ${c.toLv}`;
+    row.cost += c.cost;
+    row.scorePct = ((1 + row.scorePct / 100) * (1 + c.scorePct / 100) - 1) * 100;
+    if (row.hours !== undefined && c.hours !== undefined) row.hours += c.hours;
+    if (row.coins !== undefined && c.coins !== undefined) row.coins += c.coins;
+    if (c.skipPoints) row.skipPoints = (row.skipPoints ?? 0) + c.skipPoints;
+}
+
+// Back-to-back steps on the same stat or lab, as one row.
+export function mergeRepeats(path: OptCandidate[]): OptCandidate[] {
+    const out: OptCandidate[] = [];
+    for (const c of path) {
+        const last = out[out.length - 1];
+        if (last && continues(last, c)) mergeInto(last, c);
+        else out.push({ ...c });
+    }
+    return out;
+}
+
+// A coin/research path read in blocks of `block` steps, one row per stat or
+// lab in each (in the order it first comes up): one-level steps that take
+// turns (Crit Chance, Crit Factor, Crit Chance…) read as "Crit Chance
+// 40 → 45, Crit Factor 40 → 44" instead of dozens of rows.
+const PATH_BLOCK = 10;
+
+export function groupPath(path: OptCandidate[], block = PATH_BLOCK): OptCandidate[] {
+    const out: OptCandidate[] = [];
+    for (let i = 0; i < path.length; i += block) {
+        const rows: OptCandidate[] = [];
+        for (const c of path.slice(i, i + block)) {
+            const row = rows.find(r => continues(r, c));
+            if (row) mergeInto(row, c);
+            else rows.push({ ...c });
+        }
+        out.push(...rows);
+    }
+    return mergeRepeats(out);
+}
+
 // ============================================================
 //  SIMULATE CATEGORY PATH
 //  Runs the full simulation for one optimizer panel.
@@ -889,7 +981,7 @@ export function simulateCategoryPath(
         );
     }
 
-    return path;
+    return cat === 'workshop' || cat === 'labs' ? groupPath(path) : path;
 }
 
 // ============================================================
