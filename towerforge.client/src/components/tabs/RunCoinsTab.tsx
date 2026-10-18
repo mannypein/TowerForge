@@ -12,6 +12,8 @@ import { defaultBattleIndex, isRealRun } from '../../engine/gameExport';
 import { buildRunModel, projectRun, runSettingsFromCards } from '../../engine/runCoins';
 import type { RunModelSettings } from '../../engine/runCoins';
 import { formatGameNumber } from '../../engine/gameNumbers';
+import { runDrops } from '../../engine/battleReport';
+import type { BattleReport } from '../../engine/battleReport';
 import NumericInput from '../common/NumericInput';
 
 const fmt = (n: number) => (n >= 1000 ? formatGameNumber(n) : Math.round(n).toLocaleString());
@@ -172,6 +174,49 @@ export default function RunCoinsTab() {
                     </div>
                 </>
             )}
+
+            <RunDrops runs={candidates.map(c => c.b)} />
+        </div>
+    );
+}
+
+const DROP_RUNS = 10;
+const pretty = (key: string) => key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/This Round$/, '').trim();
+
+// Cells, gems, medals, reroll and module shards: what your runs hand out
+// besides coins, averaged per run and per hour over your newest runs.
+function RunDrops({ runs }: { runs: BattleReport[] }) {
+    const recent = runs.slice().sort((a, b) => (b.time ?? 0) - (a.time ?? 0)).slice(0, DROP_RUNS);
+    const totals = new Map<string, { sum: number; hours: number; runs: number }>();
+    for (const run of recent) {
+        for (const [key, v] of runDrops(run)) {
+            const t = totals.get(key) ?? { sum: 0, hours: 0, runs: 0 };
+            totals.set(key, { sum: t.sum + v, hours: t.hours + run.realTimeSec / 3600, runs: t.runs + 1 });
+        }
+    }
+    const rows = [...totals.entries()].filter(([, t]) => t.sum > 0);
+    if (rows.length === 0) return null;
+    return (
+        <div className="section" style={{ marginTop: '12px' }}>
+            <div className="section-head"><h3>Everything else your runs give</h3></div>
+            <div className="section-body en-table-wrap">
+                <table className="en-table">
+                    <thead><tr><th>From your runs</th><th>Per run</th><th>Per hour</th></tr></thead>
+                    <tbody>
+                        {rows.map(([key, t]) => (
+                            <tr key={key}>
+                                <td>{pretty(key)}</td>
+                                <td>{formatGameNumber(t.sum / t.runs)}</td>
+                                <td>{t.hours > 0 ? formatGameNumber(t.sum / t.hours) : '—'}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+                <p className="en-note">
+                    Averaged over your newest {recent.length} runs (tournaments left out), straight from each
+                    battle report — including what the Guardian fetched. Per hour is real time.
+                </p>
+            </div>
         </div>
     );
 }

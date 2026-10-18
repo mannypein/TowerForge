@@ -34,6 +34,7 @@ import { buildDamageContext } from './uwdps';
 import { buildEdpsCalibration, edpsParts, edpsSurvivalScore } from './edps';
 import { buildFarmCalibration, coinFactors, FARM_EFFECTS, FARM_EFFECT_LABELS } from './farming';
 import { healthLabCut } from './enemyStats';
+import { deathDefyChance, hitsSurvived, saverAverages } from './runSavers';
 import type { EnemyType } from './enemyStats';
 import {
     botMedalCost, enhancementCost, enhancementDiscount, labLevelCost, MODULE_SLOT_MAX, moduleSlotCost,
@@ -220,7 +221,7 @@ export function changeCost(snap: OptimizerSnapshot, t: UpgradeTarget, level: num
 // One link in the chain: a quantity before and after. `kind` says how to
 // show it; `share` is that damage source's share of the run's damage.
 export interface ChainLink {
-    group: 'Enemies in range' | 'Tower' | 'Damage to each enemy' | 'Level skip' | 'Coin bonuses';
+    group: 'Enemies in range' | 'Tower' | 'Damage to each enemy' | 'Level skip' | 'Run savers' | 'Coin bonuses';
     label: string;
     before: number;
     after: number;
@@ -317,11 +318,12 @@ function buildChain(
             ['Inner Land Mines', rel(p1.ilm, p0.ilm), calib.shares.ilm],
             ['Poison Swamp', rel(p1.ps, p0.ps), calib.shares.ps],
             ['Tower shots', rel(p1.tower, p0.tower, time), calib.shares.tower],
+            ['Flame Bot', rel(p1.flame, p0.flame), calib.shares.flame],
             ['Black Hole reach', rel(p1.bh, p0.bh), calib.shares.bh],
         ];
         // Flat sources split the flat-damage part of the waves by what each added.
         const flat = calib.shares.cl + calib.shares.sm + calib.shares.dw + calib.shares.ilm + calib.shares.ps
-            + calib.shares.tower;
+            + calib.shares.tower + calib.shares.flame;
         const flatWaves = wavesOf(split ? Math.log(split.damage) : 0);
         const added = split ? split.damage - 1 : 0;
         for (const [label, ratio, share] of src) {
@@ -352,6 +354,13 @@ function buildChain(
                 kind: 'percent', share, waves: wavesOf(share * Math.log(cut0 / cut1)) });
         }
     }
+
+    // Run savers: Death Defy against the saves behind it in the player's runs.
+    const [dd0, dd1] = [deathDefyChance(base), deathDefyChance(after)];
+    const savers = saverAverages(models.run?.used.map(d => d.run) ?? []);
+    add({ group: 'Run savers', label: 'Death Defy chance', before: dd0 * 100, after: dd1 * 100, kind: 'percent' });
+    add({ group: 'Run savers', label: 'Killing hits survived per run', before: hitsSurvived(dd0, savers?.others ?? 0),
+        after: hitsSurvived(dd1, savers?.others ?? 0), kind: 'count' });
 
     const farm = buildFarmCalibration(base, report);
     const [f0, f1] = [coinFactors(base, farm), coinFactors(after, farm)];

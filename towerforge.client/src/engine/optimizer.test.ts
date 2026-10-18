@@ -88,6 +88,18 @@ describe('calibrated eDPS', () => {
         expect(edpsScore(after, calib)).toBeCloseTo(1 + 0.0005 * 11.1 * 0.185 * 0.5, 8);
     });
 
+    it('counts Flame Bot as flat damage, by its Damage stat and cooldown', () => {
+        // Flame Bot did 100 of the 1000 damage: flat now CL 100 + SM 5 + PS 5 + shots 10 + flame 100.
+        const report = run({ FlameBotDamage: 100 });
+        const bot = (dmgLv: number) => snapshot(report, s => {
+            s.botData = { 'Flame Bot': { owned: true, medals: [0, 0, dmgLv, 0], plusLv: 0 } };
+        });
+        const calib = buildEdpsCalibration(bot(5), report)!;
+        expect(calib.shares.flame).toBeCloseTo(0.1, 9);
+        // Damage Lv 5 → 6 is ×90 → ×98 (wiki, 50 + 8 a level).
+        expect(edpsSurvivalScore(bot(6), calib)).toBeCloseTo(1 + (0.1 / 0.22) * (98 / 90 - 1), 6);
+    });
+
     it('counts only flat damage for how far a Glass Cannon run gets', () => {
         // Flat sources in the run: CL 100, SM 5, PS 5, tower shots 10 = 0.12 of the damage.
         const report = run();

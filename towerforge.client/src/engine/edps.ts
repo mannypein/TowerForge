@@ -21,7 +21,12 @@
 //    crits × hits per second (attack speed × Multishot × Bounce Shot ×
 //    Rapid Fire, towerDamage.calcProjectileFactors) × Spotlight; Chain
 //    Lightning procs on those same hits.
-//  • Orbs, thorns and everything else stay fixed.
+//  • Flame Bot (from the run's FlameBotDamage): burns for its Damage
+//    multiple of tower damage with crits (wiki), once per cooldown (Cooldown
+//    stat − 1 s per Flame Bot Cooldown lab level), so per enemy pass it
+//    scales with ×Damage × tower damage × crits × time in range ÷ cooldown.
+//    Burn stacks and Wild Fire (Bot+) aren't modeled. Flat damage.
+//  • Orbs, thorns, Death Ray, the Guardian and everything else stay fixed.
 //  • Smite (CL+) and Consume (BH+) add a share of each enemy's health.
 //    The run's total damage is about the total enemy health, so +x% of
 //    every enemy's health is about +x% of total damage.
@@ -49,9 +54,30 @@ import {
 } from './uwdps';
 import { calcDamageMeter, calcCoreUWDamageMult } from './towerDamage';
 import type { BattleReport } from './battleReport';
+import { extraDamage } from './battleReport';
+import { BOTS_CONFIG } from '../constants/botData';
 import type { OptimizerSnapshot } from './optimizer';
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+
+// A bot stat at a medal level (level 0 = the unlock value).
+function botStatValue(bot: string, stat: string, level: number): number {
+    const s = BOTS_CONFIG.find(b => b.name === bot)?.stats.find(x => x.label === stat);
+    if (!s) return 0;
+    return parseFloat(level > 0 ? s.values[Math.min(level, s.values.length) - 1] : s.lv0) || 0;
+}
+
+// Flame Bot burn per enemy pass, in tower-damage units: ×Damage × time in
+// range ÷ cooldown. 0 when the bot isn't owned.
+function flameBotPerPass(snap: OptimizerSnapshot, hit: number, ttt: number): number {
+    const bot = snap.botData?.['Flame Bot'];
+    if (!bot?.owned) return 0;
+    const medals = bot.medals ?? [];
+    const mult = botStatValue('Flame Bot', 'Damage', medals[2] ?? 0);
+    const cooldown = Math.max(1, botStatValue('Flame Bot', 'Cooldown', medals[1] ?? 0)
+        - (snap.labData['Flame Bot Cooldown'] ?? 0));
+    return (mult * hit * ttt) / cooldown;
+}
 
 // The damage sources stones can change, modeled in relative units.
 export interface EdpsParts {
@@ -66,6 +92,7 @@ export interface EdpsParts {
     clChance: number;  // Chain Lightning chance (0–1)
     clQty: number;     // Chain Lightning chains per proc
     consume: number;   // share of enemy health Consume deals per hole
+    flame: number;     // Flame Bot burn per enemy pass
     ttt: number;       // seconds an enemy spends in range (time to tower)
     shotRate: number;  // enemy hits per second (Chain Lightning's chances to proc)
 }
@@ -111,6 +138,7 @@ export function edpsParts(snap: OptimizerSnapshot, ttt?: number): EdpsParts {
     const uwShared = calcCoreUWDamageMult(moduleState, labData) * (1 + (relicData['rUWDmg'] ?? 0) / 100) * sl * taken;
     const uw = (abbr: 'CL' | 'SM' | 'DW' | 'ILM' | 'PS') =>
         calcUWDPS(abbr, uwData, modBonuses, refTTT, presetIdx, wsData, labData, cardData, ctx) * uwShared;
+    const flame = flameBotPerPass(snap, ctx.towerDamage * ctx.critMult, refTTT) * sl * taken;
     const slMissiles = calcSpotlightMissilesDPS(
         uwData, modBonuses, refTTT, presetIdx, wsData, labData, cardData, moduleState, relicData, enhData, ctx,
     ) * taken;
@@ -126,6 +154,7 @@ export function edpsParts(snap: OptimizerSnapshot, ttt?: number): EdpsParts {
         smite: calcSmitePerProc(uwData),
         ...calcCLChanceQtyParts(uwData, modBonuses),
         consume: calcConsumeFraction(uwData),
+        flame,
         ttt: refTTT,
         shotRate: ctx.hitRate,
     };
@@ -156,9 +185,11 @@ export function buildEdpsCalibration(snap: OptimizerSnapshot, report: BattleRepo
         ps: share(d.poisonSwamp),
         bh: Math.max(0, share(d.blackHole) - consume0),
         tower: share(d.projectiles + d.rendArmor + d.landMines),
+        flame: report ? share(extraDamage(report).flameBot) : 0,
         fixed: 0,
     };
-    const counted = shares.cl + shares.sm + shares.dw + shares.ilm + shares.ps + shares.bh + shares.tower + smite0 + consume0;
+    const counted = shares.cl + shares.sm + shares.dw + shares.ilm + shares.ps + shares.bh + shares.tower + shares.flame
+        + smite0 + consume0;
     shares.fixed = Math.max(0, 1 - counted);
     return { anchor, shares, clReach, smiteProcs: smiteProcs0, bhKills };
 }
@@ -178,6 +209,7 @@ export function edpsScore(snap: OptimizerSnapshot, calib: EdpsCalibration, ttt?:
         + s.ps * r(x.ps, a.ps)
         + s.bh * bhRatio
         + s.tower * r(x.tower, a.tower) * t
+        + s.flame * r(x.flame, a.flame)
         + s.fixed
         + Math.min(1, x.smite * smiteProcs(x, a, calib.smiteProcs)) * calib.clReach
         + x.consume * clamp01(calib.bhKills * bhRatio);
@@ -194,7 +226,7 @@ export function edpsSurvivalScore(snap: OptimizerSnapshot, calib: EdpsCalibratio
     const x = edpsParts(snap, ttt);
     const a = calib.anchor;
     const s = calib.shares;
-    const flat = s.cl + s.sm + s.dw + s.ilm + s.ps + s.tower;
+    const flat = s.cl + s.sm + s.dw + s.ilm + s.ps + s.tower + s.flame;
     if (flat <= 0) return 1;
     const r = (now: number, then: number) => (then > 0 ? now / then : 1);
     const t = timeRatio(x, a);
@@ -203,5 +235,6 @@ export function edpsSurvivalScore(snap: OptimizerSnapshot, calib: EdpsCalibratio
         + s.dw * r(x.dw, a.dw)
         + s.ilm * r(x.ilm, a.ilm)
         + s.ps * r(x.ps, a.ps)
-        + s.tower * r(x.tower, a.tower) * t) / flat;
+        + s.tower * r(x.tower, a.tower) * t
+        + s.flame * r(x.flame, a.flame)) / flat;
 }

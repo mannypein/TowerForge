@@ -16,6 +16,7 @@ suggests what to upgrade next.
 - `docs/game-export-format.md` — field-by-field notes on the game's `tool_export.json` and how each mapping was confirmed. `docs/module-effects.md` — unique module formulas and assumptions.
 - `docs/analytics.md` — Umami visitor analytics (self-hosted on the VPS at /analytics): what's tracked, where it runs, how to open the dashboard and update it. Setup scripts in `ops/umami/`.
 - `docs/ultimate-weapons.md` — every UW and UW+ mechanic checked against the wiki (values, costs, labs, perks) and how the model uses it. `docs/optimizer.md` — the Optimizer's goals and how each scores upgrades, what every currency is ranked by and where its prices come from, the What If page, calibration from battle reports, and the verified stone rules (card mastery, assist modules, primary module labs).
+- `docs/coverage.md` — the whole game, system by system, against what the site models (✅/◐/✗), and what each gap needs. Update it when a system gets modeled.
 - `docs/run-simulation.md` — research for the planned run simulator: enemy scaling, spawning, elites/fleets, battle conditions, level skip, in-run cash/perks/free upgrades, survival, what battle reports hold, the gaps, and the disagreements between sources. TheTowerSDK (MIT, npm `thetowersdk`) is the main formula source.
 
 ## Commands

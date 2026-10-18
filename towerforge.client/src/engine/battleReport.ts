@@ -101,6 +101,81 @@ export type BattleField = number | string | boolean | number[];
 // the server's 2 MB limit for a synced save).
 export const MAX_STORED_BATTLES = 100;
 
+// ── Raw fields by name ────────────────────────────────────────
+// The export's battle fields beyond the ones parsed above aren't documented
+// by name, so they're found by the words in the name (any casing):
+// "FlameBotDamage" matches flame + bot + damage. Lifetime totals and
+// records ("Total…", "Most…", "Largest…") are left out.
+const wordsOf = (key: string) => key.toLowerCase();
+
+export function rawFields(run: BattleReport, words: string[], not: string[] = []): [string, number][] {
+    return Object.entries(run.raw ?? {}).flatMap(([key, v]) => {
+        const k = wordsOf(key);
+        if (typeof v !== 'number' || !words.every(w => k.includes(w)) || not.some(w => k.includes(w))) return [];
+        if (/^(total|most|largest|best)/.test(k)) return [];
+        return [[key, v] as [string, number]];
+    });
+}
+
+export const rawField = (run: BattleReport, words: string[], not: string[] = []): number | null =>
+    rawFields(run, words, not)[0]?.[1] ?? null;
+
+// Damage the parsed breakdown doesn't name (TheTowerSDK's run field list has
+// all of these): Flame Bot, Death Ray, Spotlight, Electrons, the Guardian
+// and its Attack chip.
+export interface ExtraDamage {
+    flameBot: number;
+    deathRay: number;
+    spotlight: number;
+    electrons: number;
+    guardian: number;
+    attackChip: number;
+}
+
+export function extraDamage(run: BattleReport): ExtraDamage {
+    const f = (words: string[], not: string[] = []) => Math.max(0, rawField(run, words, not) ?? 0);
+    return {
+        flameBot: f(['flame', 'bot', 'damage'], ['reduction']),
+        deathRay: f(['death', 'ray', 'damage']),
+        spotlight: f(['spotlight', 'damage']),
+        electrons: f(['electron', 'damage']),
+        guardian: f(['guardian', 'damage']),
+        attackChip: f(['chip', 'damage']),
+    };
+}
+
+// What kept a run going: Death Defy procs, Energy Shield hits, Second Wind,
+// Nuke and Demon Mode uses (null = not in this run's fields).
+export interface RunSavers {
+    deathDefy: number | null;
+    energyShield: number | null;
+    secondWind: number | null;
+    nuke: number | null;
+    demonMode: number | null;
+}
+
+export function runSavers(run: BattleReport): RunSavers {
+    return {
+        deathDefy: rawField(run, ['death', 'defy'], ['down', 'chance']),
+        energyShield: rawField(run, ['energy', 'shield']),
+        secondWind: rawField(run, ['second', 'wind']),
+        nuke: rawField(run, ['nuke']),
+        demonMode: rawField(run, ['demon']),
+    };
+}
+
+// Everything else a run hands out: cells, gems, medals, reroll and module
+// shards, by field (earned, fetched by the Guardian, from ads…).
+export function runDrops(run: BattleReport): [string, number][] {
+    const keep = (words: string[]) => rawFields(run, words, ['hour', 'tapped', 'block']);
+    return [
+        ...keep(['cell']),
+        ...keep(['gem']),
+        ...keep(['medal']),
+        ...keep(['shard']),
+    ];
+}
+
 const runKey = (b: BattleReport) =>
     [b.tier, b.wave, Math.round(b.gameTimeSec), Math.round(b.realTimeSec), b.tournament ? 1 : 0].join('|');
 

@@ -24,7 +24,9 @@ const wavesText = (w: number) => {
     return `${w < 0 ? '−' : '+'}${n} waves`;
 };
 
-const CHAIN_GROUPS: ChainLink['group'][] = ['Enemies in range', 'Tower', 'Damage to each enemy', 'Level skip', 'Coin bonuses'];
+const CHAIN_GROUPS: ChainLink['group'][] = [
+    'Enemies in range', 'Tower', 'Damage to each enemy', 'Level skip', 'Run savers', 'Coin bonuses',
+];
 
 // A link as "before → after (change)"; relative ones (×) as a % change.
 function linkText(l: ChainLink): string {
@@ -166,7 +168,7 @@ export default function WhatIfTab() {
                                         <span className="wi-item-name">{t.label}</span>
                                         <span className="wi-item-lv">
                                             Lv {t.current} → {c.level}
-                                            {own(c) !== undefined && <span className="wi-item-waves">{wavesText(own(c)!)}</span>}
+                                            {Math.abs(own(c) ?? 0) >= 0.05 && <span className="wi-item-waves">{wavesText(own(c)!)}</span>}
                                         </span>
                                         <button
                                             className="btn btn-dim wi-remove"
@@ -300,6 +302,14 @@ export default function WhatIfTab() {
                                         </span>
                                     </div>
                                 ))}
+                                {g === 'Run savers' && (
+                                    <p className="wi-hint" style={{ marginTop: 4 }}>
+                                        Death Defy ignores a killing hit with its chance before Energy Shield, Second Wind,
+                                        Demon Mode or Nuke take one, so each saver behind it makes it worth more. Not
+                                        turned into waves yet: that needs how often killing hits come near the end of
+                                        a run.
+                                    </p>
+                                )}
                             </div>
                         ))}
                     </div>

@@ -6,7 +6,7 @@
 
 import { useState } from 'react';
 import { useGameStore } from '../../store/useGameStore';
-import { activeBattleReport, parseBattleReport } from '../../engine/battleReport';
+import { extraDamage, activeBattleReport, parseBattleReport } from '../../engine/battleReport';
 import type { BattleReport } from '../../engine/battleReport';
 import { isRealRun } from '../../engine/gameExport';
 import { formatGameNumber } from '../../engine/gameNumbers';
@@ -22,12 +22,14 @@ const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
 // ── Battle Report input ───────────────────────────────────────
 // One saved report calibrates both builds; `purpose` only changes the copy.
 // Damage by source, biggest first, as "Orbs 88% · CL 8.9% · …".
-function damageLine(d: NonNullable<BattleReport['damage']>): string {
+function damageLine(report: BattleReport, d: NonNullable<BattleReport['damage']>): string {
+    const x = extraDamage(report);
     const rows: [string, number][] = [
         ['Orbs', d.orbs], ['Chain Lightning', d.chainLightning], ['Black Hole', d.blackHole],
         ['Tower shots', d.projectiles], ['Thorns', d.thorns], ['Poison Swamp', d.poisonSwamp],
         ['Rend Armor', d.rendArmor], ['Smart Missiles', d.smartMissiles], ['Inner Land Mines', d.innerLandMines],
-        ['Death Wave', d.deathWave], ['Land Mines', d.landMines],
+        ['Death Wave', d.deathWave], ['Land Mines', d.landMines], ['Flame Bot', x.flameBot], ['Death Ray', x.deathRay],
+        ['Spotlight', x.spotlight], ['Electrons', x.electrons], ['Guardian', x.guardian], ['Attack chip', x.attackChip],
     ];
     const listed = rows.filter(([, v]) => v / d.total >= 0.001).sort((a, b) => b[1] - a[1]);
     const rest = 1 - listed.reduce((t, [, v]) => t + v / d.total, 0);
@@ -98,7 +100,7 @@ export function BattleReportPanel({ purpose }: { purpose: 'farming' | 'ehp' | 'e
                         {purpose === 'edps' ? (
                             <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginTop: '6px', lineHeight: 1.6 }}>
                                 {report.damage
-                                    ? <>Damage dealt: {damageLine(report.damage)}</>
+                                    ? <>Damage dealt: {damageLine(report, report.damage)}</>
                                     : 'This report has no damage breakdown, so eDPS uses the model alone. Import your game data and pick one of its runs to rank by your real damage.'}
                             </p>
                         ) : purpose === 'ehp' ? (

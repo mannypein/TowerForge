@@ -124,6 +124,17 @@ by the log of each part: flat damage (by what each source added), skip and
 the killers' health labs. A change's own waves and its part of a combined
 gain can differ, because changes work on each other.
 
+## Every damage source in a run (2026-10-18)
+
+Battle reports record more damage sources than the 11 the site parsed by name;
+TheTowerSDK's run field list has Flame Bot, Death Ray, Spotlight, Electrons,
+Guardian and Attack chip damage too. They're read from each run's stored
+fields by the words in their names (`battleReport.extraDamage`), shown in the
+Battle Report breakdown, and Flame Bot is calibrated as flat damage (see
+edps.ts). The rest stay in the fixed share. The same name matching reads
+what saved each run (`runSavers`) and what it dropped (`runDrops`); the exact
+export names aren't confirmed, so the pages show the field names they found.
+
 ## Damage is per enemy pass (2026-10-18)
 
 Owner's point: Chrono Field+ deals no damage but makes everything else deal

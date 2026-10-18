@@ -9,11 +9,23 @@
 import { useMemo } from 'react';
 import { useGameStore } from '../../store/useGameStore';
 import { buildRunLengthModel, runEnds, wavesFromDamage, wavesFromSkip } from '../../engine/runLength';
+import { runSavers } from '../../engine/battleReport';
+import type { BattleReport } from '../../engine/battleReport';
 import { buildRunModel, projectRun, runSettingsFromCards } from '../../engine/runCoins';
 import { defaultBattleIndex } from '../../engine/gameExport';
 
 const DAMAGE_STEPS = [0.01, 0.05, 0.1, 0.25, 0.5, 1];
 const SKIP_STEPS = [0.5, 1, 2, 5];
+
+// "Death Defy 2 · Energy Shield 1", from the run's own counts.
+function savedBy(run: BattleReport): string {
+    const s = runSavers(run);
+    const parts: [string, number | null][] = [
+        ['Death Defy', s.deathDefy], ['Energy Shield', s.energyShield], ['Second Wind', s.secondWind],
+        ['Demon Mode', s.demonMode], ['Nuke', s.nuke],
+    ];
+    return parts.filter(([, v]) => (v ?? 0) > 0).map(([k, v]) => `${k} ${v}`).join(' · ');
+}
 
 const pctOf = (x: number) => `${x >= 0 ? '+' : '−'}${Math.abs(x * 100).toFixed(1)}%`;
 
@@ -138,7 +150,10 @@ export default function RunLengthTab() {
                                         {used.has(e.index) ? '• ' : ''}T{e.run.tier} W{e.run.wave.toLocaleString()}
                                         <span className="en-sub">{e.run.date}</span>
                                     </td>
-                                    <td>{e.killer === undefined ? <span className="en-dim">—</span> : e.killer ?? 'You (quit)'}</td>
+                                    <td>
+                                        {e.killer === undefined ? <span className="en-dim">—</span> : e.killer ?? 'You (quit)'}
+                                        {savedBy(e.run) && <span className="en-sub">Saved by {savedBy(e.run)}</span>}
+                                    </td>
                                     <td>
                                         {e.enemyHealth === null || !e.killer || e.run.tier !== model.tier
                                             ? <span className="en-dim">—</span>
@@ -149,8 +164,10 @@ export default function RunLengthTab() {
                         </tbody>
                     </table>
                     <p className="en-note">
-                        &quot;Ended by&quot; is the game&apos;s Killed By (the enemy type that got through). Enemy health is
-                        how tough enemies were at the end of the run compared with where your runs usually end.
+                        &quot;Ended by&quot; is the game&apos;s Killed By (the enemy type that got through); &quot;Saved by&quot;
+                        counts the killing hits Death Defy, Energy Shield, Second Wind, Demon Mode and Nuke took before
+                        that. Enemy health is how tough enemies were at the end of the run compared with where your runs
+                        usually end.
                     </p>
                 </div>
             </div>
