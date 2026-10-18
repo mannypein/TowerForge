@@ -2784,3 +2784,36 @@
     color: var(--text-bright);
     text-align: right;
 }
+
+/* What If: how a change adds up, link by link. */
+.wi-chain {
+    margin-top: 10px;
+}
+
+.wi-chain-head {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+    color: var(--gold);
+    margin-bottom: 4px;
+}
+
+.wi-chain-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: baseline;
+    padding: 3px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.wi-chain-row .wi-v {
+    font-size: 12px;
+}
+
+.wi-share {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-dim);
+}

@@ -67,10 +67,34 @@ What each currency buys (wiki Currencies page) and how it's ranked:
 `engine/whatIf.ts`, Optimizer → What If: any UW, UW+, workshop, lab,
 enhancement, module slot or bot level set on a copy of the account. Each
 score is calibrated on the account as it is (the chosen Battle Report) and
-read on the copy: all damage, push (flat damage + skip), waves reached and
-coins per run (Run Length, Coins per Run; GC), coins per hour, survival
-(not GC) — plus the cost in every currency. Coins per run = coins for a run
-to the new wave × the coins-per-hour gain.
+read on the copy: all damage, push (flat damage + skip), waves reached,
+coins per run and per hour (Run Length, Coins per Run; GC), coin income at
+the same wave, survival (not GC) — plus the cost in every currency.
+
+- **Coins follow the run:** coins per run = Coins per Run's coins for a run
+  to the new wave × the coin-bonus gain; coins per hour the same with its
+  coins ÷ real time (later waves pay more per hour). "Coin income at the
+  same wave" is the coin bonuses alone (`farming.coinRate`).
+- **How it adds up** (`chain`): every link that moved — range, Chrono Field
+  uptime, slow, Chrono Loop's extra path, time each enemy is in range; tower
+  damage, attacks per second, crit multiplier; each damage source per enemy
+  with its share of the run's damage; Smite procs (with CL+); level skip and
+  the killers' health labs; each coin bonus's average factor
+  (`farming.coinFactors`: 1 + coverage × (bonus − 1)).
+
+## Damage is per enemy pass (2026-10-18)
+
+Owner's point: Chrono Field+ deals no damage but makes everything else deal
+more. Before this, only the cooldown UWs (SM, DW, ILM, PS, BH) gained from a
+longer time to tower (their activations during an enemy's pass); Chain
+Lightning and tower shots were per second, so CF, CF+, Slow Aura and range
+did nothing for them. Now both scores (`edpsScore`, `edpsSurvivalScore`)
+multiply Chain Lightning and tower shots by time in range ÷ the anchor's,
+and Smite procs per enemy scale with CL chance² × chains × attacks per
+second × time in range. The code's model, not checked in game: an enemy
+takes damage for as long as it's in range, so a 31% slower enemy (Slow Aura
+7★) takes 1 ÷ 0.69 = 1.45× the damage on its way in. Consequence to watch:
+range and slows are now worth much more for pushing than before.
 
 ## Paths
 

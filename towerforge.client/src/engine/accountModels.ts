@@ -24,6 +24,7 @@ import { buildEdpsCalibration } from './edps';
 import { buildRunLengthModel, killerMix, skipWorth } from './runLength';
 import type { RunLengthModel } from './runLength';
 import { buildRunModel, projectRun, runSettingsFromCards } from './runCoins';
+import type { RunProjection } from './runCoins';
 import { defaultBattleIndex } from './gameExport';
 
 export type AccountState = Pick<AppState,
@@ -69,6 +70,7 @@ export interface GoalModels {
     run: RunLengthModel | null;        // Run Length, from the deaths in the history
     worth: number;                     // skipWorth (0 without Run Length)
     coinsAt?: (wave: number) => number; // coins for a run to a wave (Coins per Run)
+    projectAt?: (wave: number) => RunProjection;   // coins and real time for a run to a wave
 }
 
 // Run Length and Coins per Run, from the saved battle history.
@@ -76,10 +78,14 @@ export function runModels(s: AccountState): GoalModels {
     const run = buildRunLengthModel(s.importedBattles);
     const settings = runSettingsFromCards(s.cardData, s.activePreset);
     const coinModel = buildRunModel(s.importedBattles, defaultBattleIndex(s.importedBattles), settings);
+    const projectAt = coinModel && run
+        ? (wave: number) => projectRun(coinModel.calibration, settings, wave, run.tier)
+        : undefined;
     return {
         run,
         worth: run ? skipWorth(run) : 0,
-        coinsAt: coinModel && run ? (wave: number) => projectRun(coinModel.calibration, settings, wave, run.tier).coins : undefined,
+        coinsAt: projectAt ? (wave: number) => projectAt(wave).coins : undefined,
+        projectAt,
     };
 }
 

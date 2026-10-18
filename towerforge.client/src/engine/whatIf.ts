@@ -8,6 +8,12 @@
 //  Every score is calibrated on the account as it is now (the chosen
 //  Battle Report), then read on the changed copy, so "now" is always 1.
 //  Waves and coins per run go through Run Length and Coins per Run.
+//
+//  Nothing acts alone, so the result also lists every link that moved on
+//  the way (`chain`): range, slows and Chrono Loop → time each enemy spends
+//  in range → each damage source per enemy (with its share of your damage)
+//  → push → waves → coins per run and per hour, alongside the coin bonuses
+//  an upgrade changes directly.
 //  Pure functions — no store imports.
 // ============================================================
 
@@ -22,7 +28,13 @@ import type { OptGoal } from '../constants/optimizerConfig';
 import type { BattleReport } from './battleReport';
 import { readActiveModuleBonuses } from './modBonuses';
 import { healthSkipChance, healthSkipSources } from './levelSkip';
-import { pathRunGains } from './runLength';
+import { killerMix, pathRunGains } from './runLength';
+import { calcTTTDisplayStats } from './ttt';
+import { buildDamageContext } from './uwdps';
+import { buildEdpsCalibration, edpsParts } from './edps';
+import { buildFarmCalibration, coinFactors, FARM_EFFECTS, FARM_EFFECT_LABELS } from './farming';
+import { healthLabCut } from './enemyStats';
+import type { EnemyType } from './enemyStats';
 import {
     botMedalCost, enhancementCost, enhancementDiscount, labLevelCost, MODULE_SLOT_MAX, moduleSlotCost,
     workshopCost, workshopDiscount,
@@ -205,14 +217,27 @@ export function changeCost(snap: OptimizerSnapshot, t: UpgradeTarget, level: num
     }
 }
 
+// One link in the chain: a quantity before and after. `kind` says how to
+// show it; `share` is that damage source's share of the run's damage.
+export interface ChainLink {
+    group: 'Enemies in range' | 'Tower' | 'Damage to each enemy' | 'Level skip' | 'Coin bonuses';
+    label: string;
+    before: number;
+    after: number;
+    kind: 'seconds' | 'meters' | 'percent' | 'times' | 'perSecond' | 'count' | 'points';
+    share?: number;
+}
+
 export interface WhatIfResult {
     damagePct: number;                 // all damage (calibrated eDPS when the report has damage by source)
     pushPct: number;                   // flat damage + skip as damage (what moves a Glass Cannon death wave)
     skipPoints: number;                // Enemy Health Level Skip points added
     waves: { from: number; to: number } | null;
-    coinsHourPct: number;              // coins per hour at the same run length
+    coinsHourPct: number;              // coin income at the same wave (coin bonuses only)
     coinsRun: { from: number; to: number } | null;
+    coinsHour: { from: number; to: number } | null;   // playing each run to its end
     survivalPct: number | null;        // eHP (not Glass Cannon)
+    chain: ChainLink[];
     costs: Costs;
 }
 
@@ -228,6 +253,80 @@ function goalPct(
     const a = { ...after, farm: b.farm, ehp: b.ehp, edps: b.edps, metric: b.metric, edpsMode: b.edpsMode,
         blend: b.blend, skipWorth: b.skipWorth, killers: b.killers };
     return ratioPct(goalScore(a), goalScore(b));
+}
+
+// Everything between a change and its result, for both snapshots; links
+// that didn't move are left out.
+function buildChain(
+    base: OptimizerSnapshot, after: OptimizerSnapshot, build: BuildType,
+    report: BattleReport | null, models: GoalModels,
+): ChainLink[] {
+    const links: ChainLink[] = [];
+    const add = (l: ChainLink) => {
+        const moved = l.kind === 'points' || l.kind === 'count'
+            ? Math.abs(l.after - l.before) > 1e-6
+            : l.before !== 0 ? Math.abs(l.after / l.before - 1) > 1e-5 : l.after !== 0;
+        if (moved) links.push(l);
+    };
+    const tt = (s: OptimizerSnapshot) => calcTTTDisplayStats(s.presetIdx, s.wsData, s.labData, s.cardData, s.uwData, s.modBonuses);
+    const [t0, t1] = [tt(base), tt(after)];
+    add({ group: 'Enemies in range', label: 'Tower range', before: t0.range, after: t1.range, kind: 'meters' });
+    add({ group: 'Enemies in range', label: 'Chrono Field uptime', before: t0.cfUptime * 100, after: t1.cfUptime * 100, kind: 'percent' });
+    add({ group: 'Enemies in range', label: 'Slow (Chrono Field + Slow Aura)', before: t0.cappedSlowPct, after: t1.cappedSlowPct, kind: 'percent' });
+    add({ group: 'Enemies in range', label: 'Chrono Loop (CF+) extra path', before: t0.cfPathMult, after: t1.cfPathMult, kind: 'times' });
+    add({ group: 'Enemies in range', label: 'Time each enemy is in range', before: t0.ttt, after: t1.ttt, kind: 'seconds' });
+
+    const ctx = (s: OptimizerSnapshot) => buildDamageContext(s.presetIdx, s.wsData, s.labData, s.cardData, s.relicData,
+        s.enhData, s.modBonuses, s.moduleState, s.botData);
+    const [c0, c1] = [ctx(base), ctx(after)];
+    add({ group: 'Tower', label: 'Tower damage', before: 1, after: c1.towerDamage / c0.towerDamage, kind: 'times' });
+    add({ group: 'Tower', label: 'Attacks per second', before: c0.attackSpeed, after: c1.attackSpeed, kind: 'perSecond' });
+    add({ group: 'Tower', label: 'Crit multiplier (average)', before: c0.critMult, after: c1.critMult, kind: 'times' });
+
+    // Damage to each enemy on its way in, by source, with its share of your damage.
+    const calib = buildEdpsCalibration(base, report);
+    if (calib) {
+        const [p0, p1] = [edpsParts(base), edpsParts(after)];
+        const time = p0.ttt > 0 ? p1.ttt / p0.ttt : 1;
+        const rel = (a: number, b: number, t = 1) => (b > 0 ? (a / b) * t : 1);
+        const src: [string, number, number][] = [
+            ['Chain Lightning', rel(p1.cl, p0.cl, time), calib.shares.cl],
+            ['Smart Missiles', rel(p1.sm, p0.sm), calib.shares.sm],
+            ['Death Wave', rel(p1.dw, p0.dw), calib.shares.dw],
+            ['Inner Land Mines', rel(p1.ilm, p0.ilm), calib.shares.ilm],
+            ['Poison Swamp', rel(p1.ps, p0.ps), calib.shares.ps],
+            ['Tower shots', rel(p1.tower, p0.tower, time), calib.shares.tower],
+            ['Black Hole reach', rel(p1.bh, p0.bh), calib.shares.bh],
+        ];
+        for (const [label, ratio, share] of src) {
+            add({ group: 'Damage to each enemy', label, before: 1, after: ratio, kind: 'times', share });
+        }
+        const procs = (p: typeof p0) => p.clChance * p.clChance * p.clQty * p.shotRate * p.ttt;
+        const procs0 = calib.smiteProcs;
+        if (p0.smite > 0 || p1.smite > 0) {     // Smite needs CL+
+            add({ group: 'Damage to each enemy', label: 'Smite procs per enemy', before: procs0,
+                after: Math.min(100, procs0 * rel(procs(p1), procs(p0))), kind: 'count' });
+        }
+        add({ group: 'Damage to each enemy', label: 'Smite (share of health per proc)', before: p0.smite * 100, after: p1.smite * 100, kind: 'percent' });
+        add({ group: 'Damage to each enemy', label: 'Consume (share of health)', before: p0.consume * 100, after: p1.consume * 100, kind: 'percent' });
+    }
+
+    add({ group: 'Level skip', label: 'Enemy Health Level Skip', before: skipOf(base), after: skipOf(after), kind: 'points' });
+    if (build === 'Glass Cannon' && models.run) {
+        const killers = Object.entries(killerMix(models.run)) as [EnemyType, number][];
+        for (const [type, share] of killers) {
+            add({ group: 'Level skip', label: `${type} health (lab)`, before: healthLabCut(base.labData, type) * 100,
+                after: healthLabCut(after.labData, type) * 100, kind: 'percent', share });
+        }
+    }
+
+    const farm = buildFarmCalibration(base, report);
+    const [f0, f1] = [coinFactors(base, farm), coinFactors(after, farm)];
+    add({ group: 'Coin bonuses', label: 'Always-on coin multiplier', before: 1, after: f1.base / f0.base, kind: 'times' });
+    for (const e of FARM_EFFECTS) {
+        add({ group: 'Coin bonuses', label: `${FARM_EFFECT_LABELS[e]} coin bonus (average)`, before: f0[e], after: f1[e], kind: 'times' });
+    }
+    return links;
 }
 
 const skipOf = (s: OptimizerSnapshot) => healthSkipChance(healthSkipSources(
@@ -261,18 +360,25 @@ export function whatIf(
 
     let waves: WhatIfResult['waves'] = null;
     let coinsRun: WhatIfResult['coinsRun'] = null;
+    let coinsHour: WhatIfResult['coinsHour'] = null;
     if (gc && models.run) {
         const [step] = pathRunGains(models.run, [pushPct], undefined, [Math.max(0, skipPoints)], models.worth);
         const from = models.run.typicalWave;
         const to = from + Math.round(step.waves);
         waves = { from, to };
-        if (models.coinsAt) {
-            coinsRun = { from: models.coinsAt(from), to: models.coinsAt(to) * (1 + coinsHourPct / 100) };
+        // A longer run: coins for the extra waves, at the new coin bonuses;
+        // per hour, the later waves pay more than the early ones.
+        if (models.projectAt) {
+            const [p0, p1] = [models.projectAt(from), models.projectAt(to)];
+            const bonus = 1 + coinsHourPct / 100;
+            coinsRun = { from: p0.coins, to: p1.coins * bonus };
+            coinsHour = { from: p0.coinsPerHour, to: p1.coinsPerHour * bonus };
         }
     }
     return {
-        damagePct, pushPct, skipPoints, waves, coinsHourPct, coinsRun,
+        damagePct, pushPct, skipPoints, waves, coinsHourPct, coinsRun, coinsHour,
         survivalPct: gc ? null : goalPct(base, after, 'survival', build, report, models),
+        chain: buildChain(base, after, build, report, models),
         costs,
     };
 }

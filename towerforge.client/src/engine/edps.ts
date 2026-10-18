@@ -29,6 +29,13 @@
 //    once). Farming runs land far fewer than 100; without shot counts the
 //    cap is assumed.
 //    Consume reaches the kills made inside a Black Hole.
+//  • Everything is damage to an enemy on its way in. Cooldown UWs (SM, DW,
+//    ILM, PS) already count their activations during an enemy's time in
+//    range; Chain Lightning and tower shots hit every second, so they scale
+//    with that time too (×TTT), and so do Smite procs (more CL hits per
+//    enemy). That's how Chrono Field, Chrono Loop (CF+), Slow Aura and range
+//    raise damage without dealing any themselves — the code's model: an
+//    enemy takes damage for as long as it's in range.
 //
 //  Pure functions — no store imports.
 // ============================================================
@@ -57,13 +64,15 @@ export interface EdpsParts {
     clChance: number;  // Chain Lightning chance (0–1)
     clQty: number;     // Chain Lightning chains per proc
     consume: number;   // share of enemy health Consume deals per hole
+    ttt: number;       // seconds an enemy spends in range (time to tower)
+    shotRate: number;  // tower attacks per second (Chain Lightning's chances to proc)
 }
 
 export interface EdpsCalibration {
     anchor: EdpsParts;
     // Share of the run's total damage, after taking Smite and Consume out of
     // Chain Lightning and Black Hole. `fixed` = orbs, thorns and the rest.
-    shares: Omit<EdpsParts, 'smite' | 'clChance' | 'clQty' | 'consume'> & { fixed: number };
+    shares: Omit<EdpsParts, 'smite' | 'clChance' | 'clQty' | 'consume' | 'ttt' | 'shotRate'> & { fixed: number };
     clReach: number;      // share of enemies Chain Lightning hits (Smite)
     smiteProcs: number;   // Smite procs per enemy reached, at the anchor (≤ 100)
     bhKills: number;      // share of kills made inside a Black Hole (Consume)
@@ -72,11 +81,15 @@ export interface EdpsCalibration {
 const SMITE_CAP = 100;
 
 // Smite procs per enemy: CL hits per enemy × CL chance, capped at 100.
-// Scales with CL chance² × chains from the anchor (more procs and more chains).
+// Scales from the anchor with CL chance² × chains (more procs and more
+// chains) × attacks per second × time in range (more chances per enemy).
 function smiteProcs(x: EdpsParts, a: EdpsParts, procs0: number): number {
-    const w = (p: EdpsParts) => p.clChance * p.clChance * p.clQty;
+    const w = (p: EdpsParts) => p.clChance * p.clChance * p.clQty * p.shotRate * p.ttt;
     return Math.min(SMITE_CAP, procs0 * (w(a) > 0 ? w(x) / w(a) : 1));
 }
+
+// Time in range now ÷ at the anchor: what per-second sources gain per enemy.
+const timeRatio = (x: EdpsParts, a: EdpsParts) => (a.ttt > 0 ? x.ttt / a.ttt : 1);
 
 const calcCLChanceQtyParts = (uwData: OptimizerSnapshot['uwData'], mb: OptimizerSnapshot['modBonuses']) => {
     const { chance, qty } = calcCLChanceQty(uwData, mb);
@@ -111,6 +124,8 @@ export function edpsParts(snap: OptimizerSnapshot, ttt?: number): EdpsParts {
         smite: calcSmitePerProc(uwData),
         ...calcCLChanceQtyParts(uwData, modBonuses),
         consume: calcConsumeFraction(uwData),
+        ttt: refTTT,
+        shotRate: ctx.attackSpeed,
     };
 }
 
@@ -153,13 +168,14 @@ export function edpsScore(snap: OptimizerSnapshot, calib: EdpsCalibration, ttt?:
     const s = calib.shares;
     const r = (now: number, then: number) => (then > 0 ? now / then : 1);
     const bhRatio = r(x.bh, a.bh);
-    return s.cl * r(x.cl, a.cl)
+    const t = timeRatio(x, a);
+    return s.cl * r(x.cl, a.cl) * t
         + s.sm * r(x.sm, a.sm)
         + s.dw * r(x.dw, a.dw)
         + s.ilm * r(x.ilm, a.ilm)
         + s.ps * r(x.ps, a.ps)
         + s.bh * bhRatio
-        + s.tower * r(x.tower, a.tower)
+        + s.tower * r(x.tower, a.tower) * t
         + s.fixed
         + Math.min(1, x.smite * smiteProcs(x, a, calib.smiteProcs)) * calib.clReach
         + x.consume * clamp01(calib.bhKills * bhRatio);
@@ -179,10 +195,11 @@ export function edpsSurvivalScore(snap: OptimizerSnapshot, calib: EdpsCalibratio
     const flat = s.cl + s.sm + s.dw + s.ilm + s.ps + s.tower;
     if (flat <= 0) return 1;
     const r = (now: number, then: number) => (then > 0 ? now / then : 1);
-    return (s.cl * r(x.cl, a.cl)
+    const t = timeRatio(x, a);
+    return (s.cl * r(x.cl, a.cl) * t
         + s.sm * r(x.sm, a.sm)
         + s.dw * r(x.dw, a.dw)
         + s.ilm * r(x.ilm, a.ilm)
         + s.ps * r(x.ps, a.ps)
-        + s.tower * r(x.tower, a.tower)) / flat;
+        + s.tower * r(x.tower, a.tower) * t) / flat;
 }

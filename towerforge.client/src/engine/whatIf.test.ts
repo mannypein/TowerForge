@@ -9,6 +9,8 @@ import { parseGameExport } from './gameExport';
 import { applyChange, changeCost, upgradeTargets, whatIf } from './whatIf';
 import type { OptimizerSnapshot } from './optimizer';
 import { buildRunLengthModel, skipWorth } from './runLength';
+import { buildEdpsCalibration, edpsParts, edpsSurvivalScore } from './edps';
+import { calcTTT } from './ttt';
 import { UWS, UW_STONE_COSTS } from '../constants/gameData';
 import { battle, makeExport } from '../test/makeExport';
 
@@ -80,7 +82,10 @@ describe('what a change costs', () => {
 
 describe('what happens', () => {
     const run = buildRunLengthModel(runs)!;
-    const models = { run, worth: skipWorth(run), coinsAt: (w: number) => w * 1e12 };
+    // Made-up projection: later waves pay more per hour.
+    const projectAt = (wave: number) => ({ wave, tier: 18, kills: 0, coins: wave * wave * 1e9, hours: wave / 1000,
+        coinsPerHour: wave * 1e12 });
+    const models = { run, worth: skipWorth(run), coinsAt: (w: number) => projectAt(w).coins, projectAt };
 
     it('turns more Chain Lightning damage into damage, push and waves', () => {
         const snap = account();
@@ -91,6 +96,44 @@ describe('what happens', () => {
         expect(r.coinsRun!.to).toBeGreaterThan(r.coinsRun!.from);
         expect(r.survivalPct).toBeNull();                 // Glass Cannon: one hit ends a run
         expect(r.costs.stones).toBeGreaterThan(0);
+    });
+
+    it('follows the longer run into coins per run and per hour', () => {
+        const snap = account();
+        const r = whatIf(snap, [{ kind: 'uw', key: 'CL|0', level: 12 }], upgradeTargets(snap), 'Glass Cannon', runs[4], models);
+        const { from, to } = r.waves!;
+        expect(r.coinsRun).toEqual({ from: from * from * 1e9, to: to * to * 1e9 * (1 + r.coinsHourPct / 100) });
+        expect(r.coinsHour!.to / r.coinsHour!.from).toBeCloseTo((to / from) * (1 + r.coinsHourPct / 100), 9);
+    });
+
+    it('shows how slowing enemies works through every source', () => {
+        // Slow Aura deals nothing itself: enemies stay in range longer, so
+        // Chain Lightning and tower shots land more on each one.
+        const snap = account(s => { s.cardData = { data: { 'Slow Aura': { s: 7, m: 0 } }, slots: 2, presets: { 0: [] } }; });
+        const after = account(s => { s.cardData = { data: { 'Slow Aura': { s: 7, m: 0 } }, slots: 2, presets: { 0: ['Slow Aura'] } }; });
+        const t = (x: OptimizerSnapshot) => calcTTT(0, x.wsData, x.labData, x.cardData, x.uwData, x.modBonuses).ttt;
+        const time = t(after) / t(snap);
+        expect(time).toBeCloseTo(1 / (1 - 0.31), 6);                       // Slow Aura 7★: 31% slower
+        const calib = buildEdpsCalibration(snap, runs[4])!;
+        expect(edpsSurvivalScore(after, calib)).toBeGreaterThan(1.2);
+        const [p0, p1] = [edpsParts(snap), edpsParts(after)];
+        expect(p1.cl / p0.cl).toBeCloseTo(1, 9);                           // CL's own rate doesn't change…
+        expect(p1.ttt / p0.ttt).toBeCloseTo(time, 9);                      // …it gets more time on each enemy
+    });
+
+    it('lists the links that moved', () => {
+        const snap = account(s => { s.uwData.data.CF = { own: true, sv: [10, 10, 10], upOwn: true, upLvl: 2 }; });
+        const r = whatIf(snap, [{ kind: 'uwp', key: 'CF', level: 6 }], upgradeTargets(snap), 'Glass Cannon', runs[4], models);
+        const labels = r.chain.map(l => l.label);
+        expect(labels).toContain('Chrono Loop (CF+) extra path');
+        expect(labels).toContain('Time each enemy is in range');
+        expect(labels).toContain('Chain Lightning');
+        expect(labels).not.toContain('Tower range');                        // didn't move
+        const cl = r.chain.find(l => l.label === 'Chain Lightning')!;
+        const time = r.chain.find(l => l.label === 'Time each enemy is in range')!;
+        expect(cl.after).toBeCloseTo(time.after / time.before, 9);
+        expect(cl.share).toBeCloseTo(0.3, 9);
+        expect(r.pushPct).toBeGreaterThan(0);
     });
 
     it('counts the health lab of the enemy that ends the runs as push', () => {

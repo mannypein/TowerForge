@@ -232,6 +232,21 @@ function stripGilded(cov: number, uptime: number, g: number): number {
     return g > 0 && g < 1 && uptime > cov ? clamp01((cov - uptime * g) / (1 - g)) : cov;
 }
 
+// Each coin effect's average factor on kill coins (1 + coverage × (bonus − 1))
+// and the always-on multiplier, for a snapshot calibrated on `calib`.
+export function coinFactors(snap: OptimizerSnapshot, calib: FarmCalibration): { base: number } & Record<FarmEffect, number> {
+    const a = calib.anchor;
+    const x = readFarmInputs(snap);
+    const out = { base: x.base } as { base: number } & Record<FarmEffect, number>;
+    for (const e of FARM_EFFECTS) {
+        const ratio = a.reach[e] > 0 ? x.reach[e] / a.reach[e] : 1;
+        const own = stripGilded(calib.coverage[e], a.uptime[e], a.gilded);
+        const cov = addGilded(clamp01(own * ratio), x.uptime[e], x.gilded);
+        out[e] = 1 + cov * (x.mult[e] - 1);
+    }
+    return out;
+}
+
 function situational(x: FarmInputs, cov: Record<FarmEffect, number>): number {
     return FARM_EFFECTS.reduce((p, e) => p * (1 + cov[e] * (x.mult[e] - 1)), 1);
 }

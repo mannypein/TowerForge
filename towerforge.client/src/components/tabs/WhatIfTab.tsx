@@ -12,12 +12,28 @@ import type { BuildType, OptCurrency } from '../../types/gameTypes';
 import { chosenReport, runModels, snapshotFromState } from '../../engine/accountModels';
 import type { AccountState } from '../../engine/accountModels';
 import { changeCost, upgradeTargets, whatIf } from '../../engine/whatIf';
-import type { Change, Costs } from '../../engine/whatIf';
+import type { ChainLink, Change, Costs } from '../../engine/whatIf';
 import { formatGameNumber } from '../../engine/gameNumbers';
 import { formatLabTime } from '../../engine/upgradeCosts';
 import { MEDAL_SYMBOL } from '../../constants/gameData';
 
 const pct = (v: number) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(2)}%`;
+
+const CHAIN_GROUPS: ChainLink['group'][] = ['Enemies in range', 'Tower', 'Damage to each enemy', 'Level skip', 'Coin bonuses'];
+
+// A link as "before → after (change)"; relative ones (×) as a % change.
+function linkText(l: ChainLink): string {
+    const change = l.before !== 0 ? pct((l.after / l.before - 1) * 100) : '';
+    switch (l.kind) {
+        case 'seconds': return `${l.before.toFixed(2)}s → ${l.after.toFixed(2)}s (${change})`;
+        case 'meters': return `${l.before.toFixed(1)}m → ${l.after.toFixed(1)}m (${change})`;
+        case 'percent': return `${l.before.toFixed(1)}% → ${l.after.toFixed(1)}%`;
+        case 'perSecond': return `${l.before.toFixed(2)}/s → ${l.after.toFixed(2)}/s (${change})`;
+        case 'count': return `${l.before.toFixed(2)} → ${l.after.toFixed(2)}`;
+        case 'points': return `${l.before.toFixed(2)} → ${l.after.toFixed(2)} points`;
+        case 'times': return l.before === 1 ? change : `×${l.before.toFixed(3)} → ×${l.after.toFixed(3)} (${change})`;
+    }
+}
 
 const COST_LABEL: [OptCurrency, string, (v: number) => string][] = [
     ['coins', 'Coins', v => `${formatGameNumber(v < 1000 ? Math.round(v) : v)} 🪙`],
@@ -180,8 +196,6 @@ export default function WhatIfTab() {
                                     {' '}({result.waves.to >= result.waves.from ? '+' : ''}{(result.waves.to - result.waves.from).toLocaleString()})
                                 </span>
                             </>)}
-                            <span className="wi-k">Coins per hour</span>
-                            <span className="wi-v">{pct(result.coinsHourPct)}</span>
                             {result.coinsRun && (<>
                                 <span className="wi-k">Coins per run</span>
                                 <span className="wi-v">
@@ -189,6 +203,19 @@ export default function WhatIfTab() {
                                     {' '}({pct((result.coinsRun.to / result.coinsRun.from - 1) * 100)})
                                 </span>
                             </>)}
+                            {result.coinsHour && (<>
+                                <span className="wi-k" title="Playing each run to its end: the extra waves pay more than the early ones">
+                                    Coins per hour
+                                </span>
+                                <span className="wi-v">
+                                    {formatGameNumber(result.coinsHour.from)} → {formatGameNumber(result.coinsHour.to)}
+                                    {' '}({pct((result.coinsHour.to / result.coinsHour.from - 1) * 100)})
+                                </span>
+                            </>)}
+                            <span className="wi-k" title="Coin bonuses only: what the same waves would pay">
+                                Coin income at the same wave
+                            </span>
+                            <span className="wi-v">{pct(result.coinsHourPct)}</span>
                             {result.survivalPct !== null && (<>
                                 <span className="wi-k">Survival (eHP)</span>
                                 <span className="wi-v">{pct(result.survivalPct)}</span>
@@ -202,9 +229,37 @@ export default function WhatIfTab() {
                             </p>
                         )}
                         <p className="wi-hint">
-                            Coins per hour is at the same run length; coins per run adds the longer run. Waves
-                            far past where your runs end now are rough.
+                            Coins per run and per hour include the longer run; income at the same wave is the coin
+                            bonuses alone. Waves far past where your runs end now are rough.
                         </p>
+                    </div>
+                </div>
+            )}
+
+            {result && result.chain.length > 0 && (
+                <div className="section" style={{ marginTop: '12px' }}>
+                    <div className="section-head"><h3>How it adds up</h3></div>
+                    <div className="section-body">
+                        <p className="wi-hint" style={{ marginTop: 0 }}>
+                            Everything that moved on the way. An upgrade that deals no damage itself — Chrono
+                            Field, Chrono Loop (CF+), range — works by keeping enemies in range longer, so every
+                            source gets more time on each enemy. The percentage after a source is its share of
+                            your run&apos;s damage.
+                        </p>
+                        {CHAIN_GROUPS.filter(g => result.chain.some(l => l.group === g)).map(g => (
+                            <div key={g} className="wi-chain">
+                                <div className="wi-chain-head">{g}</div>
+                                {result.chain.filter(l => l.group === g).map(l => (
+                                    <div key={l.label} className="wi-chain-row">
+                                        <span className="wi-k">
+                                            {l.label}
+                                            {l.share !== undefined && <span className="wi-share"> {(l.share * 100).toFixed(1)}%</span>}
+                                        </span>
+                                        <span className="wi-v">{linkText(l)}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        ))}
                     </div>
                 </div>
             )}
