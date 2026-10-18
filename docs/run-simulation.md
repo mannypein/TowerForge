@@ -44,6 +44,16 @@ fleets, bosses) are immune to orbs and BH anyway. Each step's gain compounds
 along the path and becomes waves (`pathRunGains` → Run Length) and coins per
 run (Coins per Run). Totals far past the current death wave are rough.
 
+**Enemy Health Level Skip** (same mode, `engine/levelSkip.ts`): chance =
+(workshop 0.05%/level + lab 0.1%/level + relic + module substats) ×
+enhancement (×1 + 0.01/level), capped at 100% before the tier's battle
+conditions subtract a fixed amount — so an upgrade adds to the real chance
+exactly what it adds here. A 10-step path of the most skip points per coin
+(costs from the wiki: workshop every 10th level, interpolated on the running
+total; all 20 lab levels with times; all 60 enhancement levels), each step
+turned into waves (`pathSkipGains`) and coins per run. Lab time isn't
+weighed — it's shown next to the cost.
+
 ### Run length, Glass Cannon (step 2)
 
 `engine/runLength.ts`, Optimizer → Run Length. Owner plays GC: one enemy hit

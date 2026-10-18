@@ -4,7 +4,7 @@
 // (Ray, Tank, Vampire, Overcharge, and blank for a run ended by hand).
 
 import { describe, expect, it } from 'vitest';
-import { buildRunLengthModel, deathWave, killedBy, pathRunGains, runEnds, wavesFromDamage, wavesFromSkip } from './runLength';
+import { buildRunLengthModel, deathWave, killedBy, pathRunGains, pathSkipGains, runEnds, wavesFromDamage, wavesFromSkip } from './runLength';
 import { baseEnemyHealth } from './enemyStats';
 import { parseGameExport } from './gameExport';
 import { battle, makeExport } from '../test/makeExport';
@@ -78,5 +78,14 @@ describe('waves along an upgrade path', () => {
         expect(total).toBeCloseTo(wavesFromDamage(model, 1.02 * 1.03 * 1.05 - 1), 9);
         steps.forEach(s => expect(s.coins).toBeGreaterThanOrEqual(0));
         expect(pathRunGains(model, [1])[0].coins).toBeNull();
+    });
+});
+
+describe('waves along a level skip path', () => {
+    it('adds the skip points up and turns them into waves', () => {
+        const model = buildRunLengthModel(runs(death(8100, 10), death(8200, 11), death(8402, 12)))!;
+        const steps = pathSkipGains(model, [0.13, 0.13, 0.4]);
+        expect(steps.reduce((s, x) => s + x.waves, 0)).toBeCloseTo(wavesFromSkip(model, 0.66), 9);
+        expect(steps[2].waves).toBeGreaterThan(steps[0].waves);   // a bigger step buys more
     });
 });

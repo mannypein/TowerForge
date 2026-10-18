@@ -167,3 +167,22 @@ export function pathRunGains(
         return step;
     });
 }
+
+// The same for a path of Enemy Health Level Skip upgrades: `pointsPerStep`
+// are skip-chance points, which add up along the path.
+export function pathSkipGains(
+    m: RunLengthModel, pointsPerStep: number[], coinsAt?: (wave: number) => number,
+): StepRunGain[] {
+    let points = 0;
+    let prevWaves = 0;
+    let prevCoins = coinsAt ? coinsAt(m.typicalWave) : 0;
+    return pointsPerStep.map(p => {
+        points += Math.max(0, p);
+        const waves = wavesFromSkip(m, points);
+        const coins = coinsAt ? coinsAt(m.typicalWave + Math.round(waves)) : 0;
+        const step = { waves: waves - prevWaves, coins: coinsAt && prevCoins > 0 ? coins / prevCoins - 1 : null };
+        prevWaves = waves;
+        prevCoins = coins;
+        return step;
+    });
+}
