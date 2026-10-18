@@ -28,4 +28,12 @@ describe('game numbers', () => {
         expect(formatGameNumber(3.05e18)).toBe('3.05Q');
         expect(formatGameNumber(12.5)).toBe('12.5');
     });
+
+    it('cuts off at 2 decimals like the game, instead of rounding', () => {
+        expect(formatGameNumber(3.8151e36)).toBe('3.81aa');     // Fast health, T18 W6000
+        expect(formatGameNumber(1.94096e37)).toBe('19.40aa');   // Boss
+        expect(formatGameNumber(4.848275e20)).toBe('484.82Q');  // attack
+        expect(formatGameNumber(1.999999e12)).toBe('1.99T');
+        expect(formatGameNumber(-2.5e15)).toBe('-2.50q');
+    });
 });

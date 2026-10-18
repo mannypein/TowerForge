@@ -31,11 +31,16 @@ export function parseGameNumber(raw: string): number {
 }
 
 // 3.05e18 → "3.05Q"; small numbers keep up to 2 decimals without trailing zeros.
+// Like the game, a suffixed number is cut off at 2 decimals, not rounded
+// (3.8151aa shows 3.81aa — checked on the Wave Info panel).
 export function formatGameNumber(n: number): string {
     if (!Number.isFinite(n)) return '0';
     const abs = Math.abs(n);
     for (const [suffix, value] of SUFFIXES) {
-        if (abs >= value) return `${(n / value).toFixed(2)}${suffix}`;
+        if (abs >= value) {
+            const cut = Math.floor((abs / value) * 100 * (1 + 1e-12)) / 100;   // tiny nudge for float noise
+            return `${n < 0 ? '-' : ''}${cut.toFixed(2)}${suffix}`;
+        }
     }
     return Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.?0+$/, '');
 }

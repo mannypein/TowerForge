@@ -4,7 +4,7 @@
 //  All state is loaded here on mount via the store.
 // ============================================================
 
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { useGameStore } from './store/useGameStore';
 import type { TabName } from './types/gameTypes';
 import { parseCloudSave } from './engine/saveParser';
@@ -29,11 +29,14 @@ import ModulesTab from './components/tabs/ModulesTab';
 import OptimizerTab from './components/tabs/OptimizerTab';
 import ShareTab from './components/tabs/ShareTab';
 import AccountTab from './components/tabs/AccountTab';
-import CreatorCodesTab from './components/tabs/CreatorCodesTab';
 import { useAccountStore } from './store/useAccountStore';
 import SharedView from './components/share/SharedView';
 
 import './styles/app.css';
+
+// Pages most visits never open load on first use, keeping the main bundle small.
+const CreatorCodesTab = lazy(() => import('./components/tabs/CreatorCodesTab'));
+const EnemyStatsTab = lazy(() => import('./components/tabs/EnemyStatsTab'));
 
 // ── Tab Definitions ───────────────────────────────────────────
 // The tabs, grouped into sections so the menu fits a phone: the top row
@@ -76,7 +79,12 @@ const TAB_GROUPS: TabGroup[] = [
             { id: 'relics', label: 'Relics' },
         ],
     },
-    { id: 'optimizer', label: 'Optimizer', tabs: [{ id: 'optimizer', label: 'Optimizer' }] },
+    {
+        id: 'optimizer', label: 'Optimizer', tabs: [
+            { id: 'optimizer', label: 'Optimizer' },
+            { id: 'enemies', label: 'Enemy Stats' },
+        ],
+    },
     { id: 'creators', label: 'Creator Codes', short: 'Creators', tabs: [{ id: 'creators', label: 'Creator Codes' }] },
 ];
 
@@ -263,6 +271,7 @@ export default function App() {
             case 'bots': return <BotsTab />;
             case 'modules': return <ModulesTab />;
             case 'optimizer': return <OptimizerTab />;
+            case 'enemies': return <EnemyStatsTab />;
             case 'creators': return <CreatorCodesTab />;
             case 'share': return <ShareTab />;
             case 'account': return <AccountTab />;
@@ -358,7 +367,7 @@ export default function App() {
 
             {/* ── Content ── */}
             <main className="tab-content">
-                {renderTab()}
+                <Suspense fallback={null}>{renderTab()}</Suspense>
             </main>
 
             {/* ── Login Modal ── */}

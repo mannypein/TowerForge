@@ -2479,3 +2479,127 @@
     .cc-link[data-site="reddit"] { --site: #ff4500; }
     .cc-link[data-site="x"] { --site: var(--text-bright); }
     .cc-link[data-site="github"] { --site: var(--text-bright); }
+
+/* ── Enemy Stats Tab ─────────────────────────────────────────── */
+.en-inputs {
+    padding: 10px 14px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 10px 14px;
+}
+
+.en-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--text-dim);
+}
+
+    .en-field select {
+        min-width: 70px;
+    }
+
+.en-note {
+    flex-basis: 100%;
+    margin-top: 6px;
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--text-dim);
+}
+
+.en-perks {
+    padding: 8px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.en-perk {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--text);
+    cursor: pointer;
+}
+
+    .en-perk input {
+        margin-top: 2px;
+        flex-shrink: 0;
+    }
+
+.en-table-wrap {
+    padding: 6px 10px 10px;
+}
+
+.en-table {
+    width: 100%;
+    max-width: 760px;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+    .en-table th {
+        padding: 6px 4px;
+        font-weight: 700;
+        color: var(--text-bright);
+        text-align: right;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .en-table td {
+        padding: 6px 4px;
+        font-family: var(--font-mono);
+        color: var(--accent);
+        text-align: right;
+        white-space: nowrap;
+        border-bottom: 1px solid var(--bg3);
+    }
+
+        .en-table th:first-child,
+        .en-table td:first-child {
+            text-align: left;
+            font-family: var(--font-ui);
+            font-weight: 600;
+            color: var(--text);
+        }
+
+.en-dim {
+    color: var(--text-dim);
+}
+
+.en-sub {
+    display: block;
+    font-size: 10px;
+    color: var(--text-dim);
+}
+
+/* Enemy markers in the panel's shapes and colours. */
+.en-mark {
+    --en: var(--text);
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    margin-right: 6px;
+    vertical-align: -1px;
+    background: var(--en);
+}
+
+    .en-mark.sq { clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 0 0, 18% 18%, 18% 82%, 82% 82%, 82% 18%, 18% 18%); }
+    .en-mark.tri { clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+    .en-mark.pent { clip-path: polygon(50% 0, 100% 38%, 82% 100%, 18% 100%, 0 38%); }
+    .en-mark.basic, .en-mark.vampire, .en-mark.saboteur { --en: #ff4d5e; }
+    .en-mark.fast, .en-mark.ray { --en: #ffd23f; }
+    .en-mark.tank, .en-mark.commander { --en: #ff9a3c; }
+    .en-mark.ranged { --en: #3ee0e0; }
+    .en-mark.boss { --en: #e040fb; }
+    .en-mark.protector { --en: #2ecc71; }
+    .en-mark.scatter, .en-mark.overcharge { --en: #8f7cff; }
+
+@media (max-width: 420px) {
+    .en-table { font-size: 11px; }
+    .en-table th, .en-table td { padding: 5px 2px; }
+}

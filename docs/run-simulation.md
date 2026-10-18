@@ -4,7 +4,10 @@ Everything gathered (2026-10-17) for a simulator that plays a run wave by
 wave, calibrated to the player's own battle history, to predict **how far a
 run gets** and **coins / cells per run**, before and after an upgrade.
 
-Status: **research only — nothing built yet.** Facts below say where they
+Status: **first piece built — the Enemy Stats page** (Optimizer → Enemy
+Stats, `engine/enemyStats.ts`), which recreates the in-game Wave Info panel
+and matches the checked screenshot digit for digit. The simulator itself
+isn't built yet. Facts below say where they
 come from. "SDK" = TheTowerSDK (below); "wiki" = the Fandom wiki; "GV" = the
 Game Vault wiki. Where sources disagree it says so (see [Disagreements](#disagreements-to-settle)).
 Game version at the time: **v29.1**.
@@ -87,8 +90,19 @@ What it proves:
   elites 190.5, Ray 476, fleets 952).
 - **Spawn mix at T18 W6000:** basic 18 / fast 24 / tank 22 / ranged 21 /
   protector 15%.
-- **Boss row** (19.40aa) isn't explained yet — needs the boss perk's exact
-  value and the boss-health / overheal rules (SDK `stat-display.ts`).
+- **Boss row:** 19.40aa = base × 20 × 0.45 (enemy HP perk) × (1 − 0.7 ×
+  1.05) × 0.91 (Boss Health lab 30). The Boss Health trade-off gets **half**
+  the Improve Trade-Off Perks bonus (wiki), so −73.5%, not −77%.
+- **The game cuts big numbers off at 2 decimals** (3.8151aa shows 3.81aa,
+  19.4096aa shows 19.40aa); plain decimals like speed are rounded (2.688
+  shows 2.69). The site's `formatGameNumber` now cuts off the same way.
+- **Fast speed** is ×3.9 × (1 − 0.4% × Fast Enemy Speed lab) from wave 750
+  (wiki) — 23.06 vs the game's 23.05, so the 3.9 is slightly rounded.
+- **Spawn mix (Basic–Protector)** at T18 W6000 doesn't match the SDK's
+  formula (it gives 41/16/15/14/14). The SDK's fast:tank:ranged ratios
+  (3.294 : 3.019 : 2.881) are right; the game uses the tier weight of tier
+  20 (7.285) — a guess is tier + 1 per 3000 waves. Not shown on the page
+  until more screenshots confirm the rule.
 - **Wave cycle measured: 28.0 s** of real time per wave at the game's ×1.0
   (8 cycles, ±0.5 s; spawn bar fills ~24 s then the 4 s cooldown) vs the
   nominal 26 + 4 = 30 s — the game runs ~7% faster than its timers say.
