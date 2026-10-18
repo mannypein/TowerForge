@@ -136,6 +136,31 @@ describe('what happens', () => {
         expect(r.pushPct).toBeGreaterThan(0);
     });
 
+    it('gives each change its own waves, and splits the waves between the links', () => {
+        const snap = account();
+        const changes = [{ kind: 'uw' as const, key: 'CL|0', level: 12 }, { kind: 'lab' as const, key: 'Enemy HP Lvl Skip Lab', level: 3 }];
+        const r = whatIf(snap, changes, upgradeTargets(snap), 'Glass Cannon', runs[4], models);
+        expect(r.perChange.map(c => c.key)).toEqual(['CL|0', 'Enemy HP Lvl Skip Lab']);
+        for (const c of r.perChange) expect(c.waves).toBeGreaterThan(0);
+        // The links' waves add up to the whole gain (before rounding to whole waves).
+        const linked = r.chain.reduce((sum, l) => sum + (l.waves ?? 0), 0);
+        const whole = r.waves!.to - r.waves!.from;
+        expect(Math.abs(linked - whole)).toBeLessThan(0.51);
+        expect(r.chain.find(l => l.label === 'Enemy Health Level Skip')!.waves).toBeGreaterThan(0);
+        expect(r.spread!.runs).toBe(5);
+        expect(r.spread!.max).toBeGreaterThanOrEqual(r.spread!.min);
+    });
+
+    it('gives Chain Lightning more hits from Multishot', () => {
+        const snap = account(s => { s.wsData[0].attack[6] = 50; });
+        const r = whatIf(snap, [{ kind: 'workshop', key: 'attack|6', level: 99 }], upgradeTargets(snap),
+            'Glass Cannon', runs[4], models);
+        const hits = r.chain.find(l => l.label === 'Projectiles per attack (Multishot)')!;
+        expect(hits.before).toBeCloseTo(1 + 0.25 * 1, 9);                     // 25% for 2 targets
+        expect(hits.after).toBeCloseTo(1 + 0.495 * 1, 9);
+        expect(r.pushPct).toBeGreaterThan(0);
+    });
+
     it('counts the health lab of the enemy that ends the runs as push', () => {
         const snap = account();
         const r = whatIf(snap, [{ kind: 'lab', key: 'Ray Health', level: 10 }], upgradeTargets(snap),

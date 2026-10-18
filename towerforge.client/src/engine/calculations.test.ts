@@ -3,7 +3,7 @@
 // them shows up here.
 
 import { describe, expect, it } from 'vitest';
-import { calcCannonModuleMult, calcModuleDamageMult, primaryMainMult } from './towerDamage';
+import { calcCannonModuleMult, calcModuleDamageMult, calcProjectileFactors, primaryMainMult } from './towerDamage';
 import { activeLoadout, enhForPreset, masteredCardMult, milestoneReached, uniqueTier } from './statHelpers';
 import { DEFAULT_RUN_RATES, runRatesFrom } from './runRates';
 import { calcCFSpeedReduction, calcCFUptime, calcEnemySpeedFactor, calcSlowAura } from './ttt';
@@ -109,6 +109,32 @@ describe('Chrono Field', () => {
         expect(calcSlowAura(cards(['Slow Aura'], false), 0)).toBeCloseTo(0.31, 10);
         expect(calcSlowAura(cards(['Slow Aura'], true), 0)).toBeCloseTo(0.31, 10);
         expect(calcSlowAura(cards([], false), 0)).toBe(0);
+    });
+});
+
+describe('projectile hits per second', () => {
+    const ws = (levels: Record<number, number>) => [{
+        attack: Array.from({ length: 17 }, (_, i) => levels[i] ?? 0), defense: [], utility: [],
+    }];
+    const mods = { subs: {} } as unknown as ModBonuses;
+
+    it('counts nothing extra without Multishot, Bounce Shot or Rapid Fire', () => {
+        expect(calcProjectileFactors(0, ws({}), mods, 3)).toEqual({ multishot: 1, bounce: 1, rapid: 1 });
+    });
+
+    it('averages each chance at the workshop maxima (wiki values)', () => {
+        // Multishot 49.5% for 9 targets; Bounce 68% up to 8 bounces; Rapid Fire 34% for 5.55 s.
+        const f = calcProjectileFactors(0, ws({ 6: 99, 7: 7, 8: 85, 9: 99, 10: 85, 11: 7 }), mods, 3);
+        expect(f.multishot).toBeCloseTo(1 + 0.495 * 8, 9);
+        expect(f.bounce).toBeCloseTo((1 - 0.68 ** 9) / (1 - 0.68), 9);
+        const rad = 0.34 * 3 * 5.55;
+        expect(f.rapid).toBeCloseTo(1 + (3 * rad) / (1 + rad), 9);
+        expect(f.rapid).toBeLessThan(4);                                    // ×4 at most, while it's up
+    });
+
+    it('adds module substats', () => {
+        const withSubs = { subs: { 'Multishot Chance': 10, 'Multishot Targets': 2 } } as unknown as ModBonuses;
+        expect(calcProjectileFactors(0, ws({ 7: 1 }), withSubs, 1).multishot).toBeCloseTo(1 + 0.1 * 4, 9);
     });
 });
 

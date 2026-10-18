@@ -18,7 +18,9 @@
 //  • Black Hole deals a share of enemy health, so it scales with its
 //    reach (holes × uptime × size), not tower damage.
 //  • Tower shots, rend armor and land mines scale with tower damage ×
-//    crits × attack speed × Spotlight.
+//    crits × hits per second (attack speed × Multishot × Bounce Shot ×
+//    Rapid Fire, towerDamage.calcProjectileFactors) × Spotlight; Chain
+//    Lightning procs on those same hits.
 //  • Orbs, thorns and everything else stay fixed.
 //  • Smite (CL+) and Consume (BH+) add a share of each enemy's health.
 //    The run's total damage is about the total enemy health, so +x% of
@@ -65,7 +67,7 @@ export interface EdpsParts {
     clQty: number;     // Chain Lightning chains per proc
     consume: number;   // share of enemy health Consume deals per hole
     ttt: number;       // seconds an enemy spends in range (time to tower)
-    shotRate: number;  // tower attacks per second (Chain Lightning's chances to proc)
+    shotRate: number;  // enemy hits per second (Chain Lightning's chances to proc)
 }
 
 export interface EdpsCalibration {
@@ -120,12 +122,12 @@ export function edpsParts(snap: OptimizerSnapshot, ttt?: number): EdpsParts {
         ilm: uw('ILM'),
         ps: uw('PS'),
         bh: calcBlackHoleReach(uwData, modBonuses, presetIdx, wsData, labData, cardData),
-        tower: ctx.towerDamage * ctx.critMult * ctx.attackSpeed * sl * taken,
+        tower: ctx.towerDamage * ctx.critMult * ctx.hitRate * sl * taken,
         smite: calcSmitePerProc(uwData),
         ...calcCLChanceQtyParts(uwData, modBonuses),
         consume: calcConsumeFraction(uwData),
         ttt: refTTT,
-        shotRate: ctx.attackSpeed,
+        shotRate: ctx.hitRate,
     };
 }
 

@@ -185,6 +185,30 @@ function luckyWaves(m: RunLengthModel, logGain: number, points: number): number 
     return sum / LUCK_POINTS;
 }
 
+// The waves a gain buys from each recent death on its own (luck-averaged
+// like the path rows; their mean is what pathRunGains shows), and the waves
+// those runs ended on — how much an upgrade varies from run to run, and
+// how much runs vary anyway. Inputs as pathRunGains: the gain in % with any
+// skip already counted in it at `worth`, and the skip points.
+export function wavesSpread(
+    m: RunLengthModel, gainPct: number, skipPoints: number, worth: number,
+): { moves: number[]; ended: number[] } {
+    const points = Math.max(0, skipPoints);
+    const logGain = Math.max(0, Math.log(1 + Math.max(0, gainPct) / 100) - worth * points);
+    const moves = m.used.map(d => {
+        const rate = 1 - d.healthLevel! / d.run.wave;
+        let moved = 0;
+        let start = 0;
+        for (let k = 0; k < LUCK_POINTS; k++) {
+            const spread = -LUCK + (2 * LUCK * k) / (LUCK_POINTS - 1);
+            moved += deathWave(d.enemyHealth! * Math.exp(logGain + spread), m.tier, Math.min(0.99, rate + points / 100));
+            start += deathWave(d.enemyHealth! * Math.exp(spread), m.tier, rate);
+        }
+        return (moved - start) / LUCK_POINTS;
+    });
+    return { moves, ended: m.used.map(d => d.run.wave) };
+}
+
 // Waves (and coins per run, when `coinsAt` gives coins for a run to a wave)
 // each step of an upgrade path adds. `gainsPct` are the steps' flat-damage
 // gains in %, each on top of the steps before it, so they compound.

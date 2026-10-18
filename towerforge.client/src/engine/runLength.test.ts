@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
-    buildRunLengthModel, deathWave, killedBy, killerMix, pathRunGains, pathSkipGains, runEnds, skipWorth,
+    buildRunLengthModel, deathWave, killedBy, killerMix, pathRunGains, pathSkipGains, runEnds, skipWorth, wavesSpread,
     wavesFromDamage, wavesFromSkip,
 } from './runLength';
 import { baseEnemyHealth } from './enemyStats';
@@ -122,6 +122,17 @@ describe('waves along an upgrade path', () => {
         const [skip, dmg] = pathRunGains(model, [asSkip, 2], undefined, [0.1, 0], worth);
         expect(Math.abs(skip.waves - wavesFromSkip(model, 0.1))).toBeLessThan(1);
         expect(dmg.waves).toBeGreaterThan(0);
+    });
+});
+
+describe('from run to run', () => {
+    it('moves each recent death on its own; their mean is the waves shown', () => {
+        const model = buildRunLengthModel(runs(death(8100, 10), death(8200, 11), death(8402, 12), death(8500, 13), death(8501, 14)))!;
+        const { moves, ended } = wavesSpread(model, 5, 0, 0);
+        expect(ended.slice().sort()).toEqual([8100, 8200, 8402, 8500, 8501]);
+        const mean = moves.reduce((a, b) => a + b, 0) / moves.length;
+        expect(mean).toBeCloseTo(pathRunGains(model, [5])[0].waves, 9);
+        expect(Math.max(...moves)).toBeGreaterThan(Math.min(...moves));   // runs differ
     });
 });
 

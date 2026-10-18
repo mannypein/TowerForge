@@ -8,7 +8,9 @@ import { calcBlackHoleReach, calcSpotlightMissilesDPS, calcUWDPS } from './uwdps
 import type { DamageContext } from './uwdps';
 import type { CardData, LabData, PerkData, UWAbbr, UWData } from '../types/gameTypes';
 
-const ctx: DamageContext = { towerDamage: 1, critMult: 1, attackSpeed: 1 };
+const ctx: DamageContext = {
+    towerDamage: 1, critMult: 1, attackSpeed: 1, projectiles: { multishot: 1, bounce: 1, rapid: 1 }, hitRate: 1,
+};
 const noCards: CardData = { data: {}, slots: 1, presets: { 0: [] } };
 
 function uw(abbr: UWAbbr, sv: [number, number, number], plus = -1): UWData {

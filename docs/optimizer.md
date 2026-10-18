@@ -82,6 +82,48 @@ the same wave, survival (not GC) — plus the cost in every currency.
   the killers' health labs; each coin bonus's average factor
   (`farming.coinFactors`: 1 + coverage × (bonus − 1)).
 
+## Chance mechanics and variance (2026-10-18)
+
+Everything chance-based is counted at its average:
+- Crit and super crit (crit multiplier), Chain Lightning chance and chains,
+  Smite procs (≤ 100 per enemy), Consume.
+- **Multishot, Bounce Shot, Rapid Fire** (`towerDamage.calcProjectileFactors`,
+  added 2026-10-18): Chain Lightning procs "on enemy hit" (wiki), so
+  every extra projectile hit is another chance for it; tower shots and
+  Smite gain the same way. Expected values from the wiki's workshop values
+  plus module substats:
+  - Multishot: 1 + m(T − 1) projectiles per attack.
+  - Bounce Shot: 1 + b + … + b^N hits per projectile.
+  - Rapid Fire: ×(1 + 3U), uptime U = rAD/(1 + rAD).
+
+  The code's assumptions:
+  - Every extra projectile and bounce finds an enemy (a full field late in a push).
+  - Each bounce rolls the chance again.
+  - Rapid Fire doesn't re-trigger while it's active.
+- Level skip is deterministic over a run; wave skip, Golden Combo and
+  Gilded Sniper are averaged in the coin model.
+
+Not valued yet — **Death Defy, Energy Shield, Second Wind, the wall, Nuke /
+Demon Mode automation**. Their current levels are inside the death point
+(Run Length is calibrated on real deaths), but raising them isn't scored.
+How it would work: Death Defy ignores a killing hit with its chance, and
+then Energy Shield, Second Wind and the rest take one each (wiki: Death Defy,
+Activation Priority). So a run survives K/(1 − p) killing hits on average,
+where K is the charges behind Death Defy + 1. The missing piece is how fast
+killing hits pile up per wave near the end. Battle reports log Death Defy
+procs, Energy Shield hits absorbed and Second Wind uses per run
+(TheTowerSDK's battle field list); one end-of-run recording would give the
+rate.
+
+Variance: the waves are the average over the last 5 deaths, each averaged
+over ±10% luck. What If shows each change's own waves and the spread
+across those deaths (`runLength.wavesSpread`). It also says how far apart
+the runs themselves ended, so a gain smaller than that is clearly something
+seen over several runs. The breakdown splits the waves between the links
+by the log of each part: flat damage (by what each source added), skip and
+the killers' health labs. A change's own waves and its part of a combined
+gain can differ, because changes work on each other.
+
 ## Damage is per enemy pass (2026-10-18)
 
 Owner's point: Chrono Field+ deals no damage but makes everything else deal

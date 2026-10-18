@@ -39,7 +39,10 @@ import {
     calcTowerRange,
 } from './ttt';
 
-import { calcTowerDamage, calcCritMult, calcAttackSpeed, calcDamageMeter, calcCoreUWDamageMult } from './towerDamage';
+import {
+    calcTowerDamage, calcCritMult, calcAttackSpeed, calcDamageMeter, calcCoreUWDamageMult, calcProjectileFactors,
+} from './towerDamage';
+import type { ProjectileFactors } from './towerDamage';
 
 import type {
     UWData,
@@ -98,7 +101,9 @@ export function uwStatValue(abbr: UWAbbr, statIdx: number, level: number): numbe
 export interface DamageContext {
     towerDamage: number;
     critMult: number;
-    attackSpeed: number;   // fire rate (attacks/sec) — only CL uses this
+    attackSpeed: number;   // fire rate (attacks/sec)
+    projectiles: ProjectileFactors;
+    hitRate: number;       // enemy hits per second: attacks × Multishot × Bounce Shot × Rapid Fire (CL procs on these)
 }
 
 // Build the shared TowerDamage × CritMult context once per calculation
@@ -113,10 +118,14 @@ export function buildDamageContext(
     moduleState: ModuleState,
     botData?: AppState['botData'],
 ): DamageContext {
+    const attackSpeed = calcAttackSpeed(presetIdx, wsData, labData, cardData, enhData, relicData, modBonuses);
+    const projectiles = calcProjectileFactors(presetIdx, wsData, modBonuses, attackSpeed);
     return {
         towerDamage: calcTowerDamage(presetIdx, wsData, labData, cardData, relicData, enhData, modBonuses, moduleState, botData),
         critMult: calcCritMult(presetIdx, wsData, labData, cardData, enhData, relicData, modBonuses),
-        attackSpeed: calcAttackSpeed(presetIdx, wsData, labData, cardData, enhData, relicData, modBonuses),
+        attackSpeed,
+        projectiles,
+        hitRate: attackSpeed * projectiles.multishot * projectiles.bounce * projectiles.rapid,
     };
 }
 
@@ -214,7 +223,7 @@ export function calcUWDPS(
 
     const b = modBonuses.uwBonus[uwAbbr] ?? {};
     const pk = modBonuses.perks;
-    const { towerDamage, critMult, attackSpeed } = dmgCtx;
+    const { towerDamage, critMult } = dmgCtx;
 
     switch (uwAbbr) {
 
@@ -235,8 +244,9 @@ export function calcUWDPS(
             // (Critical Chance mastery raises tower crit chance — already in critMult.)
             const clDmgMult = pk.clDmgMult ?? 1;
 
+            // Procs on every enemy hit: attacks × Multishot × Bounce × Rapid Fire.
             return uwMult * towerDamage * critMult * clDmgMult
-                * qty * chance * attackSpeed;
+                * qty * chance * dmgCtx.hitRate;
         }
 
         case 'SM': {

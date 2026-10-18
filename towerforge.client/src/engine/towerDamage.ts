@@ -418,6 +418,52 @@ export function calcAttackSpeed(
     return displayedAS * perkMult * relicMult * restorative;
 }
 
+// ── Projectile hits per second ────────────────────────────────
+// Chain Lightning procs "on enemy hit" (wiki), so it — and tower shots —
+// gain from every extra projectile hit, not just from attack speed. Each
+// is a chance, counted at its average; every extra projectile and bounce is
+// assumed to find an enemy (true near the end of a push, when the field is
+// full):
+//  • Multishot: chance m to fire T projectiles instead of 1 →
+//    1 + m × (T − 1) per attack (workshop 0.5%/level, 2 + 1/level targets).
+//  • Bounce Shot: after a hit, chance b to bounce on, up to N bounces →
+//    1 + b + … + b^N hits per projectile (workshop 0.8%/level, 1 + 1/level).
+//    That every bounce rolls the chance again is the code's assumption.
+//  • Rapid Fire: chance r per attack to fire ×4 for D seconds (workshop
+//    0.4%/level, 0.6 s + 0.05 s/level). Taken as not re-triggering while
+//    active, so uptime U = rAD ÷ (1 + rAD) and the rate is ×(1 + 3U) — the
+//    code's assumption; the ×4 is fixed (wiki).
+// Module substats add to each.
+export interface ProjectileFactors {
+    multishot: number;   // projectiles per attack
+    bounce: number;      // enemy hits per projectile
+    rapid: number;       // average fire-rate factor from Rapid Fire
+}
+
+export function calcProjectileFactors(
+    presetIdx: number,
+    wsData: WSPreset[],
+    modBonuses: ModBonuses,
+    attackSpeed: number,
+): ProjectileFactors {
+    const ws = wsData[presetIdx]?.attack ?? [];
+    const sub = (k: string) => modBonuses.subs?.[k] ?? 0;
+    const msChance = Math.min(1, (0.5 * (ws[6] ?? 0) + sub('Multishot Chance')) / 100);
+    const msTargets = 2 + (ws[7] ?? 0) + sub('Multishot Targets');
+    const rfChance = Math.min(1, (0.4 * (ws[8] ?? 0) + sub('Rapid Fire Chance')) / 100);
+    const rfSeconds = 0.6 + 0.05 * (ws[9] ?? 0) + sub('Rapid Fire Duration');
+    const bChance = Math.min(1, (0.8 * (ws[10] ?? 0) + sub('Bounce Shot Chance')) / 100);
+    const bounces = 1 + (ws[11] ?? 0) + sub('Bounce Shot Targets');
+    let bounce = 0;
+    for (let k = 0, p = 1; k <= bounces; k++, p *= bChance) bounce += p;
+    const rad = rfChance * attackSpeed * rfSeconds;
+    return {
+        multishot: 1 + msChance * (msTargets - 1),
+        bounce,
+        rapid: 1 + (3 * rad) / (1 + rad),
+    };
+}
+
 // ── Damage / Meter ────────────────────────────────────────────
 // DPM% per meter of enemy distance. Only used by SL+ (Light Range),
 // which boosts the Spotlight bonus by lrVal × (DPM × range).

@@ -19,6 +19,11 @@ import { MEDAL_SYMBOL } from '../../constants/gameData';
 
 const pct = (v: number) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(2)}%`;
 
+const wavesText = (w: number) => {
+    const n = Math.abs(w) < 10 ? Math.abs(w).toFixed(1) : Math.round(Math.abs(w)).toLocaleString();
+    return `${w < 0 ? '−' : '+'}${n} waves`;
+};
+
 const CHAIN_GROUPS: ChainLink['group'][] = ['Enemies in range', 'Tower', 'Damage to each enemy', 'Level skip', 'Coin bonuses'];
 
 // A link as "before → after (change)"; relative ones (×) as a % change.
@@ -92,6 +97,8 @@ export default function WhatIfTab() {
         [base, changes, targets, build, account, models],
     );
 
+    const own = (c: Change) => result?.perChange.find(x => x.kind === c.kind && x.key === c.key)?.waves;
+
     function add() {
         if (!target || !validLevel) return;
         setChanges(cs => [...cs.filter(c => !(c.kind === target.kind && c.key === target.key)),
@@ -157,7 +164,10 @@ export default function WhatIfTab() {
                                 return (
                                     <div key={`${c.kind}:${c.key}`} className="wi-item">
                                         <span className="wi-item-name">{t.label}</span>
-                                        <span className="wi-item-lv">Lv {t.current} → {c.level}</span>
+                                        <span className="wi-item-lv">
+                                            Lv {t.current} → {c.level}
+                                            {own(c) !== undefined && <span className="wi-item-waves">{wavesText(own(c)!)}</span>}
+                                        </span>
                                         <button
                                             className="btn btn-dim wi-remove"
                                             onClick={() => setChanges(cs => cs.filter(x => x !== c))}
@@ -166,6 +176,12 @@ export default function WhatIfTab() {
                                     </div>
                                 );
                             })}
+                            {result && result.perChange.length > 1 && (
+                                <p className="wi-hint" style={{ marginTop: 0 }}>
+                                    Waves next to each change are what it adds on its own. Together they can add more
+                                    or less, as each works on the others.
+                                </p>
+                            )}
                             <button className="btn btn-dim" onClick={() => setChanges([])}>Clear all</button>
                         </div>
                     )}
@@ -190,6 +206,18 @@ export default function WhatIfTab() {
                                 <span className="wi-v">{result.skipPoints > 0 ? '+' : ''}{result.skipPoints.toFixed(2)} points</span>
                             </>)}
                             {result.waves && (<>
+                                <span className="wi-k wi-strong">Waves gained</span>
+                                <span className="wi-v wi-strong">
+                                    {wavesText(result.waves.to - result.waves.from)}
+                                </span>
+                                {result.spread && (<>
+                                    <span className="wi-k" title="Each of your recent deaths moved on its own: how much the gain changes from run to run">
+                                        From run to run
+                                    </span>
+                                    <span className="wi-v">
+                                        {wavesText(result.spread.min).replace(' waves', '')} to {wavesText(result.spread.max)}
+                                    </span>
+                                </>)}
                                 <span className="wi-k">Waves reached</span>
                                 <span className="wi-v">
                                     {result.waves.from.toLocaleString()} → {result.waves.to.toLocaleString()}
@@ -223,6 +251,14 @@ export default function WhatIfTab() {
                             <span className="wi-k">Cost</span>
                             <span className="wi-v"><CostLine costs={result.costs} /></span>
                         </div>
+                        {result.spread && (
+                            <p className="wi-hint">
+                                Your last {result.spread.runs} deaths ended between W{result.spread.endedMin.toLocaleString()} and
+                                W{result.spread.endedMax.toLocaleString()} — runs already vary by{' '}
+                                {(result.spread.endedMax - result.spread.endedMin).toLocaleString()} waves, so a gain smaller than
+                                that shows over several runs, not one.
+                            </p>
+                        )}
                         {gc && !models.run && (
                             <p className="wi-hint">
                                 Waves and coins per run need runs that ended in a death — use Import Game Data.
@@ -243,8 +279,9 @@ export default function WhatIfTab() {
                         <p className="wi-hint" style={{ marginTop: 0 }}>
                             Everything that moved on the way. An upgrade that deals no damage itself — Chrono
                             Field, Chrono Loop (CF+), range — works by keeping enemies in range longer, so every
-                            source gets more time on each enemy. The percentage after a source is its share of
-                            your run&apos;s damage.
+                            source gets more time on each enemy; Multishot, Bounce Shot and Rapid Fire give Chain
+                            Lightning more hits to proc on. The percentage after a source is its share of your
+                            run&apos;s damage; the waves after it are its part of the waves gained.
                         </p>
                         {CHAIN_GROUPS.filter(g => result.chain.some(l => l.group === g)).map(g => (
                             <div key={g} className="wi-chain">
@@ -255,7 +292,12 @@ export default function WhatIfTab() {
                                             {l.label}
                                             {l.share !== undefined && <span className="wi-share"> {(l.share * 100).toFixed(1)}%</span>}
                                         </span>
-                                        <span className="wi-v">{linkText(l)}</span>
+                                        <span className="wi-v">
+                                            {linkText(l)}
+                                            {l.waves !== undefined && Math.abs(l.waves) >= 0.05 && (
+                                                <span className="wi-link-waves">≈ {wavesText(l.waves)}</span>
+                                            )}
+                                        </span>
                                     </div>
                                 ))}
                             </div>

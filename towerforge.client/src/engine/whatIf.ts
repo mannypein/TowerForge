@@ -28,10 +28,10 @@ import type { OptGoal } from '../constants/optimizerConfig';
 import type { BattleReport } from './battleReport';
 import { readActiveModuleBonuses } from './modBonuses';
 import { healthSkipChance, healthSkipSources } from './levelSkip';
-import { killerMix, pathRunGains } from './runLength';
+import { killerMix, pathRunGains, wavesSpread } from './runLength';
 import { calcTTTDisplayStats } from './ttt';
 import { buildDamageContext } from './uwdps';
-import { buildEdpsCalibration, edpsParts } from './edps';
+import { buildEdpsCalibration, edpsParts, edpsSurvivalScore } from './edps';
 import { buildFarmCalibration, coinFactors, FARM_EFFECTS, FARM_EFFECT_LABELS } from './farming';
 import { healthLabCut } from './enemyStats';
 import type { EnemyType } from './enemyStats';
@@ -226,6 +226,16 @@ export interface ChainLink {
     after: number;
     kind: 'seconds' | 'meters' | 'percent' | 'times' | 'perSecond' | 'count' | 'points';
     share?: number;
+    waves?: number;     // this link's part of the waves gained (damage sources, skip, enemy health labs)
+}
+
+// What the push gain is made of, to split the waves between the links:
+// waves ∝ log of each part (flat damage, level skip, killers' health labs).
+interface WaveSplit {
+    waves: number;
+    damage: number;     // flat damage ratio
+    skipLog: number;    // skip points × skipWorth
+    killerLog: number;  // log of the killers' health-lab factor
 }
 
 export interface WhatIfResult {
@@ -238,6 +248,10 @@ export interface WhatIfResult {
     coinsHour: { from: number; to: number } | null;   // playing each run to its end
     survivalPct: number | null;        // eHP (not Glass Cannon)
     chain: ChainLink[];
+    perChange: { kind: ChangeKind; key: string; waves: number }[];   // each change on its own (GC)
+    // Run to run: the waves gained from each recent death on its own, and
+    // the waves those runs ended on.
+    spread: { min: number; max: number; endedMin: number; endedMax: number; runs: number } | null;
     costs: Costs;
 }
 
@@ -259,8 +273,11 @@ function goalPct(
 // that didn't move are left out.
 function buildChain(
     base: OptimizerSnapshot, after: OptimizerSnapshot, build: BuildType,
-    report: BattleReport | null, models: GoalModels,
+    report: BattleReport | null, models: GoalModels, split: WaveSplit | null,
 ): ChainLink[] {
+    // A part's share of the waves, by its log against the whole gain's.
+    const totalLog = split ? Math.log(split.damage) + split.skipLog + split.killerLog : 0;
+    const wavesOf = (log: number) => (split && Math.abs(totalLog) > 1e-12 ? (split.waves * log) / totalLog : undefined);
     const links: ChainLink[] = [];
     const add = (l: ChainLink) => {
         const moved = l.kind === 'points' || l.kind === 'count'
@@ -282,6 +299,10 @@ function buildChain(
     add({ group: 'Tower', label: 'Tower damage', before: 1, after: c1.towerDamage / c0.towerDamage, kind: 'times' });
     add({ group: 'Tower', label: 'Attacks per second', before: c0.attackSpeed, after: c1.attackSpeed, kind: 'perSecond' });
     add({ group: 'Tower', label: 'Crit multiplier (average)', before: c0.critMult, after: c1.critMult, kind: 'times' });
+    add({ group: 'Tower', label: 'Projectiles per attack (Multishot)', before: c0.projectiles.multishot, after: c1.projectiles.multishot, kind: 'times' });
+    add({ group: 'Tower', label: 'Hits per projectile (Bounce Shot)', before: c0.projectiles.bounce, after: c1.projectiles.bounce, kind: 'times' });
+    add({ group: 'Tower', label: 'Fire rate from Rapid Fire', before: c0.projectiles.rapid, after: c1.projectiles.rapid, kind: 'times' });
+    add({ group: 'Tower', label: 'Enemy hits per second', before: c0.hitRate, after: c1.hitRate, kind: 'perSecond' });
 
     // Damage to each enemy on its way in, by source, with its share of your damage.
     const calib = buildEdpsCalibration(base, report);
@@ -298,8 +319,18 @@ function buildChain(
             ['Tower shots', rel(p1.tower, p0.tower, time), calib.shares.tower],
             ['Black Hole reach', rel(p1.bh, p0.bh), calib.shares.bh],
         ];
+        // Flat sources split the flat-damage part of the waves by what each added.
+        const flat = calib.shares.cl + calib.shares.sm + calib.shares.dw + calib.shares.ilm + calib.shares.ps
+            + calib.shares.tower;
+        const flatWaves = wavesOf(split ? Math.log(split.damage) : 0);
+        const added = split ? split.damage - 1 : 0;
         for (const [label, ratio, share] of src) {
-            add({ group: 'Damage to each enemy', label, before: 1, after: ratio, kind: 'times', share });
+            const own = label === 'Black Hole reach' || flat <= 0 ? 0 : (share * (ratio - 1)) / flat;
+            add({
+                group: 'Damage to each enemy', label, before: 1, after: ratio, kind: 'times', share,
+                waves: flatWaves !== undefined && Math.abs(added) > 1e-12 && label !== 'Black Hole reach'
+                    ? (flatWaves * own) / added : undefined,
+            });
         }
         const procs = (p: typeof p0) => p.clChance * p.clChance * p.clQty * p.shotRate * p.ttt;
         const procs0 = calib.smiteProcs;
@@ -311,12 +342,14 @@ function buildChain(
         add({ group: 'Damage to each enemy', label: 'Consume (share of health)', before: p0.consume * 100, after: p1.consume * 100, kind: 'percent' });
     }
 
-    add({ group: 'Level skip', label: 'Enemy Health Level Skip', before: skipOf(base), after: skipOf(after), kind: 'points' });
+    add({ group: 'Level skip', label: 'Enemy Health Level Skip', before: skipOf(base), after: skipOf(after), kind: 'points',
+        waves: wavesOf(split?.skipLog ?? 0) });
     if (build === 'Glass Cannon' && models.run) {
         const killers = Object.entries(killerMix(models.run)) as [EnemyType, number][];
         for (const [type, share] of killers) {
-            add({ group: 'Level skip', label: `${type} health (lab)`, before: healthLabCut(base.labData, type) * 100,
-                after: healthLabCut(after.labData, type) * 100, kind: 'percent', share });
+            const [cut0, cut1] = [healthLabCut(base.labData, type), healthLabCut(after.labData, type)];
+            add({ group: 'Level skip', label: `${type} health (lab)`, before: cut0 * 100, after: cut1 * 100,
+                kind: 'percent', share, waves: wavesOf(share * Math.log(cut0 / cut1)) });
         }
     }
 
@@ -361,11 +394,39 @@ export function whatIf(
     let waves: WhatIfResult['waves'] = null;
     let coinsRun: WhatIfResult['coinsRun'] = null;
     let coinsHour: WhatIfResult['coinsHour'] = null;
+    let split: WaveSplit | null = null;
+    let spread: WhatIfResult['spread'] = null;
+    const perChange: WhatIfResult['perChange'] = [];
     if (gc && models.run) {
-        const [step] = pathRunGains(models.run, [pushPct], undefined, [Math.max(0, skipPoints)], models.worth);
-        const from = models.run.typicalWave;
-        const to = from + Math.round(step.waves);
+        const run = models.run;
+        const wavesFor = (gain: number, skip: number) =>
+            pathRunGains(run, [gain], undefined, [Math.max(0, skip)], models.worth)[0].waves;
+        const gained = wavesFor(pushPct, skipPoints);
+        const from = run.typicalWave;
+        const to = from + Math.round(gained);
         waves = { from, to };
+        for (const c of changes) {
+            const one = JSON.parse(JSON.stringify(base)) as OptimizerSnapshot;
+            applyChange(one, c);
+            one.modBonuses = readActiveModuleBonuses(one.moduleState, one.perkData, one.labData, one.cardData, one.modBonuses.run);
+            perChange.push({ kind: c.kind, key: c.key, waves: wavesFor(goalPct(base, one, 'waves', build, report, models), skipOf(one) - skipOf(base)) });
+        }
+        const s = wavesSpread(run, pushPct, skipPoints, models.worth);
+        spread = {
+            min: Math.min(...s.moves), max: Math.max(...s.moves),
+            endedMin: Math.min(...s.ended), endedMax: Math.max(...s.ended), runs: s.ended.length,
+        };
+        const calib = buildEdpsCalibration(base, report);
+        if (calib) {
+            const killers = Object.entries(killerMix(run)) as [EnemyType, number][];
+            split = {
+                waves: gained,
+                damage: edpsSurvivalScore(after, calib) / edpsSurvivalScore(base, calib),
+                skipLog: models.worth * skipPoints,
+                killerLog: killers.reduce((sum, [type, share]) =>
+                    sum + share * Math.log(healthLabCut(base.labData, type) / healthLabCut(after.labData, type)), 0),
+            };
+        }
         // A longer run: coins for the extra waves, at the new coin bonuses;
         // per hour, the later waves pay more than the early ones.
         if (models.projectAt) {
@@ -378,7 +439,8 @@ export function whatIf(
     return {
         damagePct, pushPct, skipPoints, waves, coinsHourPct, coinsRun, coinsHour,
         survivalPct: gc ? null : goalPct(base, after, 'survival', build, report, models),
-        chain: buildChain(base, after, build, report, models),
+        chain: buildChain(base, after, build, report, models, split),
+        perChange, spread,
         costs,
     };
 }
