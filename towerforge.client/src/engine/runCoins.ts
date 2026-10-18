@@ -24,6 +24,8 @@
 // ============================================================
 
 import type { BattleReport } from './battleReport';
+import type { CardData } from '../types/gameTypes';
+import { activeCard, cardValue } from './statHelpers';
 
 // Coins multiplier by tier (wiki Tiers / Currency-Coins).
 export const TIER_COIN_MULT = [0, 1, 1.8, 2.6, 3.4, 4.2, 5, 5.8, 6.6, 7.5, 8.7, 10.3, 12.2,
@@ -58,6 +60,17 @@ export function spawnRate(wave: number, waMastery: number | null): number {
 export interface RunModelSettings {
     introSprintWaves: number;     // waves at the start that pay nothing (Intro Sprint)
     waMastery: number | null;     // Wave Accelerator mastery 0–9, null = not unlocked
+}
+
+// Intro Sprint waves and Wave Accelerator mastery from the cards in a preset
+// (a run may have used another preset, so the pages let the player change them).
+export function runSettingsFromCards(cardData: CardData, presetIdx: number): RunModelSettings {
+    const sprint = activeCard(cardData, presetIdx, 'Intro Sprint');
+    const wa = cardData.data['Wave Accelerator'];
+    return {
+        introSprintWaves: sprint ? Math.round(cardValue('Intro Sprint', sprint.stars) * (sprint.mastery ?? 1)) : 0,
+        waMastery: activeCard(cardData, presetIdx, 'Wave Accelerator') && wa && wa.s >= 7 && wa.mu ? wa.m ?? 0 : null,
+    };
 }
 
 export type CoinGrowth = 'flat' | 'wave';

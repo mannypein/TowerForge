@@ -257,7 +257,7 @@ Infinity Threshold is newer than the wiki's module pages; its Legendary value (2
 | `TotalEnemies`, `DestroyedInGoldenTower`, `TaggedByDeathwave`, `DestroyedInSpotlight`, `DestroyedInGoldenBot`, `DestroyedInBlackhole`, `DestroyedInOrbs` | Share of kills each coin effect covers |
 | `WavesSkipped`, `LargestGoldenCombo`, `RecoveryPackages`, `DestroyedByThorns` | Farming + eHP calibration |
 
-Everything else in a battle (damage by source, damage taken/blocked, healing by source, enemy counts, guardian drops, per-source coins) is 📊 for now. `KilledBy` is the enemy type that ended the run (owner). TheTowerSDK's save order: 0 Basic, 1 Fast, 2 Tank, 3 Boss, 4 Ranged, 5 Protector, 6 Vampire, 7 Scatter, 8 Scatter split, 9 Ray, 10 Saboteur, 11 Commander, 12 Overcharge; −1/99/255 = no killer. 99 on our test runs (quit at wave 1) fits; the rest ❓ until one run with a known killer confirms it. `DissonanceType` ❓.
+Everything else in a battle (damage by source, damage taken/blocked, healing by source, enemy counts, guardian drops, per-source coins) is 📊 for now. `KilledBy` is the enemy type that ended the run (owner). TheTowerSDK's save order: 0 Basic, 1 Fast, 2 Tank, 3 Boss, 4 Ranged, 5 Protector, 6 Vampire, 7 Scatter, 8 Scatter split, 9 Ray, 10 Saboteur, 11 Commander, 12 Overcharge; −1/99/255 = no killer (the player ended the run — the in-game report shows Killed By blank). Owner's battle reports showed Ray (W8100), Tank (W8200), Vampire (W8500), Overcharge (W8501) and a blank (W5125); the Run Length page shows the decoded name next to each run — ❓ until it matches those. `DissonanceType` ❓.
 
 ---
 

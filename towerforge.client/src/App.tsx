@@ -38,6 +38,7 @@ import './styles/app.css';
 const CreatorCodesTab = lazy(() => import('./components/tabs/CreatorCodesTab'));
 const EnemyStatsTab = lazy(() => import('./components/tabs/EnemyStatsTab'));
 const RunCoinsTab = lazy(() => import('./components/tabs/RunCoinsTab'));
+const RunLengthTab = lazy(() => import('./components/tabs/RunLengthTab'));
 
 // ── Tab Definitions ───────────────────────────────────────────
 // The tabs, grouped into sections so the menu fits a phone: the top row
@@ -85,6 +86,7 @@ const TAB_GROUPS: TabGroup[] = [
             { id: 'optimizer', label: 'Optimizer' },
             { id: 'enemies', label: 'Enemy Stats' },
             { id: 'runcoins', label: 'Coins per Run' },
+            { id: 'runlength', label: 'Run Length' },
         ],
     },
     { id: 'creators', label: 'Creator Codes', short: 'Creators', tabs: [{ id: 'creators', label: 'Creator Codes' }] },
@@ -275,6 +277,7 @@ export default function App() {
             case 'optimizer': return <OptimizerTab />;
             case 'enemies': return <EnemyStatsTab />;
             case 'runcoins': return <RunCoinsTab />;
+            case 'runlength': return <RunLengthTab />;
             case 'creators': return <CreatorCodesTab />;
             case 'share': return <ShareTab />;
             case 'account': return <AccountTab />;

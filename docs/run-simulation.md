@@ -22,9 +22,41 @@ gets) and upgrades aren't in yet.
 - Coins = kill coins + Coins / Wave + Golden Combo and Critical Coin (shares
   of kill coins) + Wave Skip and fetch (shares of the rest), as the tuning run
   shows them; another tier scales by its coin multiplier.
-- **Open question the player's runs decide:** coins per kill fixed per enemy
-  (wiki) or × the wave number (TheTowerSDK's coin simulation). The page fits
-  both and reports which predicts the other runs better. Facts below say where they
+- **Coins per kill: fixed per enemy (wiki), not × the wave (TheTowerSDK).**
+  Owner's 16 T18 runs (2026-10-17): kills within ±2% for every run past
+  W5000; coins 9.6% average off with fixed values vs 11.1% × wave (offline
+  refit: × wave is worse at every Wave Accelerator setting; a wave-dependent
+  enemy mix helps only slightly). Most of the remaining error is the account
+  improving over the week — tuned on the newest run, Oct 10–11 runs come out
+  +8%, Oct 16–17 within ±2%; same-day runs to similar waves differ ±5%.
+  Two short runs (W3418 +46%, W4060 +29%) don't fit any rule — likely runs
+  ended by hand or played differently.
+
+### Run length, Glass Cannon (step 2)
+
+`engine/runLength.ts`, Optimizer → Run Length. Owner plays GC: one enemy hit
+takes all of the tower's health (Death Defy, Energy Shield and the wall
+absorb a few), so a run ends where enemies get too tough to kill before
+they arrive — enemy health ÷ tower damage crosses a fixed point (enemy speed
+is capped by then).
+- Enemy health at death = basic enemy at the run's own stat level (wave −
+  HealthLevelSkips), by the confirmed formula; ratios only, so perks/labs that
+  scale every enemy cancel.
+- **Enemy health has walls:** at some levels several bands step together and
+  health jumps 30–40% in one wave. At a 58% skip rate a big one sits near
+  W8571 (level 3600 = 4 × 900, where the 900-wave band, ×1.15 growth and
+  ×1.03/200 steps coincide); the owner's deaths at W8500/W8501 sit just under it.
+  So each recent death is moved separately at its own skip rate and the
+  moves averaged (an averaged limit can land on a wall and make small
+  gains read as 0 waves).
+- Near W8300 at 58% skip: +10% damage ≈ +50 waves; +1 point of effective
+  health level skip ≈ +200 waves (83 fewer enemy levels). Attack level skip
+  doesn't matter for GC (any hit is lethal).
+- **KilledBy, to confirm:** the owner's in-game battle reports show W8100
+  Ray, W8200 Tank, W8500 Vampire, W8501 Overcharge and W5125 blank (run ended
+  by hand). The page decodes the stored numbers with the SDK order (2 Tank,
+  6 Vampire, 9 Ray, 12 Overcharge; 99 = none) — if it shows the same names
+  for those runs, the order is confirmed. Facts below say where they
 come from. "SDK" = TheTowerSDK (below); "wiki" = the Fandom wiki; "GV" = the
 Game Vault wiki. Where sources disagree it says so (see [Disagreements](#disagreements-to-settle)).
 Game version at the time: **v29.1**.

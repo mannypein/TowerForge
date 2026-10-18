@@ -10,8 +10,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useGameStore } from '../../store/useGameStore';
 import { activeBattleReport } from '../../engine/battleReport';
-import type { BattleReport } from '../../engine/battleReport';
 import { enemyPanel, NO_ENEMY_PERKS } from '../../engine/enemyStats';
+import { runLevelSkips } from '../../engine/runLength';
 import type { EnemyPerks, EnemyType } from '../../engine/enemyStats';
 import { formatGameNumber } from '../../engine/gameNumbers';
 import NumericInput from '../common/NumericInput';
@@ -53,21 +53,6 @@ function loadInputs(fallbackTier: number): PanelInputs {
     }
 }
 
-// Levels skipped in a stored run, by whatever the game named the field.
-function runSkips(run: BattleReport): { health: number; attack: number } | null {
-    const raw = run.raw ?? {};
-    const find = (stat: 'health' | 'attack') => {
-        const key = Object.keys(raw).find(k => {
-            const l = k.toLowerCase();
-            return l.includes(stat) && l.includes('level') && l.includes('skip') && typeof raw[k] === 'number';
-        });
-        return key ? (raw[key] as number) : null;
-    };
-    const health = find('health');
-    const attack = find('attack');
-    return health !== null && attack !== null ? { health, attack } : null;
-}
-
 const fmt = (n: number) => (n === 0 ? '0' : formatGameNumber(n));
 const pct = (n: number) => `${n % 1 === 0 ? n : n.toFixed(2)}%`;
 
@@ -94,7 +79,7 @@ export default function EnemyStatsTab() {
     // Skips are deterministic, so the last run's skip rate predicts the
     // levels skipped by any wave on that tier.
     const lastRun = activeBattleReport(reportText, battles, choice) ?? battles.at(-1) ?? null;
-    const lastSkips = lastRun ? runSkips(lastRun) : null;
+    const lastSkips = lastRun ? runLevelSkips(lastRun) : null;
     function fillFromRun() {
         if (!lastRun || !lastSkips || lastRun.wave <= 0) return;
         const wave = inputs.tier === lastRun.tier ? inputs.wave : lastRun.wave;

@@ -9,9 +9,8 @@
 import { useMemo, useState } from 'react';
 import { useGameStore } from '../../store/useGameStore';
 import { defaultBattleIndex, isRealRun } from '../../engine/gameExport';
-import { buildRunModel, projectRun } from '../../engine/runCoins';
+import { buildRunModel, projectRun, runSettingsFromCards } from '../../engine/runCoins';
 import type { RunModelSettings } from '../../engine/runCoins';
-import { activeCard, cardValue } from '../../engine/statHelpers';
 import { formatGameNumber } from '../../engine/gameNumbers';
 import NumericInput from '../common/NumericInput';
 
@@ -24,15 +23,12 @@ export default function RunCoinsTab() {
     const preset = useGameStore(s => s.activePreset);
 
     // Card defaults from the current preset; the run may have used another, so both are editable.
-    const sprint = activeCard(cardData, preset, 'Intro Sprint');
-    const defaultSprint = sprint ? Math.round(cardValue('Intro Sprint', sprint.stars) * (sprint.mastery ?? 1)) : 0;
-    const wa = cardData.data['Wave Accelerator'];
-    const defaultWa = activeCard(cardData, preset, 'Wave Accelerator') && wa && wa.s >= 7 && wa.mu ? wa.m ?? 0 : null;
+    const defaults = runSettingsFromCards(cardData, preset);
 
     const candidates = battles.map((b, i) => ({ b, i })).filter(({ b }) => isRealRun(b) && !b.tournament);
     const [tuning, setTuning] = useState(() => defaultBattleIndex(battles));
-    const [introSprint, setIntroSprint] = useState(defaultSprint);
-    const [waMastery, setWaMastery] = useState<number | null>(defaultWa);
+    const [introSprint, setIntroSprint] = useState(defaults.introSprintWaves);
+    const [waMastery, setWaMastery] = useState<number | null>(defaults.waMastery);
     const tuningRun = battles[tuning];
     const [target, setTarget] = useState({ tier: tuningRun?.tier ?? 1, wave: tuningRun?.wave ?? 1000 });
 
