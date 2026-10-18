@@ -32,6 +32,73 @@ tower kill fast enough, how much damage reaches it, when it dies) and the
 
 ---
 
+## Checked against the game (owner's account)
+
+**Wave Info panel, Tier 18 wave 6000** (screenshot, 2026-10-17; the panel
+shows stats after level skips, enemy labs and the run's perks):
+
+| Row | Health | Attack | Speed | Mass | Spawn % |
+|---|---|---|---|---|---|
+| Basic | 4.02aa | 484.82Q | 6.72 | 40.95 | 18 |
+| Fast | 3.81aa | 484.82Q | 23.05 | 40.95 | 24 |
+| Tank | 18.19aa | 484.82Q | 4.03 | 198.90 | 22 |
+| Ranged | 4.02aa | 1.45s | 8.06 | 40.95 | 21 |
+| Boss | 19.40aa | 484.82Q | 4.03 | 507.00 | 100 |
+| Protector | 2.41aa | 484.82Q | 2.69 | 81.90 | 15 |
+| Vampire | 8.04aa | 484.82Q | 2.69 | 7800 | 100 |
+| Scatter | 8.04aa | 242.41Q | 4.03 | 7800 | 100 |
+| Ray | 4.02aa | 484.82Q | 2.69 | 19500 | 100 |
+| Saboteur | 80.48aa | 0 | 14.11 | 39000 | 0 |
+| Commander | 80.48aa | 0 | 1.34 | 39000 | 0 |
+| Overcharge | 79.19aa | 3.31T | 1.34 | 39000 | 0 |
+
+Footer: wave timer 26 s, cooldown 4 s, protector radius 15.19 m, protector
+damage reduction **55%**, active enemies 53 (spawn rate 56), enemy attack
+levels skipped 3465, health levels skipped 3474.
+
+What it proves:
+- **Stat level = wave − levels skipped** (health 6000 − 3474 = 2526, attack
+  2535), as the SDK says.
+- **The base formula is exact.** health(2526, T18) = 8.943e36 and
+  damage(2535, T18) = 1.9393e20 from the SDK constants (my Python port,
+  scratch). The panel = formula × **0.45** for health (the "Enemy HP −50%"
+  trade-off perk at −55% with the Improve Trade-off Perks lab) and × **2.5**
+  for attack (the "enemies slower, ×2.5 damage" trade-off perk). Basic
+  4.0244aa → shows 4.02aa; Saboteur ×20 → 80.49aa vs 80.48aa; Overcharge
+  attack = wave-1 damage 1.324T × 2.5 = 3.31T ✓; Ranged ×3 (ranged trade-off
+  perk) = 1.45s ✓; Scatter attack ×0.5 ✓; Ray attack ×1 on the panel.
+- **A 3.8-minute ×1 recording (T18 W6196 → 6206)** matched the formula at
+  every wave to the displayed digit: health 6.39aa (level 2608) → 6.63 (2610)
+  → 6.64 (2611) → 6.65 (2612); attack 590.90Q (2618) → 591.37 (2619) → 593.12
+  (2620) → 593.60 (2621) → 594.07 (2622). The game **truncates** to 2
+  decimals (6.638 shows 6.63). Skip rate over those waves ≈ 58%.
+- **Number suffixes:** aa = 1e36 (wiki Common Abbreviations: … S 1e24, O
+  1e27, N 1e30, D 1e33, aa 1e36, ab 1e39 …). The site's parser was fixed to
+  match (it had o, d, U, D for 1e27–1e39).
+- **Type rules:** Fast 3.81 = basic × (1 − Fast Health lab); Tank = ×5 × its
+  lab (18.19 ⇒ −9.6%, 24 levels); Protector ×0.6; Vampire/Scatter ×2; Ray ×1;
+  fleets ×20 with no lab except Overcharge's (−1.6%). Common enemy health lab
+  = 0 on this account (Basic equals Saboteur ÷ 20).
+- **Speeds** relative to Basic: Fast 3.43 (≈ ×3.9 × Fast Speed lab), Tank 0.60,
+  Ranged 1.20, Protector/Vampire/Ray 0.40, Scatter 0.60, Saboteur 2.10,
+  Commander/Overcharge 0.20 — the wiki table is right. Boss shows 0.60 =
+  wiki 0.4 × 1.5 (boss trade-off perk speeds bosses up).
+- **Mass** ratios match the SDK exactly (Tank 4.857, Boss 12.38, Protector 2,
+  elites 190.5, Ray 476, fleets 952).
+- **Spawn mix at T18 W6000:** basic 18 / fast 24 / tank 22 / ranged 21 /
+  protector 15%.
+- **Boss row** (19.40aa) isn't explained yet — needs the boss perk's exact
+  value and the boss-health / overheal rules (SDK `stat-display.ts`).
+- **Wave cycle measured: 28.0 s** of real time per wave at the game's ×1.0
+  (8 cycles, ±0.5 s; spawn bar fills ~24 s then the 4 s cooldown) vs the
+  nominal 26 + 4 = 30 s — the game runs ~7% faster than its timers say.
+  10 wave numbers passed in 8 cycles (Wave Skip).
+- The tower sat at its overheal cap (289T of 17.5T max) the whole clip, so
+  enemy attack cadence can't be read from it.
+
+**How runs are played:** most players run AFK — so the default is no
+in-run cash spending (only free upgrades and perks change stats mid-run).
+
 ## 1. Run structure and timing
 
 - **Wave = spawn phase + cooldown.** 26 s spawning + 9 s cooldown at ×1 speed
@@ -78,8 +145,9 @@ tweak. Both formulas step at band boundaries; don't smooth them.
 
 Accuracy: one SDK file says these constants are the game's own, checked with
 exact equality across 21 tiers × 34 waves × 8 contexts; another says "fitted,
-close but not exact at extreme waves". **To settle with in-game Wave Info
-screenshots** (the panel shows each enemy's health and attack).
+close but not exact at extreme waves". **Confirmed exact on our account** at
+T18 (see "Checked against the game") — more tiers and a tournament wave still
+to check.
 
 ### Per-type multipliers (relative to the wave's basic enemy)
 
@@ -268,11 +336,16 @@ modes, recovery packages, free upgrades (per category), upgrades bought,
 Combo / wave skip / ILM charge / SM stack, and `KilledBy` (code, meaning
 unknown).
 
-**Today the site** replaces its stored runs on every import
-(`useGameStore` → `importedBattles: imp.battles`) and keeps ~30 parsed
-fields (`engine/battleReport.ts`). For the simulator it should keep **all**
-fields of every run and **merge** imports (dedupe by date), so a player's
-history grows past 5 runs.
+**Since 2026-10-17 the site keeps the history:** each import adds its runs
+to the ones already stored (`mergeBattles`, same run = same tier, wave and
+times; the fresh copy wins), every plain field of each run is kept in
+`raw`, oldest → newest, newest 100 kept.
+
+`KilledBy` = the enemy type that ended the run (owner). SDK save order:
+0 Basic, 1 Fast, 2 Tank, 3 Boss, 4 Ranged, 5 Protector, 6 Vampire, 7 Scatter,
+8 Scatter (split), 9 Ray, 10 Saboteur, 11 Commander, 12 Overcharge;
+−1 / 99 / 255 = no killer (quit). 99 matches our wave-1 test runs; the rest
+still need one run where the killer is known.
 
 ## 10. Gaps — not documented anywhere reachable
 
@@ -284,7 +357,8 @@ history grows past 5 runs.
 2. **Enemy type mix** by wave/tier (only averages). Plan: calibrate from
    per-type kill counts.
 3. **How a player spends cash in-run and which perks they take.**
-4. **Exactness of the health/damage formula** (SDK self-disagreement).
+4. ~~Exactness of the health/damage formula~~ — confirmed at T18; other
+   tiers and tournaments still to check.
 5. **Per-wave data** — reports are run totals; a run's shape (when damage
    taken rises) is invisible. Death wave + totals constrain it.
 6. `KilledBy` codes.
@@ -313,19 +387,18 @@ history grows past 5 runs.
 
 ## Needed from the owner
 
-- **Wave Info screenshots** (tap the wave counter in a run): every enemy row
-  (health, attack, spawn %, speed) at 3–4 waves (e.g. 100, 1000, 3000, 6000)
-  on the tiers played, plus one tournament wave — settles the scaling
-  formula, the type mix and the speed disagreements.
-- **More battle history:** the export only keeps 5 runs. Import after
-  several runs (farming, pushing, tournament) so we have 15–30 to calibrate
-  and backtest with — the site should keep every imported run, not just the
-  latest 5.
-- **How runs are played:** AFK or active; is cash spent in-run (on what);
-  game speed used; Auto Pick perk ranking; which UWs are on auto.
-- Optional: a 2–3 minute ×1-speed screen recording mid-run with health
-  visible — to measure enemy attack rate and movement, which nothing documents.
-- `KilledBy` codes, if known (what killed you, per number).
+- **Wave Info screenshots** (tap the wave counter in a run): T18 W6000 done.
+  Still useful: other waves on T18 (e.g. 100, 1000, 3000) for the spawn mix by
+  wave, another tier, a tournament wave, and which trade-off perks were active
+  (to pin the boss row).
+- **More battle history:** the site now keeps every imported run; import
+  after several runs (farming, pushing, tournament) until there are 15–30.
+- **How runs are played:** mostly AFK (owner). Still useful: game speed used,
+  Auto Pick perk ranking, which UWs are on auto.
+- A recording where the tower is **below** full health (early in a run, or a
+  push near death) — the first clip sat at the overheal cap, so enemy attack
+  cadence couldn't be read.
+- One run where you know what killed you, to confirm the `KilledBy` order.
 - Decision: use `thetowersdk` as a pinned dependency (with credits on the
   site) or port its formulas.
 
@@ -334,13 +407,15 @@ history grows past 5 runs.
 | Topic | Says | Other source says |
 |---|---|---|
 | Basic enemy coins | 1 (SDK) | 0 (wiki table) |
-| Tank speed | ×0.6 (wiki) | ×0.5 (SDK summary), ×0.336 (SDK wave-panel ratio) |
-| Boss speed | ×0.4 (wiki) | ×0.3 (SDK, GV) |
-| Protector damage cut | ×0.6 taken / "40% less" (wiki, SDK) | "60% reduced" (GV) |
+| Tank speed | **×0.6 (wiki) — confirmed in game** | ×0.5 (SDK summary), ×0.336 (SDK wave-panel ratio) |
+| Boss speed | ×0.4 (wiki) — in game 0.6 with a boss-speed perk, consistent | ×0.3 (SDK, GV) |
+| Commander / Overcharge speed | **×0.2 (wiki) — confirmed** | 0.5× / 1× (SDK summary) |
+| Protector damage cut | ×0.6 taken / "40% less" (wiki, SDK) | "60% reduced" (GV); **the panel shows 55%** on an account with some Protector DR lab — favours ~60% base |
 | Protector cap | 10 (wiki Protector entry) | 8 (wiki Normal section, GV) |
 | Commander buff | ×1.15 per pulse, 8 stacks (wiki) | "2× aura" (SDK summary) |
 | T22 fleets per spawn | 3 (wiki) | 2 (SDK) |
 | Thorns | % of enemy max health (wiki) | share of enemy contact damage (SDK) |
 | Perk Wave Requirement | −25% (wiki table) | −20% (wiki worked example, SDK) |
 | Energy Shield BC | longer recharge (wiki) | shorter duration (SDK lab text) |
-| Wave base formula | exact (SDK scaler) | fitted/approximate (SDK constants file) |
+| Wave base formula | **exact (SDK scaler) — confirmed** at T18 W6000 and W6196–6206 | fitted/approximate (SDK constants file) |
+| Wave cycle | 26 s + cooldown (wiki, SDK) | **28.0 s measured** at ×1.0 with a 4 s cooldown (~7% faster) |

@@ -248,7 +248,7 @@ Infinity Threshold is newer than the wiki's module pages; its Legendary value (2
 
 ## Battle history ✅
 
-`BattleHistory[5]` — the last 5 runs, oldest first, ~150 fields each (the same numbers as the in-game Battle Report). Times are in **seconds**. The optimizer can calibrate Farming and eHP from any of them instead of a pasted report (the newest non-tournament run is picked by default).
+`BattleHistory[5]` — the last 5 runs, oldest first, ~150 fields each (the same numbers as the in-game Battle Report). Times are in **seconds**. The optimizer can calibrate Farming and eHP from any of them instead of a pasted report (the newest non-tournament run is picked by default). Since 2026-10-17 the site **keeps runs across imports** (`mergeBattles` in engine/battleReport.ts; the newest 100) and stores every plain field of each run in `raw`, for the planned run simulator ([run-simulation.md](run-simulation.md)).
 
 | Used field | For |
 |---|---|
@@ -257,7 +257,7 @@ Infinity Threshold is newer than the wiki's module pages; its Legendary value (2
 | `TotalEnemies`, `DestroyedInGoldenTower`, `TaggedByDeathwave`, `DestroyedInSpotlight`, `DestroyedInGoldenBot`, `DestroyedInBlackhole`, `DestroyedInOrbs` | Share of kills each coin effect covers |
 | `WavesSkipped`, `LargestGoldenCombo`, `RecoveryPackages`, `DestroyedByThorns` | Farming + eHP calibration |
 
-Everything else in a battle (damage by source, damage taken/blocked, healing by source, enemy counts, guardian drops, per-source coins) is 📊 for now. `KilledBy` is a number (99 on the test runs, which were quit at wave 1) ❓ — need the list of what each number means. `DissonanceType` ❓.
+Everything else in a battle (damage by source, damage taken/blocked, healing by source, enemy counts, guardian drops, per-source coins) is 📊 for now. `KilledBy` is the enemy type that ended the run (owner). TheTowerSDK's save order: 0 Basic, 1 Fast, 2 Tank, 3 Boss, 4 Ranged, 5 Protector, 6 Vampire, 7 Scatter, 8 Scatter split, 9 Ray, 10 Saboteur, 11 Commander, 12 Overcharge; −1/99/255 = no killer. 99 on our test runs (quit at wave 1) fits; the rest ❓ until one run with a known killer confirms it. `DissonanceType` ❓.
 
 ---
 
@@ -268,6 +268,6 @@ Everything else in a battle (damage by source, damage taken/blocked, healing by 
 3. Bots: the export only has the old (empty) bot fields — can TTG add the current bot data?
 4. `RelicsUnlocked` — 2 = owned; the order of relic slots (release order?) still needs anchors.
 5. `Vault.UpgradesLevel` IDs and the Power/Harmony node lists — what do they unlock?
-6. `KilledBy` numbers — what enemy is each?
+6. `KilledBy` numbers — enemy type (owner); SDK order above, confirm with one known death.
 7. `UltimateWeaponSelectedLevel`, `UpgradeTierUnlocked`, `UpgradeLevel` arrays, `PerkLevel`, `LabLevel[5]` — confirm what they hold.
 8. Remaining lab numbers (see Labs), Area of Effect's card number, module `InfoIndex`/effect codes and relic numbers.

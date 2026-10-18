@@ -6,6 +6,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { defaultBattleIndex, isGameExport, isRealRun, parseGameExport } from './gameExport';
+import { MAX_STORED_BATTLES, mergeBattles } from './battleReport';
 import { LABS, UWS, WS_ENH, WS_STATS } from '../constants/gameData';
 import { GAME_CARDS, MASTERY_LAB_CARDS, MASTERY_LAB_START, CARD_PRESET_SLOTS } from '../constants/gameExportMaps';
 import { SUB_EFFECTS, SUB_RARITIES } from '../constants/moduleData';
@@ -304,5 +305,48 @@ describe('battle history', () => {
         expect(isRealRun(battles[5])).toBe(false);
         expect(defaultBattleIndex(battles)).toBe(1);
         expect(defaultBattleIndex([])).toBe(-1);
+    });
+
+    it('keeps every field the game stored for a run, and when it was played', () => {
+        const [r] = parseGameExport(makeExport({
+            BattleHistory: [battle({ KilledBy: 3, DamageTakenWall: 5e15, SomeList: [1, 2], Nested: { a: 1 } })],
+        })).battles;
+        expect(r.time).toBe(Date.parse('2026-10-01T12:00:00Z'));
+        expect(r.raw).toMatchObject({ KilledBy: 3, DamageTakenWall: 5e15, SomeList: [1, 2], Tier: 18, IsTournament: false });
+        expect(r.raw).not.toHaveProperty('Nested');
+    });
+});
+
+describe('battle history across imports', () => {
+    // The file only holds the last 5 runs; each import adds to what's kept.
+    const runs = (...fields: Record<string, unknown>[]) =>
+        parseGameExport(makeExport({ BattleHistory: fields.map(f => battle(f)) })).battles;
+
+    it('adds new runs, replaces runs seen again, and keeps them oldest first', () => {
+        const first = runs(
+            { BattleDate: '2026-10-01T00:00:00Z', Wave: 100 },
+            { BattleDate: '2026-10-02T00:00:00Z', Wave: 200 },
+        );
+        const second = runs(
+            { BattleDate: '2026-10-02T00:00:00Z', Wave: 200, KilledBy: 2 },   // same run, fresh copy
+            { BattleDate: '2026-10-03T00:00:00Z', Wave: 300 },
+        );
+        const merged = mergeBattles(first, second);
+        expect(merged.map(b => b.wave)).toEqual([100, 200, 300]);
+        expect(merged[1].raw?.KilledBy).toBe(2);
+        expect(mergeBattles(merged, second)).toEqual(merged);
+    });
+
+    it('puts runs kept before times were stored first, and caps the history', () => {
+        const old = { ...runs({ Wave: 50 })[0], time: undefined, raw: undefined };
+        const fresh = runs({ BattleDate: '2026-10-05T00:00:00Z', Wave: 60 });
+        expect(mergeBattles(fresh, [old]).map(b => b.wave)).toEqual([50, 60]);
+
+        const many = runs(...Array.from({ length: MAX_STORED_BATTLES + 7 }, (_, i) => ({
+            BattleDate: new Date(Date.UTC(2026, 0, 1) + i * 864e5).toISOString(), Wave: 1000 + i,
+        })));
+        const kept = mergeBattles([], many);
+        expect(kept).toHaveLength(MAX_STORED_BATTLES);
+        expect(kept[0].wave).toBe(1007);     // the oldest 7 drop off
     });
 });

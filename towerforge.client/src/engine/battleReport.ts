@@ -84,6 +84,33 @@ export interface BattleReport {
     psHits?: number;            // enemies hit by Poison Swamp
     orbHits?: number;
     damage?: DamageBreakdown;   // damage by source (calibrates Glass Cannon)
+    // Imported runs only: when the run was played (ms since 1970) and every
+    // field the game stored for it (~150 run totals, `BattleHistory` names),
+    // kept for calibration and the run simulator (docs/run-simulation.md).
+    time?: number;
+    raw?: Record<string, BattleField>;
+}
+
+export type BattleField = number | string | boolean | number[];
+
+// The game's export only holds the last 5 runs, so each import adds its runs
+// to the ones already kept instead of replacing them. A run seen again (same
+// tier, wave and times) is replaced by the fresh copy, which has every field.
+// Oldest → newest; runs kept before times were stored sort first. The newest
+// MAX_STORED_BATTLES are kept (up to ~10 KB each: ~1 MB at the cap, under
+// the server's 2 MB limit for a synced save).
+export const MAX_STORED_BATTLES = 100;
+
+const runKey = (b: BattleReport) =>
+    [b.tier, b.wave, Math.round(b.gameTimeSec), Math.round(b.realTimeSec), b.tournament ? 1 : 0].join('|');
+
+export function mergeBattles(stored: BattleReport[], incoming: BattleReport[]): BattleReport[] {
+    const byKey = new Map<string, BattleReport>();
+    for (const b of stored) byKey.set(runKey(b), b);
+    for (const b of incoming) byKey.set(runKey(b), b);
+    return [...byKey.values()]
+        .sort((x, y) => (x.time ?? -Infinity) - (y.time ?? -Infinity))
+        .slice(-MAX_STORED_BATTLES);
 }
 
 type Sections = Record<string, Record<string, string>>;

@@ -9,16 +9,13 @@ import { useGameStore } from '../../store/useGameStore';
 import { activeBattleReport, parseBattleReport } from '../../engine/battleReport';
 import type { BattleReport } from '../../engine/battleReport';
 import { isRealRun } from '../../engine/gameExport';
+import { formatGameNumber } from '../../engine/gameNumbers';
 import { FARM_EFFECTS, FARM_EFFECT_LABELS } from '../../engine/farming';
 import type { FarmCalibration } from '../../engine/farming';
 import { ehpBreakdown, SUSTAIN_WINDOW_S } from '../../engine/ehp';
 import type { EhpCalibration, EhpFactor } from '../../engine/ehp';
 
-function fmtBig(n: number): string {
-    const units: [number, string][] = [[1e21, 's'], [1e18, 'Q'], [1e15, 'q'], [1e12, 'T'], [1e9, 'B'], [1e6, 'M'], [1e3, 'K']];
-    for (const [v, s] of units) if (n >= v) return `${(n / v).toFixed(2)}${s}`;
-    return n.toFixed(0);
-}
+const fmtBig = (n: number): string => (n >= 1e3 ? formatGameNumber(n) : n.toFixed(0));
 
 const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
 
@@ -86,6 +83,10 @@ export function BattleReportPanel({ purpose }: { purpose: 'farming' | 'ehp' | 'e
                             ))}
                             <option value={-1}>{text ? 'Pasted Battle Report' : 'Pasted Battle Report (none yet)'}</option>
                         </select>
+                        <span style={{ fontSize: '11px', color: 'var(--text-dim)', flexBasis: '100%' }}>
+                            {imported.length} run{imported.length === 1 ? '' : 's'} saved — the game&apos;s file only
+                            holds your last 5, so importing after a few runs keeps adding to this history.
+                        </span>
                     </div>
                 )}
                 {report && !editing ? (

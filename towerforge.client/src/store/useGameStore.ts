@@ -35,6 +35,7 @@ import type {
     TabName,
     CloudSaveData,
 } from '../types/gameTypes';
+import { mergeBattles } from '../engine/battleReport';
 import type { BattleReport } from '../engine/battleReport';
 import { defaultBattleIndex } from '../engine/gameExport';
 import type { GameImport } from '../engine/gameExport';
@@ -395,7 +396,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
             ...(imp.wallUnlocked ? { wall: true } : {}),
             ...(imp.presetNames.some(n => n) ? { presetNames: imp.presetNames } : {}),
         };
-        const choice = defaultBattleIndex(imp.battles);
+        // Runs add to the history already kept (the file only has the last 5).
+        const battles = mergeBattles(s.importedBattles, imp.battles);
+        const choice = defaultBattleIndex(battles);
         const wsData = imp.workshop ?? s.wsData;
         const enhData = imp.enhancements ?? s.enhData;
         const uwData = imp.uws ? { ...s.uwData, data: imp.uws } : s.uwData;
@@ -429,14 +432,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
             currencies: imp.currencies,
             tierWaves,
             profile,
-            importedBattles: imp.battles,
+            importedBattles: battles,
             battleReportChoice: choice,
             wsData, enhData, uwData, cardData, perkData, labData, moduleState,
         });
         saveKey(KEYS.currencies, imp.currencies);
         saveKey(KEYS.tiers, tierWaves);
         saveKey(KEYS.profile, profile);
-        saveKey(KEYS.importedBattles, imp.battles);
+        saveKey(KEYS.importedBattles, battles);
         saveKey(KEYS.battleReportChoice, choice);
         saveKey(KEYS.workshop, wsData);
         saveKey(KEYS.enh, enhData);

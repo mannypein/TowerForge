@@ -12,7 +12,7 @@
 //  Pure functions — no store imports.
 // ============================================================
 
-import type { BattleReport } from './battleReport';
+import type { BattleField, BattleReport } from './battleReport';
 import { WS_STATS, WS_ENH, UWS, LABS } from '../constants/gameData';
 import {
     GAME_CARDS, MASTERY_LAB_START, MASTERY_LAB_CARDS, CARD_PRESET_SLOTS, GAME_PERKS, GAME_LABS, GAME_LAB_GROUPS,
@@ -422,6 +422,17 @@ function formatBattleDate(iso: string): string {
     });
 }
 
+// Every plain value of a BattleHistory entry (numbers, text, flags, short
+// number lists), so fields the site doesn't read yet are still there later.
+function battleFields(b: Raw): Record<string, BattleField> {
+    const out: Record<string, BattleField> = {};
+    for (const [key, v] of Object.entries(b)) {
+        if ((typeof v === 'number' && Number.isFinite(v)) || typeof v === 'string' || typeof v === 'boolean') out[key] = v;
+        else if (Array.isArray(v) && v.length <= 64 && v.every(x => typeof x === 'number')) out[key] = v as number[];
+    }
+    return out;
+}
+
 // One BattleHistory entry → the same shape a pasted Battle Report produces.
 function battleToReport(b: Raw): BattleReport {
     const total = num(b.TotalEnemies);
@@ -478,6 +489,8 @@ function battleToReport(b: Raw): BattleReport {
             landMines: num(b.LandMineDamage),
             thorns: num(b.ThornDamage),
         } : undefined,
+        ...(Number.isFinite(Date.parse(String(b.BattleDate))) ? { time: Date.parse(String(b.BattleDate)) } : {}),
+        raw: battleFields(b),
     };
 }
 
