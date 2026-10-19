@@ -42,8 +42,8 @@ reports set the baseline, so even unmodeled effects are already in it; only
 | Enemy mix of normal types | ◐ | Not confirmed; doesn't change the push ranking |
 | Run length (Glass Cannon) | ✅ | runLength.ts — your last 5 deaths, luck-averaged, with the spread shown |
 | Run length for tanky builds | ◐ | eHP scores survival but not waves |
-| Death Defy, Energy Shield, Second Wind, Demon Mode / Nuke automation | ◐ | Counts read from each run ("Saved by", 2026-10-18); Death Defy valued as killing hits survived (exact chance math), not yet as waves — needs how often killing hits come near the end |
-| Wall | ◐ | eHP only; how many GC hits it takes isn't modeled |
+| Death Defy, Energy Shield, Second Wind, Demon Mode / Nuke automation | ◐ | Counts read from each run ("Saved by", 2026-10-18); Death Defy valued as killing hits survived (exact chance math), not yet as waves. A recording of a push's end (2026-10-19) showed the last hits come in bursts once the wall breaks, so Death Defy's waves come from earlier leaks — needs when in a run it fires |
+| Wall | ◐ | eHP only. For Glass Cannon at the end of a push the wall blocks one hit per rebuild (any hit is lethal, ~1e21 vs ~3e14 health — recording 2026-10-19), so Wall Rebuild matters and Wall Health doesn't; not modeled yet |
 | Tournaments and battle conditions | ◐ | Tournament waves from your tournament deaths on the tournament health curve; Tournament page (2026-10-18): every random condition's strength by wave (heat, crowdsourced table) and each league's fixed conditions; counted: UW Durations, Boss's Ultimate, Skip Reduction - Multiply, Skip Decay; Enemy Speed, Armored Enemies, More Enemies and the resistances shown but not counted (why on the page); best module loadout for the week; battle history doesn't record conditions; no coins per run for tournaments |
 | Dissonance runs | ✗ | Not in the export the site reads |
 
@@ -72,9 +72,10 @@ reports set the baseline, so even unmodeled effects are already in it; only
 
 ## What it would take to close the biggest gaps
 
-1. **Death Defy in waves:** how often killing hits come near the end of a
-   run. A recording of the last waves of one push, or the wave of the first
-   Death Defy in a run.
+1. **Death Defy in waves:** when in a run it fires. The end-of-push
+   recording (2026-10-19) showed the last hits come in bursts after the wall
+   breaks — saves there buy seconds — so what's needed is the in-run stats
+   ("Death defied") at a few waves of one push.
 2. **Stuns and knockback:** the wave an elite gets stunned or pushed, and
    for how long or how far, at your waves (a short recording).
 3. **Cells and drops from upgrades:** with cells per run now read, the

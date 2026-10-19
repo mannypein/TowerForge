@@ -195,6 +195,47 @@ What it proves:
 - The tower sat at its overheal cap (289T of 17.5T max) the whole clip, so
   enemy attack cadence can't be read from it.
 
+**End of a T18 push (owner's recording, 2026-10-19):** the last ~90 s of a
+Glass Cannon run at ×6.3 (BlueStacks), W8875 → death at **W8898** (new
+best). End screen: Killed By **Tank**, "Death defied 8 times". Read frame
+by frame (1 s, and 0.25 s around the hits):
+
+| Video | Wave | What happened |
+|---|---|---|
+| 0–26 s | 8875–8880 | Wall up and regenerating (200T → 297T, ≈3.7T per real second); tower health flat at its overheal cap; Energy Shield full (3 charges) |
+| 26.5 s | 8880 | **Wall breaks** ("Rebuilding") |
+| 31.3–32.3 s | 8881 | **Energy Shield blocks three hits** in about one real second (charges 3 → 0) |
+| 32.6 s | 8881 | Another hit: health 288T → **8.99T = 51% of max** with a red 10 s timer — **Second Wind** (revive at 50%, invincibility; wiki card table) |
+| 35 s | 8886 | Wall back (62T) |
+| 35–86 s | 8886–8895 | Energy Shield stays empty — no charge back in ~17 waves (the card's recharge is 8–20 min) |
+| 86.5 s | 8895 | **Wall breaks** again; Tanks packed around the tower |
+| ≈89.7 s | 8898 | Next hit kills the tower (Second Wind already used, shield empty) |
+
+What it proves:
+- **Any hit is lethal.** The site's enemy attack at W8881 T18, at the ~58%
+  attack skip of the owner's recent runs, is ~3.7e21 (~9e21 with the ×2.5
+  speed perk); the tower's health is 2.9e14
+  even overhealed. So for Glass Cannon only the wall and the run savers stop
+  a hit — health, regen and Defense don't — as the model assumes.
+- **Overheal cap = 16.5 × max health:** 288.8–289.6T on a 17.53T tower (the
+  workshop Max Recovery at max, 1.5 + 0.03 × 500). Health tops up ~28.7T at
+  each new wave (packages) back to the cap.
+- **Second Wind revives at 50% of max health** (8.99T of 17.53T, plus a regen
+  tick); the wall bar showed its 10 s timer and the wall was back when it ran
+  out (the card rebuilds the wall).
+- **The end comes in bursts.** Enemies (Tanks here) pile up around the tower
+  once damage can't kill them; when the wall breaks, killing hits arrive
+  seconds apart (at least five within ~10 game seconds at W8880–81: the wall,
+  three shield charges, Second Wind). Two bursts ~15 waves apart ended this
+  run. So at the very end a Death Defy save buys seconds, not waves — it has
+  to win several rolls in a row. The waves Death Defy buys come from the
+  earlier, single leaks (this run's 8 procs all landed before W8875 or were
+  invisible inside the bursts — a Death Defy proc doesn't show on screen).
+- **Wall at the end:** each break let the hits through; it took ~5.5 real s
+  (~35 game s) to rebuild plus Second Wind's timer the first time. Its
+  health (~250–300T) is irrelevant against ~1e21 hits — it blocks one hit
+  per rebuild. Wall Rebuild matters for GC; Wall Health doesn't.
+
 **How runs are played:** most players run AFK — so the default is no
 in-run cash spending (only free upgrades and perks change stats mid-run).
 
@@ -574,10 +615,15 @@ still need one run where the killer is known.
   after several runs (farming, pushing, tournament) until there are 15–30.
 - **How runs are played:** mostly AFK (owner). Still useful: game speed used,
   Auto Pick perk ranking, which UWs are on auto.
-- A recording where the tower is **below** full health (early in a run, or a
-  push near death) — the first clip sat at the overheal cap, so enemy attack
-  cadence couldn't be read.
-- One run where you know what killed you, to confirm the `KilledBy` order.
+- ~~A recording of the end of a push~~ — done (2026-10-19, above): any hit is
+  lethal; the end comes in bursts after the wall breaks.
+- **When Death Defy fires across a run:** in one push, open the in-run stats
+  at a few waves (e.g. W4000, 6000, 7000, 8000, and after the first wall
+  break) and note "Death defied", Energy Shield and Second Wind. That gives
+  how often killing hits come and where — what Death Defy in waves needs.
+- KilledBy: the W8898 run ended by **Tank** (end screen). After importing it,
+  Run Length should show "Tank" for that run — that confirms the order on a
+  fourth run.
 - Decision: use `thetowersdk` as a pinned dependency (with credits on the
   site) or port its formulas.
 

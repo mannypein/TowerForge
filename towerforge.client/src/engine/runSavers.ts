@@ -12,8 +12,11 @@
 //  p × (K + 1) ÷ (1 − p) of them. K comes from the player's own runs (their
 //  Energy Shield, Second Wind, Demon Mode and Nuke counts).
 //
-//  Turning extra hits into waves needs how often killing hits come near the
-//  end of a run, which battle reports don't give — so What If shows hits.
+//  Turning extra hits into waves needs when in a run killing hits come,
+//  which battle reports don't give — so What If shows hits. A recording of
+//  the end of a T18 push (docs/run-simulation.md) showed the last ones come
+//  in bursts once the wall breaks (five within ~10 game seconds), so saves
+//  there buy seconds; the waves come from earlier, single leaks.
 //  Death Defy chance: workshop 0.4% a level (75 levels, 30%) + module
 //  substats. Tiers whose battle conditions include Death Defy Down lower it
 //  in the run by an amount not modeled here (the observed procs show it).

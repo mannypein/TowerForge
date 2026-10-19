@@ -7,7 +7,8 @@ import { calcCannonModuleMult, calcModuleDamageMult, calcProjectileFactors, prim
 import { activeLoadout, enhForPreset, masteredCardMult, milestoneReached, uniqueTier } from './statHelpers';
 import { DEFAULT_RUN_RATES, runRatesFrom } from './runRates';
 import { calcCFSpeedReduction, calcCFUptime, calcEnemySpeedFactor, calcSlowAura } from './ttt';
-import { baseEnemyHealth } from './enemyStats';
+import { baseEnemyDamage, baseEnemyHealth } from './enemyStats';
+import { WS_MAX_RECOVERY } from '../constants/buildStatCurves';
 import { parseGameExport } from './gameExport';
 import { moduleMaxLevel } from '../constants/moduleRarities';
 import { UNIQUE_MODULES } from '../constants/moduleData';
@@ -242,5 +243,22 @@ describe('run rates from a battle report', () => {
         expect(r.poisonedShare).toBe(1);        // capped at every enemy
         expect(r.bhShare).toBe(0.25);
         expect(r.orbHitsPerEnemy).toBe(1);
+    });
+});
+
+describe('end of a T18 push (owner’s recording, 2026-10-19)', () => {
+    // The tower sat at 288.79–289.58T on a 17.53T max: packages overheal to
+    // Max Recovery × max health, and the workshop's max level gives 16.5.
+    it('overheals to 16.5 × max health with Max Recovery maxed', () => {
+        expect(WS_MAX_RECOVERY.valueAt(WS_MAX_RECOVERY.maxLevel)).toBeCloseTo(16.5, 10);
+        expect(17.53 * 16.5).toBeCloseTo(289.2, 1);
+    });
+
+    // Every hit is lethal for Glass Cannon there: a basic enemy's attack at
+    // W8881 (at the ~58% attack skip of the owner's runs) dwarfs the
+    // overhealed tower — which is why only the wall and run savers stop one.
+    it('enemy hits dwarf the overhealed tower', () => {
+        const attack = baseEnemyDamage(Math.floor(8881 * (1 - 0.577)), 18);
+        expect(attack / 289.2e12).toBeGreaterThan(1e6);
     });
 });
