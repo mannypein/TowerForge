@@ -33,6 +33,14 @@ if ($LASTEXITCODE -ne 0) {
 }
 Pop-Location
 
+# ── Step 1b: TowerForge Link (Windows helper) into the site's downloads ─
+Write-Host "`n[1b/6] Building TowerForge Link (downloads/TowerForgeLink.exe)..." -ForegroundColor Yellow
+dotnet publish TowerForge.Link -c Release -o towerforge.client/dist/downloads
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "TowerForge Link build failed!" -ForegroundColor Red
+    exit 1
+}
+
 # ── Step 2: Build backend ───────────────────────────────────
 Write-Host "`n[2/6] Building backend..." -ForegroundColor Yellow
 dotnet publish TowerForge.Server -c Release -r linux-x64 --self-contained true -o publish

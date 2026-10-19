@@ -16,6 +16,8 @@ import CurrencyBar from './components/common/CurrencyBar';
 // ── Tab Components (stubs for now — filled in one by one) ────
 import ProfileTab from './components/tabs/ProfileTab';
 import LoginModal from './components/LoginModal';
+import LinkModal from './components/LinkModal';
+import { exportAge, linkExport } from './engine/linkClient';
 import PerksTab from './components/tabs/PerksTab';
 import TiersTab from './components/tabs/TiersTab';
 import WorkshopTab from './components/tabs/WorkshopTab';
@@ -101,6 +103,9 @@ const groupOf = (tab: TabName): TabGroup => TAB_GROUPS.find(g => g.tabs.some(t =
 export default function App() {
     const [showLoginModal, setShowLoginModal] = useState(false);
     const [pdfBusy, setPdfBusy] = useState(false);
+    // "Get from emulator": TowerForge Link's setup dialog (with its message, if it answered).
+    const [linkBusy, setLinkBusy] = useState(false);
+    const [linkModal, setLinkModal] = useState<{ problem: string | null } | null>(null);
     // The tab last opened in each section, so going back to a section returns to it.
     const [lastInGroup, setLastInGroup] = useState<Record<string, TabName>>({});
     // ?share=CODE opens the read-only viewer instead of the app shell.
@@ -180,12 +185,39 @@ export default function App() {
         }
     }
 
+    // The export straight off an emulator, through TowerForge Link (a
+    // small helper on this PC — engine/linkClient.ts). If the helper isn't
+    // running or reports a problem, the setup dialog says what to do.
+    async function getFromEmulator() {
+        setLinkBusy(true);
+        try {
+            const r = await linkExport();
+            if (r.ok) {
+                let json: unknown;
+                try {
+                    json = JSON.parse(r.text);
+                } catch {
+                    setLinkModal({ problem: 'The export file didn’t read as game data. Export your data again in the game, then try again.' });
+                    return;
+                }
+                setLinkModal(null);
+                const when = r.modified ? `, exported ${exportAge(r.modified)}` : '';
+                importJson(json, r.text, 'link', `Read from ${r.source}${when}. Export again in the game whenever you want fresh data.`);
+                return;
+            }
+            trackEvent(r.reason === 'unreachable' ? 'Emulator link not running' : `Emulator link: ${r.code}`);
+            setLinkModal({ problem: r.reason === 'problem' ? r.message : null });
+        } finally {
+            setLinkBusy(false);
+        }
+    }
+
     // Imports parsed data: the game's export, else a TowerForge backup.
-    function importJson(json: unknown, text: string, source: 'json' | 'pdf') {
+    function importJson(json: unknown, text: string, source: 'json' | 'pdf' | 'link', note?: string) {
         if (isGameExport(json)) {
             const imp = parseGameExport(json);
             applyGameImport(imp, json);
-            trackEvent(source === 'pdf' ? 'Import game data (PDF)' : 'Import game data');
+            trackEvent(source === 'pdf' ? 'Import game data (PDF)' : source === 'link' ? 'Import game data (emulator)' : 'Import game data');
             const lines = [
                 '✓ Imported from your game data:',
                 '• Currencies',
@@ -208,6 +240,7 @@ export default function App() {
                 'Not imported yet: bots and relics.',
                 'The game file doesn’t include bots, and we’re still confirming the rest, so what you entered there was left as it is.',
                 ...(source === 'pdf' ? ['', 'Read from a PDF — if something looks off, import the tool_export.json file itself.'] : []),
+                ...(note ? ['', note] : []),
             ];
             alert(lines.join('\n'));
             return;
@@ -296,6 +329,9 @@ export default function App() {
             {pdfBusy && (
                 <div className="opt-apply-toast" role="status">Reading the PDF… this can take a few seconds.</div>
             )}
+            {linkBusy && !linkModal && (
+                <div className="opt-apply-toast" role="status">Getting your data from the emulator…</div>
+            )}
             {/* ── Header ── */}
             <header className="app-header">
                 <div className="app-logo">
@@ -309,6 +345,14 @@ export default function App() {
                     {/* <button className="btn btn-cloud" onClick={() => setShowLoginModal(true)}>
                         ☁ Cloud Pull
                     </button> */}
+                    <button
+                        className="btn btn-dim lnk-btn"
+                        onClick={() => void getFromEmulator()}
+                        disabled={linkBusy}
+                        title="Copy the game's data export straight from BlueStacks or another emulator on this PC"
+                    >
+                        🖥 Get from emulator
+                    </button>
                     <label className="btn btn-gold" style={{ cursor: 'pointer' }} title="Import the data export from The Tower (tool_export.json)">
                         ⬆ Import Game Data
                         <input
@@ -381,6 +425,15 @@ export default function App() {
             <main className="tab-content">
                 <Suspense fallback={null}>{renderTab()}</Suspense>
             </main>
+
+            {linkModal && (
+                <LinkModal
+                    problem={linkModal.problem}
+                    busy={linkBusy}
+                    onRetry={() => void getFromEmulator()}
+                    onClose={() => setLinkModal(null)}
+                />
+            )}
 
             {/* ── Login Modal ── */}
             {showLoginModal && (

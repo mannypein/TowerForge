@@ -7,4 +7,5 @@
     <Deploy />
   </Project>
   <Project Path="TowerForge.Server/TowerForge.Server.csproj" />
+  <Project Path="TowerForge.Link/TowerForge.Link.csproj" />
 </Solution>
