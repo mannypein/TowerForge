@@ -2837,3 +2837,60 @@
     gap: 8px;
     margin-bottom: 12px;
 }
+
+/* Tournament: the module swaps the loadout search found. */
+.tn-swaps {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.tn-swap {
+    padding: 8px 10px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    min-width: 0;
+}
+
+.tn-swap-head {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+    color: var(--gold);
+    margin-bottom: 4px;
+}
+
+.tn-swap-row {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 4px 0;
+    font-size: 12px;
+    overflow-wrap: anywhere;
+}
+
+    .tn-swap-row + .tn-swap-row {
+        border-top: 1px solid var(--border);
+    }
+
+.tn-pos {
+    font-size: 10px;
+    color: var(--text-dim);
+}
+
+.tn-from {
+    color: var(--text-dim);
+    text-decoration: line-through;
+}
+
+.tn-to {
+    font-weight: 600;
+}
+
+.tn-waves {
+    font-size: 11px;
+    color: var(--gold);
+}

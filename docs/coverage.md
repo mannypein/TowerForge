@@ -44,7 +44,7 @@ reports set the baseline, so even unmodeled effects are already in it; only
 | Run length for tanky builds | ◐ | eHP scores survival but not waves |
 | Death Defy, Energy Shield, Second Wind, Demon Mode / Nuke automation | ◐ | Counts read from each run ("Saved by", 2026-10-18); Death Defy valued as killing hits survived (exact chance math), not yet as waves — needs how often killing hits come near the end |
 | Wall | ◐ | eHP only; how many GC hits it takes isn't modeled |
-| Tournaments and battle conditions | ◐ | Tournament waves from your tournament deaths on the tournament health curve (2026-10-18); heat and league conditions are in those deaths, not modeled on their own; no coins per run for tournaments |
+| Tournaments and battle conditions | ◐ | Tournament waves from your tournament deaths on the tournament health curve (2026-10-18); best module loadout for tournament waves (Tournament page); heat and league conditions are in those deaths, not modeled on their own; no coins per run for tournaments |
 | Dissonance runs | ✗ | Not in the export the site reads |
 
 ## Economy

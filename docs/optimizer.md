@@ -82,6 +82,32 @@ the same wave, survival (not GC) — plus the cost in every currency.
   the killers' health labs; each coin bonus's average factor
   (`farming.coinFactors`: 1 + coverage × (bonus − 1)).
 
+## Best module loadout — Tournament page (2026-10-18)
+
+`engine/loadoutOptimizer.ts`, Optimizer → Tournament. Which owned modules
+to equip, main and assist per type, for the most tournament waves (Glass
+Cannon) or survival (other builds).
+
+- **Calibrated on tournaments:** the newest tournament run is the Battle
+  Report (its damage mix and run rates), and waves come from the tournament
+  deaths on the tournament health curve (`runModels` with that run chosen).
+- **Search:** every owned module of a type is tried in the main slot and,
+  once the slot is unlocked, the assist slot; one slot changes at a time and
+  the best swap stays; up to 4 rounds, until nothing improves (coordinate
+  ascent). A module can't sit in two slots. The score is `goalScore` — the
+  same push score the Optimizer ranks by (flat damage × skip × killers'
+  health labs), so main effects at the slot's level, substats at the assist
+  slot's efficiency and the unique effects the model reads all count.
+- **Waves:** the total gain goes through `pathRunGains` with the skip
+  points the swap adds. Each swap is also shown on its own from the current
+  loadout; swaps multiply, so those don't add up to the total.
+- **What it can't see:** a module whose value is outside the push score
+  (armor for Glass Cannon, coin modules) is never moved for waves.
+  Battle conditions differ week to week and past tournaments mix them; the
+  result is for an average week of the player's own tournaments.
+- "Save as a loadout" adds (or replaces) a loadout named "Best for
+  tournaments"; the equipped loadout doesn't change.
+
 ## Chance mechanics and variance (2026-10-18)
 
 Everything chance-based is counted at its average:
