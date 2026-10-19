@@ -73,11 +73,18 @@ export interface GoalModels {
     projectAt?: (wave: number) => RunProjection;   // coins and real time for a run to a wave
 }
 
-// Run Length and Coins per Run, from the saved battle history.
-export function runModels(s: AccountState): GoalModels {
-    const run = buildRunLengthModel(s.importedBattles);
+// Run Length and Coins per Run, from the saved battle history, matching
+// the chosen run: a tournament run is measured against your tournament
+// deaths on the tournament curve (and has no Coins per Run — tournaments
+// pay differently), a campaign run against deaths on its own tier.
+export function runModels(s: Pick<AccountState, 'importedBattles' | 'cardData' | 'activePreset'
+    | 'battleReportText' | 'battleReportChoice'>): GoalModels {
+    const chosen = activeBattleReport(s.battleReportText, s.importedBattles, s.battleReportChoice);
+    const tournament = !!chosen?.tournament;
+    const run = buildRunLengthModel(s.importedBattles, { tournament, tier: chosen?.tier });
     const settings = runSettingsFromCards(s.cardData, s.activePreset);
-    const coinModel = buildRunModel(s.importedBattles, defaultBattleIndex(s.importedBattles), settings);
+    const coinModel = tournament ? null
+        : buildRunModel(s.importedBattles, defaultBattleIndex(s.importedBattles), settings);
     const projectAt = coinModel && run
         ? (wave: number) => projectRun(coinModel.calibration, settings, wave, run.tier)
         : undefined;

@@ -9,6 +9,7 @@ import { parseGameExport } from './gameExport';
 import { applyChange, changeCost, upgradeTargets, whatIf } from './whatIf';
 import type { OptimizerSnapshot } from './optimizer';
 import { buildRunLengthModel, skipWorth } from './runLength';
+import { runModels } from './accountModels';
 import { buildEdpsCalibration, edpsParts, edpsSurvivalScore } from './edps';
 import { calcTTT } from './ttt';
 import { UWS, UW_STONE_COSTS } from '../constants/gameData';
@@ -44,6 +45,30 @@ function account(edit?: (s: OptimizerSnapshot) => void): OptimizerSnapshot {
 }
 
 const target = (snap: OptimizerSnapshot, label: string) => upgradeTargets(snap).find(t => t.label === label)!;
+
+describe('the runs waves are measured against', () => {
+    // Campaign deaths near W8300 plus tournament deaths near W135.
+    const mixed = [...runs, ...parseGameExport(makeExport({
+        BattleHistory: [130, 135, 140].map((wave, i) => battle({
+            BattleDate: `2026-10-2${i}T12:00:00Z`, Wave: wave, KilledBy: 9, IsTournament: true,
+            HealthLevelSkips: Math.floor(wave * 0.2), AttackLevelSkips: 0,
+        })),
+    })).battles];
+    const pick = (choice: number) => runModels({
+        importedBattles: mixed, cardData: { data: {}, slots: 1, presets: {} }, activePreset: 0,
+        battleReportText: '', battleReportChoice: choice,
+    });
+
+    it('follow the chosen run: a tournament run uses tournament deaths, with no coins per run', () => {
+        const t = pick(mixed.length - 1);
+        expect(t.run!.tournament).toBe(true);
+        expect(t.run!.typicalWave).toBe(135);
+        expect(t.coinsAt).toBeUndefined();
+        const c = pick(4);
+        expect(c.run!.tournament).toBe(false);
+        expect(c.run!.typicalWave).toBeGreaterThan(8000);
+    });
+});
 
 describe('what can change', () => {
     it('lists every upgrade with its level now and its max', () => {

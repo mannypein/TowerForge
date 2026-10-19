@@ -26,14 +26,12 @@ import type { EdpsCalibration } from '../../engine/edps';
 import { applyGoal, chosenReport, runModels, snapshotFromState } from '../../engine/accountModels';
 import { CELL_BOOSTS } from '../../engine/upgradeCosts';
 import { BattleReportPanel, EconomyStats, EhpStats } from './BuildPanels';
-import { buildRunLengthModel, pathRunGains, pathSkipGains, skipWorth } from '../../engine/runLength';
+import { buildRunLengthModel, pathRunGains, pathSkipGains } from '../../engine/runLength';
 import { formatLabTime } from '../../engine/upgradeCosts';
 import { healthSkipSources, skipUpgradePath } from '../../engine/levelSkip';
 import type { SkipUpgrade } from '../../engine/levelSkip';
 import { formatGameNumber } from '../../engine/gameNumbers';
 import type { StepRunGain } from '../../engine/runLength';
-import { buildRunModel, projectRun, runSettingsFromCards } from '../../engine/runCoins';
-import { defaultBattleIndex } from '../../engine/gameExport';
 
 // The goal every panel ranks by, and how much coins count in "coins and
 // push". Remembered per browser (the old Rank by "waves" carries over).
@@ -118,15 +116,15 @@ export default function OptimizerTab() {
         damage: 'eDPS', waves: 'waves', coins: 'coins', survival: 'survival', blend: 'coins and push',
     }[shown];
 
-    // Run Length (waves) and Coins per Run (coins), from the saved runs.
-    const runModel = useMemo(() => buildRunLengthModel(importedBattles), [importedBattles]);
-    const coinsAt = useMemo(() => {
-        const settings = runSettingsFromCards(cardData, activePreset);
-        const model = buildRunModel(importedBattles, defaultBattleIndex(importedBattles), settings);
-        if (!model || !runModel) return undefined;
-        return (wave: number) => projectRun(model.calibration, settings, wave, runModel.tier).coins;
-    }, [importedBattles, cardData, activePreset, runModel]);
-    const worth = useMemo(() => (runModel ? skipWorth(runModel) : 0), [runModel]);
+    // Run Length (waves) and Coins per Run (coins), from the saved runs that
+    // match the chosen Battle Report (tournament or campaign, and its tier).
+    const battleReportText = useGameStore(s => s.battleReportText);
+    const battleReportChoice = useGameStore(s => s.battleReportChoice);
+    const models = useMemo(
+        () => runModels({ importedBattles, cardData, activePreset, battleReportText, battleReportChoice }),
+        [importedBattles, cardData, activePreset, battleReportText, battleReportChoice],
+    );
+    const { run: runModel, coinsAt, worth } = models;
     const runGains = (cat: OptCategory): StepRunGain[] | undefined => {
         if (!wavesMode || !runModel) return undefined;
         const path = results[cat] ?? [];
@@ -646,7 +644,10 @@ export default function OptimizerTab() {
                             so they don&apos;t fall behind as waves get harder, and the enemies that end Glass Cannon
                             runs ignore orbs and Black Hole. Enemy Health Level Skip counts as the damage that gains
                             the same waves. Waves come from Run Length and coins per run from Coins
-                            per Run{runModel ? '' : ' — import runs that ended in a death to see them'}.
+                            per Run{runModel
+                                    ? ` — from your last ${runModel.used.length} ${runModel.tournament ? 'tournament' : `tier ${runModel.tier}`} deaths (around W${runModel.typicalWave.toLocaleString()}), to match your chosen run`
+                                    : ' — import runs that ended in a death to see them'}.
+                                {runModel?.tournament && ' Tournaments have no coins per run here — they pay differently.'}
                         </>)}
                         {shown === 'damage' && (<>
                             <strong>Ranked for all damage (eDPS).</strong>{' '}

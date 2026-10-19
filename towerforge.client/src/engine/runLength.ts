@@ -69,15 +69,15 @@ export function runEnds(runs: BattleReport[]): RunEnd[] {
             index, run,
             killer: killedBy(run),
             healthLevel,
-            enemyHealth: healthLevel !== null ? baseEnemyHealth(healthLevel, run.tier) : null,
+            enemyHealth: healthLevel !== null ? baseEnemyHealth(healthLevel, run.tier, run.tournament) : null,
         };
     });
 }
 
 // Waves until the basic enemy's health reaches `limit`, skipping `skipRate`
 // of health levels (enemy health only rises with the wave, so a halving search works).
-export function deathWave(limit: number, tier: number, skipRate: number): number {
-    const healthAt = (w: number) => baseEnemyHealth(Math.max(1, w - Math.floor(w * skipRate)), tier);
+export function deathWave(limit: number, tier: number, skipRate: number, tournament = false): number {
+    const healthAt = (w: number) => baseEnemyHealth(Math.max(1, w - Math.floor(w * skipRate)), tier, tournament);
     let lo = 1;
     let hi = 1;
     while (healthAt(hi) < limit && hi < 1e6) hi *= 2;
@@ -90,6 +90,7 @@ export function deathWave(limit: number, tier: number, skipRate: number): number
 
 export interface RunLengthModel {
     tier: number;
+    tournament: boolean;      // built from tournament deaths, on the tournament curve
     used: RunEnd[];           // the deaths the model works from (newest first)
     limit: number;            // their typical basic-enemy health at death (geometric mean)
     skipRate: number;         // health levels skipped per wave (newest of those runs)
@@ -98,20 +99,31 @@ export interface RunLengthModel {
 
 const RECENT_DEATHS = 5;
 
-// The newest deaths on the tier the player dies on most.
-export function buildRunLengthModel(runs: BattleReport[]): RunLengthModel | null {
+// Which deaths to learn from: campaign or tournament runs (they scale
+// differently), and on campaign a tier — the chosen run's when it has
+// deaths, else the tier you die on most.
+export interface RunPick {
+    tournament?: boolean;
+    tier?: number;
+}
+
+// The newest deaths of the picked kind.
+export function buildRunLengthModel(runs: BattleReport[], pick: RunPick = {}): RunLengthModel | null {
+    const tournament = !!pick.tournament;
     const deaths = runEnds(runs).filter(e =>
-        e.killer !== null && e.enemyHealth !== null && !e.run.tournament && e.run.wave > 1);
+        e.killer !== null && e.enemyHealth !== null && e.run.tournament === tournament && e.run.wave > 1);
     if (deaths.length === 0) return null;
     const byTier = new Map<number, number>();
     for (const d of deaths) byTier.set(d.run.tier, (byTier.get(d.run.tier) ?? 0) + 1);
-    const tier = [...byTier.entries()].sort((a, b) => b[1] - a[1] || b[0] - a[0])[0][0];
+    const tier = pick.tier !== undefined && byTier.has(pick.tier)
+        ? pick.tier
+        : [...byTier.entries()].sort((a, b) => b[1] - a[1] || b[0] - a[0])[0][0];
     const used = deaths.filter(d => d.run.tier === tier)
         .sort((a, b) => (b.run.time ?? b.index) - (a.run.time ?? a.index))
         .slice(0, RECENT_DEATHS);
     const limit = Math.exp(used.reduce((s, d) => s + Math.log(d.enemyHealth!), 0) / used.length);
     return {
-        tier, used, limit,
+        tier, tournament, used, limit,
         skipRate: 1 - used[0].healthLevel! / used[0].run.wave,
         typicalWave: Math.round(used.reduce((s, d) => s + d.run.wave, 0) / used.length),
     };
@@ -136,12 +148,12 @@ const startWaves = new WeakMap<RunLengthModel, number[]>();
 function averageMove(m: RunLengthModel, healthFactor: number, extraSkip: number): number {
     let from = startWaves.get(m);
     if (!from) {
-        from = m.used.map(d => deathWave(d.enemyHealth!, m.tier, 1 - d.healthLevel! / d.run.wave));
+        from = m.used.map(d => deathWave(d.enemyHealth!, m.tier, 1 - d.healthLevel! / d.run.wave, m.tournament));
         startWaves.set(m, from);
     }
     const moves = m.used.map((d, i) => {
         const rate = 1 - d.healthLevel! / d.run.wave;
-        return deathWave(d.enemyHealth! * healthFactor, m.tier, Math.min(0.99, rate + extraSkip)) - from[i];
+        return deathWave(d.enemyHealth! * healthFactor, m.tier, Math.min(0.99, rate + extraSkip), m.tournament) - from[i];
     });
     return moves.reduce((a, b) => a + b, 0) / moves.length;
 }
@@ -201,8 +213,8 @@ export function wavesSpread(
         let start = 0;
         for (let k = 0; k < LUCK_POINTS; k++) {
             const spread = -LUCK + (2 * LUCK * k) / (LUCK_POINTS - 1);
-            moved += deathWave(d.enemyHealth! * Math.exp(logGain + spread), m.tier, Math.min(0.99, rate + points / 100));
-            start += deathWave(d.enemyHealth! * Math.exp(spread), m.tier, rate);
+            moved += deathWave(d.enemyHealth! * Math.exp(logGain + spread), m.tier, Math.min(0.99, rate + points / 100), m.tournament);
+            start += deathWave(d.enemyHealth! * Math.exp(spread), m.tier, rate, m.tournament);
         }
         return (moved - start) / LUCK_POINTS;
     });

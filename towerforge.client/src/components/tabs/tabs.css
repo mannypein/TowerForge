@@ -2830,3 +2830,10 @@
     color: var(--gold);
     text-align: right;
 }
+
+/* Run Length: campaign or tournament runs. */
+.rl-kind {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}

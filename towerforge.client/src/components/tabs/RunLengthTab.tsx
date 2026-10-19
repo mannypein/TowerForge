@@ -6,7 +6,7 @@
 //  Health Level Skip would buy (engine/runLength.ts, runCoins.ts).
 // ============================================================
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useGameStore } from '../../store/useGameStore';
 import { buildRunLengthModel, runEnds, wavesFromDamage, wavesFromSkip } from '../../engine/runLength';
 import { runSavers } from '../../engine/battleReport';
@@ -34,8 +34,15 @@ export default function RunLengthTab() {
     const cardData = useGameStore(s => s.cardData);
     const preset = useGameStore(s => s.activePreset);
 
-    const model = useMemo(() => buildRunLengthModel(battles), [battles]);
-    const ends = useMemo(() => runEnds(battles).filter(e => !e.run.tournament && e.run.wave > 1).reverse(), [battles]);
+    // Campaign and tournament runs scale differently, so each has its own model.
+    const [tourney, setTourney] = useState(false);
+    const hasTourney = useMemo(() => buildRunLengthModel(battles, { tournament: true }) !== null, [battles]);
+    const showTourney = tourney && hasTourney;
+    const model = useMemo(() => buildRunLengthModel(battles, { tournament: showTourney }), [battles, showTourney]);
+    const ends = useMemo(
+        () => runEnds(battles).filter(e => e.run.tournament === showTourney && e.run.wave > 1).reverse(),
+        [battles, showTourney],
+    );
     // Coins per run from step 1, tuned on the default run with the card settings.
     const coins = useMemo(() => {
         const settings = runSettingsFromCards(cardData, preset);
@@ -53,7 +60,9 @@ export default function RunLengthTab() {
     }
 
     const used = new Set(model.used.map(d => d.index));
-    const coinsAt = (wave: number) => coins ? projectRun(coins.cal, coins.settings, wave, model.tier).coins : null;
+    // Tournaments pay differently; Coins per Run is campaign only.
+    const coinsAt = (wave: number) =>
+        coins && !model.tournament ? projectRun(coins.cal, coins.settings, wave, model.tier).coins : null;
     const baseCoins = coinsAt(model.typicalWave);
     const coinChange = (extraWaves: number) => {
         const at = coinsAt(model.typicalWave + extraWaves);
@@ -69,8 +78,18 @@ export default function RunLengthTab() {
                 damage pushes it to where enemies are that much tougher.
             </div>
 
+            {hasTourney && (
+                <div className="rl-kind" role="group" aria-label="Which runs">
+                    <button className={`btn ${showTourney ? 'btn-dim' : 'btn-accent'}`} onClick={() => setTourney(false)}>Campaign</button>
+                    <button className={`btn ${showTourney ? 'btn-accent' : 'btn-dim'}`} onClick={() => setTourney(true)}>Tournament</button>
+                </div>
+            )}
+
             <div className="section" style={{ marginBottom: '12px' }}>
-                <div className="section-head"><h3>Where your runs end</h3><span className="s-badge">Tier {model.tier}</span></div>
+                <div className="section-head">
+                    <h3>Where your runs end</h3>
+                    <span className="s-badge">{model.tournament ? 'Tournament' : `Tier ${model.tier}`}</span>
+                </div>
                 <div className="section-body en-inputs">
                     <div className="rc-result">
                         <div><span>Runs end around</span><strong>W{model.typicalWave.toLocaleString()}</strong></div>
@@ -78,7 +97,9 @@ export default function RunLengthTab() {
                         <div><span>+10% damage</span><strong>+{Math.round(wavesFromDamage(model, 0.1))} waves</strong></div>
                     </div>
                     <p className="en-note">
-                        From your {model.used.length} newest death{model.used.length === 1 ? '' : 's'} on tier {model.tier} (marked • below).
+                        From your {model.used.length} newest {model.tournament ? 'tournament ' : ''}death{model.used.length === 1 ? '' : 's'}
+                        {model.tournament ? '' : ` on tier ${model.tier}`} (marked • below).
+                        {model.tournament && ' Tournament enemies get tougher much faster than on a campaign tier, so the same upgrade buys far fewer waves. '}
                         Enemy health jumps at some waves — a wall — so the same extra damage buys more waves in
                         some runs than others; the tables average your recent deaths.
                     </p>

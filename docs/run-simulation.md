@@ -322,6 +322,16 @@ reports count kills per type, so the mix can be **calibrated per player**.
 - **Overheat** (campaign, after clearing w4500 once): from wave 15000 on T1,
   250 earlier per tier, 10000 from T21 — Skip Decay 1%/wave and an extra
   fleet every 100 waves.
+- **Tournament run length (2026-10-18):** the site's enemy health has the
+  SDK's tournament branch (`baseEnemyHealth(…, tournament)`): body
+  0.465·w^e + 5.84·w + 1.5, ×1.004 a wave, ×1.65 per hundred waves past 100.
+  The SDK's two tournament exponents (2.308, 2.408) sit behind contradictory
+  switch names; its code path gives a league tournament 2.408 — the code's
+  choice, unconfirmed. Run Length keeps campaign and tournament deaths apart,
+  and the Optimizer and What If measure waves against the deaths matching
+  the chosen Battle Report (tournament, or the run's tier). Owner's report:
+  a tournament run near W135 was shown +40 waves for one substat level,
+  because waves came from campaign deaths near W8300.
 - **Tournaments:** different scaling curve (above); league conditions and
   "heat" that ramps with wave (SDK `tournament-heat-bc.ts`); Legend adds Damage
   Decay / Health Decay from w1500 and More Elites from w2000.

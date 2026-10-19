@@ -73,6 +73,38 @@ describe('death wave', () => {
     });
 });
 
+describe('tournament runs', () => {
+    // A tournament death at `wave` with 20% of health levels skipped.
+    const tDeath = (wave: number, day: number) => ({
+        ...death(wave, day), IsTournament: true, HealthLevelSkips: Math.floor(wave * 0.2), AttackLevelSkips: 0,
+    });
+    const all = runs(death(8100, 10), death(8200, 11), tDeath(130, 12), tDeath(135, 13), tDeath(140, 14));
+
+    it('are kept apart from campaign runs', () => {
+        expect(buildRunLengthModel(all)!.used.map(d => d.run.wave).sort()).toEqual([8100, 8200]);
+        const t = buildRunLengthModel(all, { tournament: true })!;
+        expect(t.tournament).toBe(true);
+        expect(t.used.map(d => d.run.wave).sort()).toEqual([130, 135, 140]);
+        expect(t.typicalWave).toBe(135);
+    });
+
+    it('get far fewer waves from the same damage (enemies get tougher much faster)', () => {
+        const t = buildRunLengthModel(all, { tournament: true })!;
+        const c = buildRunLengthModel(all)!;
+        const tWaves = wavesFromDamage(t, 0.1);
+        expect(tWaves).toBeGreaterThan(0);
+        expect(tWaves).toBeLessThan(10);                                   // a few waves near W135…
+        expect(wavesFromDamage(c, 0.1)).toBeGreaterThan(5 * tWaves);       // …against dozens near W8100
+    });
+
+    it('use the chosen tier on campaign when it has deaths', () => {
+        const mixed = runs(death(8100, 10), death(8200, 11), { ...death(6000, 12), Tier: 17 });
+        expect(buildRunLengthModel(mixed)!.tier).toBe(18);
+        expect(buildRunLengthModel(mixed, { tier: 17 })!.tier).toBe(17);
+        expect(buildRunLengthModel(mixed, { tier: 5 })!.tier).toBe(18);    // no deaths there
+    });
+});
+
 describe('which enemies end the runs', () => {
     it('shares out the recorded killers, leaving out runs without one', () => {
         const model = buildRunLengthModel(runs(death(8100, 10, 9), death(8200, 11, 2), death(8402, 12, 9), death(8500, 13, 6)))!;

@@ -7,6 +7,7 @@ import { calcCannonModuleMult, calcModuleDamageMult, calcProjectileFactors, prim
 import { activeLoadout, enhForPreset, masteredCardMult, milestoneReached, uniqueTier } from './statHelpers';
 import { DEFAULT_RUN_RATES, runRatesFrom } from './runRates';
 import { calcCFSpeedReduction, calcCFUptime, calcEnemySpeedFactor, calcSlowAura } from './ttt';
+import { baseEnemyHealth } from './enemyStats';
 import { parseGameExport } from './gameExport';
 import { moduleMaxLevel } from '../constants/moduleRarities';
 import { UNIQUE_MODULES } from '../constants/moduleData';
@@ -109,6 +110,19 @@ describe('Chrono Field', () => {
         expect(calcSlowAura(cards(['Slow Aura'], false), 0)).toBeCloseTo(0.31, 10);
         expect(calcSlowAura(cards(['Slow Aura'], true), 0)).toBeCloseTo(0.31, 10);
         expect(calcSlowAura(cards([], false), 0)).toBe(0);
+    });
+});
+
+describe('tournament enemy health', () => {
+    it('grows ×1.65 at each hundred waves and ×1.004 a wave on top of the campaign bands', () => {
+        const t = (w: number) => baseEnemyHealth(w, 18, true);
+        expect(t(201) / t(200)).toBeGreaterThan(1.65);
+        expect(t(150) / t(149)).toBeGreaterThan(1.004);
+        expect(t(150) / t(149)).toBeLessThan(1.65);
+    });
+
+    it('leaves the campaign curve as it was', () => {
+        expect(baseEnemyHealth(3360, 18)).toBe(baseEnemyHealth(3360, 18, false));
     });
 });
 

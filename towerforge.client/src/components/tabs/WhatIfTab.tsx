@@ -255,7 +255,7 @@ export default function WhatIfTab() {
                         </div>
                         {result.spread && (
                             <p className="wi-hint">
-                                Your last {result.spread.runs} deaths ended between W{result.spread.endedMin.toLocaleString()} and
+                                Your last {result.spread.runs} {result.spread.tournament ? 'tournament deaths' : 'deaths'} ended between W{result.spread.endedMin.toLocaleString()} and
                                 W{result.spread.endedMax.toLocaleString()} — runs already vary by{' '}
                                 {(result.spread.endedMax - result.spread.endedMin).toLocaleString()} waves, so a gain smaller than
                                 that shows over several runs, not one.

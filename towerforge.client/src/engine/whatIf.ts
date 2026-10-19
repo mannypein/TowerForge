@@ -252,7 +252,7 @@ export interface WhatIfResult {
     perChange: { kind: ChangeKind; key: string; waves: number }[];   // each change on its own (GC)
     // Run to run: the waves gained from each recent death on its own, and
     // the waves those runs ended on.
-    spread: { min: number; max: number; endedMin: number; endedMax: number; runs: number } | null;
+    spread: { min: number; max: number; endedMin: number; endedMax: number; runs: number; tournament: boolean } | null;
     costs: Costs;
 }
 
@@ -424,6 +424,7 @@ export function whatIf(
         spread = {
             min: Math.min(...s.moves), max: Math.max(...s.moves),
             endedMin: Math.min(...s.ended), endedMax: Math.max(...s.ended), runs: s.ended.length,
+            tournament: run.tournament,
         };
         const calib = buildEdpsCalibration(base, report);
         if (calib) {

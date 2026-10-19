@@ -98,13 +98,27 @@ const growth = (level: number, steps: Step[]) =>
 
 const tierAddon = (t: number, table: number[], cap: number) => (t <= 9 ? 0 : t <= 14 ? table[t - 10] : cap);
 
-// Health of a basic enemy at a stat level on a campaign tier.
-export function baseEnemyHealth(level: number, tier: number): number {
+// Health of a basic enemy at a stat level on a campaign tier — or, with
+// `tournament`, in a tournament. Tournaments use the same bands and growth
+// with a steeper body (0.465·w^e + 5.84·w + 1.5), ×1.004 a wave and ×1.65
+// for every 100 waves past the first hundred (TheTowerSDK
+// base-empirical-scaling.ts, tournament branch). The SDK's league switch
+// picks exponent 2.408 over 2.308 by names that contradict each other; 2.408
+// is what its code path gives a league tournament — the code's choice, not
+// checked against a tournament Wave Info panel yet. Only ratios between
+// waves are used for tournaments, where the two differ by ~4%.
+export function baseEnemyHealth(level: number, tier: number, tournament = false): number {
     const w = Math.max(1, Math.floor(level));
     const t = clampTier(tier);
     const bands = 1 + HP_BANDS.reduce((s, [c, d]) => s + c * bracket(w, d), 0);
-    const exp = 2.130000114440918 + tierAddon(t, HP_EXP_ADDON, HP_EXP_CAP);
-    const body = w ** exp * 0.05000000074505806 + 0.800000011920929 * w + 1.5;
+    const addon = tierAddon(t, HP_EXP_ADDON, HP_EXP_CAP);
+    if (tournament) {
+        const body = w ** (2.4079999923706055 + addon) * 0.4650000035762787 + 5.840000152587891 * w + 1.5;
+        const centuries = w >= 100 ? Math.floor((w - 1) / 100) : 0;
+        return bands * growth(w, HP_GROWTH) * body * 1.649999976158142 ** centuries
+            * 1.003999948501587 ** w * TIER_PRESSURE[t];
+    }
+    const body = w ** (2.130000114440918 + addon) * 0.05000000074505806 + 0.800000011920929 * w + 1.5;
     return bands * growth(w, HP_GROWTH) * body * TIER_PRESSURE[t];
 }
 
