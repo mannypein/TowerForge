@@ -11,14 +11,15 @@ reports set the baseline, so even unmodeled effects are already in it; only
 
 | System | Status | Notes |
 |---|---|---|
-| Tower damage, attack speed, crit, super crit, Damage/Meter, range | ✅ | towerDamage.ts; workshop, labs, cards, masteries, enhancements, relics, modules |
+| Tower damage, attack speed, crit, super crit, Damage/Meter, range | ✅ | towerDamage.ts; workshop, labs, cards, masteries, enhancements, relics, modules. Damage/Meter on tower shots since 2026-10-19 (1 + DPM × distance, shots at half the range on average — the code's assumption); before that it only fed Spotlight+ |
 | Multishot, Bounce Shot, Rapid Fire | ✅ | Averages (2026-10-18); give Chain Lightning, tower shots and Smite more hits |
 | Rend Armor | ◐ | In the tower-shots share; Rend chance/mult upgrades aren't modeled on their own |
 | All 9 UWs + UW+ | ✅ | uwdps.ts; Golden Tower for coins only |
 | Flame Bot | ✅ | From the run's FlameBotDamage (2026-10-18): ×Damage × tower damage × crits ÷ cooldown; burn stacks and Wild Fire (Bot+) not modeled |
 | Amplify Bot, Bot Bot | ✅ | Tower damage multiplier |
 | Death Ray card | ◐ | Read from runs and shown; kills what it touches (not bosses or protected enemies), so it isn't flat damage; its upgrades (Double Death Ray lab) aren't valued |
-| Guardian / Attack chip, Electrons, Spotlight damage | ◐ | Read from runs and shown, kept fixed — what scales them isn't documented |
+| Guardian Attack chip, Electrons, Spotlight damage | ◐ | Read from runs and shown, kept fixed. Attack deals a share of an enemy's missing health, so it doesn't move the flat-damage death point |
+| Guardian (2026-10-19) | ◐ | Gear → Guardian; imported from the export (chips, presets, slots, skins). Scout → tower shots through Damage/Meter; Bounty, Summon → kill coins; Fetch → its coins and loot by finds per second; skins +0.6% coins each. Ally (overheal past Max Recovery) not counted — how it combines with the usual cap isn't confirmed |
 | Orbs, thorns, land mines | ◐ | Fixed share for damage; orbs and thorns modeled for coins / survival |
 | Demon Mode, Plasma Cannon, Berserker, Super Tower | ◐ | Berserker and Super Tower in the model; Demon Mode and Plasma Cannon aren't |
 | Protectors' damage reduction (55%) | ◐ | Inside the calibration; the Protector labs aren't valued |
@@ -54,7 +55,7 @@ reports set the baseline, so even unmodeled effects are already in it; only
 | Coins per kill and wave, tier multiplier, Golden Tower / Combo, Black Hole, Spotlight, Death Wave, Golden Bot coin bonuses, Wave Skip, Critical Coin | ✅ | farming.ts + runCoins.ts, calibrated on your runs |
 | Coins per run and per hour as runs get longer | ✅ | Coins per Run projection |
 | Cells, gems, medals, reroll and module shards per run | ◐ | Read from your runs (2026-10-18, Coins per Run page); upgrades that raise them (Cells / Kill enhancement, DW cell bonus, Cells card) aren't valued |
-| Guardian fetch | ◐ | In the run drops; chips not modeled |
+| Guardian fetch | ✅ | In the run drops; its coins are a separate share of the run's coins, scaled by the Fetch chip's finds per second |
 | In-run cash, interest, free upgrades, perks picked in a run | ✗ | The site assumes AFK runs; the calibration includes what you usually pick |
 
 ## Spending
@@ -68,7 +69,8 @@ reports set the baseline, so even unmodeled effects are already in it; only
 | Module Shards: slot levels | ✅ | Shard cost lab; level caps by rarity |
 | Gems: card slots | ✅ | Card pulls random; lab slots and rushes not ranked |
 | Elite Cells: lab boosts | ◐ | Boost table; your cells per day now visible in run drops |
-| Keys (Vault), Bits (Guardian chips), Guild Tokens | ✗ | Vault data in TheTowerSDK is marked unverified; chips not documented enough |
+| Bits: Guardian chips | ✅ | Optimizer Bits panel: each equipped chip's next level per Bit (wiki and SDK tables; 2026-10-19). Slots and which chips to equip aren't ranked |
+| Keys (Vault), Guild Tokens | ✗ | Vault data in TheTowerSDK is marked unverified |
 
 ## What it would take to close the biggest gaps
 
@@ -81,4 +83,4 @@ reports set the baseline, so even unmodeled effects are already in it; only
 3. **Cells and drops from upgrades:** with cells per run now read, the
    Cells / Kill and Death Wave cell bonuses can be valued the way coins are —
    next step.
-4. **Vault and Guardian chips:** in-game values for the trees and chips you own.
+4. **Vault:** in-game values for the trees you own. Guardian: how Ally's Max Recovery combines with the usual overheal cap, and the Attack chip's share of a pushing run's damage.

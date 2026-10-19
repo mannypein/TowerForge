@@ -83,8 +83,10 @@ export default function TournamentTab() {
         enhData: state.enhData, labData: state.labData, cardData: state.cardData, uwData: state.uwData,
         relicData: state.relicData, botData: state.botData, moduleState: state.moduleState,
         battleReportText: '', importedBattles: state.importedBattles, battleReportChoice: tourneyIdx,
+        guardianData: state.guardianData,
     }), [tourneyIdx, state.activePreset, state.profile, state.perkData, state.wsData, state.enhData, state.labData,
-        state.cardData, state.uwData, state.relicData, state.botData, state.moduleState, state.importedBattles]);
+        state.cardData, state.uwData, state.relicData, state.botData, state.moduleState, state.importedBattles,
+        state.guardianData]);
 
     const models = useMemo(() => (account ? runModels(account) : null), [account]);
     const run = models?.run ?? null;

@@ -27,6 +27,7 @@ import UWTab from './components/tabs/UWTab';
 import PUWsTab from './components/tabs/pUWsTab';
 import RelicsTab from './components/tabs/RelicsTab';
 import BotsTab from './components/tabs/BotsTab';
+import GuardianTab from './components/tabs/GuardianTab';
 import ModulesTab from './components/tabs/ModulesTab';
 import ShareTab from './components/tabs/ShareTab';
 import AccountTab from './components/tabs/AccountTab';
@@ -82,6 +83,7 @@ const TAB_GROUPS: TabGroup[] = [
         id: 'gear', label: 'Gear', tabs: [
             { id: 'modules', label: 'Modules' },
             { id: 'bots', label: 'Bots' },
+            { id: 'guardian', label: 'Guardian' },
             { id: 'relics', label: 'Relics' },
         ],
     },
@@ -310,6 +312,7 @@ export default function App() {
             case 'puws': return <PUWsTab />;
             case 'relics': return <RelicsTab />;
             case 'bots': return <BotsTab />;
+            case 'guardian': return <GuardianTab />;
             case 'modules': return <ModulesTab />;
             case 'optimizer': return <OptimizerTab />;
             case 'enemies': return <EnemyStatsTab />;

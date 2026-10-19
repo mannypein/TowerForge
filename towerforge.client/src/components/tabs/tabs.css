@@ -3109,3 +3109,95 @@
         display: none;
     }
 }
+
+/* Guardian tab: settings, slots and chip cards. */
+.grd-settings,
+.grd-slots,
+.grd-owned {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 10px 16px;
+}
+
+.grd-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--text-dim);
+    min-width: 0;
+}
+
+    .grd-field input[type='number'] {
+        width: 70px;
+    }
+
+.grd-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.grd-chips {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.grd-chip {
+    padding: 10px 12px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    min-width: 0;
+}
+
+.grd-chip-head {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--gold);
+}
+
+.grd-stat {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 64px minmax(0, 1.2fr);
+    gap: 8px;
+    align-items: center;
+    padding: 5px 0;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+}
+
+    .grd-stat:first-of-type {
+        margin-top: 6px;
+    }
+
+    .grd-stat input[type='number'] {
+        width: 100%;
+    }
+
+.grd-stat-name {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.grd-stat-val {
+    font-family: var(--font-mono);
+    color: var(--text-bright);
+    min-width: 0;
+}
+
+    .grd-stat-val .en-sub {
+        display: block;
+        font-family: inherit;
+    }
+
+.grd-effect {
+    margin: 8px 0 0;
+    font-size: 12px;
+    color: var(--accent);
+}

@@ -33,7 +33,7 @@ import type {
     SlotLevels,
     AssistEntry,
     TabName,
-    CloudSaveData,
+    CloudSaveData, GuardianData,
 } from '../types/gameTypes';
 import { mergeBattles } from '../engine/battleReport';
 import type { BattleReport } from '../engine/battleReport';
@@ -41,6 +41,7 @@ import { defaultBattleIndex } from '../engine/gameExport';
 import type { GameImport } from '../engine/gameExport';
 import { MAPPED_PERK_IDS } from '../constants/gameExportMaps';
 import { botsForPreset, isBotEntryOwned } from '../constants/botData';
+import { defaultGuardianData } from '../engine/guardian';
 
 // A bot entry with one preset's levels replaced (ownership made explicit so
 // a preset at all-Lv 0 can't make an old save read the bot as not owned).
@@ -68,6 +69,7 @@ const KEYS = {
     battleReportChoice: 'tc_battle_choice',
     modules: 'tc_modules',
     cloudSaveData: 'tc_cloud_save',
+    guardian: 'tc_guardian',
 } as const;
 
 // ── Default State ─────────────────────────────────────────────
@@ -258,6 +260,9 @@ interface GameStore extends AppState {
     setCurrency: (key: keyof Currencies, value: number) => void;
     applyGameImport: (imp: GameImport, raw: Record<string, unknown>) => void;
 
+    // ── Guardian ─────────────────────────────────────────────────
+    setGuardianData: (patch: Partial<GuardianData>) => void;
+
     // ── Modules ──────────────────────────────────────────────────
     setModuleState: (patch: Partial<ModuleState>) => void;
     setSlotLevel: (type: ModuleType, position: 'main' | 'assist', level: number) => void;
@@ -322,6 +327,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     importedBattles: [],
     battleReportChoice: -1,
     cloudSaveData: null,
+    guardianData: defaultGuardianData(),
 
     // ── UI Actions ────────────────────────────────────────────────
     setActiveTab: (tab) => set({ activeTab: tab }),
@@ -349,11 +355,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
         const battleReportChoice = loadKey<number>(KEYS.battleReportChoice, -1);
         const moduleState = migrateModuleState(loadKey<ModuleState>(KEYS.modules, defaultModuleState));
         const cloudSaveData = loadKey<CloudSaveData | null>(KEYS.cloudSaveData, null);
+        const guardianData = { ...defaultGuardianData(), ...loadKey<Partial<GuardianData>>(KEYS.guardian, {}) };
 
         set({
             profile, tierWaves, wsData, enhData,
             labData, cardData, uwData, relicData,
             perkData, botData, botLoadouts, moduleState, battleReportText, currencies, importedBattles, battleReportChoice, cloudSaveData,
+            guardianData,
         });
     },
 
@@ -428,14 +436,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
                 ],
             }
             : s.moduleState;
+        const guardianData = imp.guardian ?? s.guardianData;
         set({
             currencies: imp.currencies,
             tierWaves,
             profile,
             importedBattles: battles,
             battleReportChoice: choice,
-            wsData, enhData, uwData, cardData, perkData, labData, moduleState,
+            wsData, enhData, uwData, cardData, perkData, labData, moduleState, guardianData,
         });
+        saveKey(KEYS.guardian, guardianData);
         saveKey(KEYS.currencies, imp.currencies);
         saveKey(KEYS.tiers, tierWaves);
         saveKey(KEYS.profile, profile);
@@ -684,6 +694,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
     },
 
     // ── Modules ───────────────────────────────────────────────────
+    setGuardianData: (patch) => {
+        const guardianData = { ...get().guardianData, ...patch };
+        set({ guardianData });
+        saveKey(KEYS.guardian, guardianData);
+    },
+
     setModuleState: (patch) => {
         const moduleState = { ...get().moduleState, ...patch };
         set({ moduleState });
@@ -747,6 +763,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             importedBattles: [],
             battleReportChoice: -1,
             cloudSaveData: null,
+            guardianData: defaultGuardianData(),
         });
     },
 
@@ -771,6 +788,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             currencies: s.currencies,
             importedBattles: s.importedBattles,
             battleReportChoice: s.battleReportChoice,
+            guardianData: s.guardianData,
         };
         return JSON.stringify(payload, null, 2);
     },
@@ -797,6 +815,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
                 currencies: { ...DEFAULT_CURRENCIES, ...(data.currencies ?? {}) },
                 importedBattles: data.importedBattles ?? [],
                 battleReportChoice: data.battleReportChoice ?? -1,
+                guardianData: { ...defaultGuardianData(), ...(data.guardianData ?? {}) },
             });
             // Persist everything
             Object.entries(KEYS).forEach(([, storageKey]) => {
@@ -817,6 +836,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
                     tc_imported_battles: data.importedBattles,
                     tc_battle_choice: data.battleReportChoice,
                     tc_modules: moduleState,
+                    tc_guardian: data.guardianData,
                 };
                 if (keyMap[storageKey] != null) saveKey(storageKey, keyMap[storageKey]);
             });

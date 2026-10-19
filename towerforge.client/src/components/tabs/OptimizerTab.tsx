@@ -33,6 +33,7 @@ import { healthSkipSources, skipUpgradePath } from '../../engine/levelSkip';
 import type { SkipUpgrade } from '../../engine/levelSkip';
 import { formatGameNumber } from '../../engine/gameNumbers';
 import type { StepRunGain } from '../../engine/runLength';
+import { withChipLevel } from '../../engine/guardian';
 
 // The goal every panel ranks by, and how much coins count in "coins and
 // push". Remembered per browser (the old Rank by "waves" carries over).
@@ -54,12 +55,12 @@ const loadWeight = (): number => {
 
 const EMPTY_RESULTS: Record<OptCategory, OptCandidate[]> = {
     uw: [], uwp: [], mast: [], assist: [], stones: [],
-    workshop: [], labs: [], cards: [], enhancements: [], bots: [], modules: [],
+    workshop: [], labs: [], cards: [], enhancements: [], bots: [], modules: [], guardian: [],
 };
 
 const EMPTY_SHOW_MORE: Record<OptCategory, boolean> = {
     uw: false, uwp: false, mast: false, assist: false, stones: false,
-    workshop: false, labs: false, cards: false, enhancements: false, bots: false, modules: false,
+    workshop: false, labs: false, cards: false, enhancements: false, bots: false, modules: false, guardian: false,
 };
 
 export default function OptimizerTab() {
@@ -300,6 +301,12 @@ export default function OptimizerTab() {
                 st.setBotMedal(name, st.activePreset, Number(stat), level);
                 return true;
             }
+            case 'guardian': {
+                const [chip, stat] = (c.ref ?? []).map(Number);
+                if (!Number.isInteger(chip) || !Number.isInteger(stat)) return false;
+                st.setGuardianData(withChipLevel(st.guardianData, st.activePreset, chip, stat, level));
+                return true;
+            }
             case 'modules': {
                 const [type, pos] = c.ref ?? [];
                 if (!type || (pos !== 'main' && pos !== 'assist')) return false;
@@ -362,6 +369,7 @@ export default function OptimizerTab() {
             enhancements: { bg: 'rgba(147,51,234,.15)', color: '#e040fb' },
             bots: { bg: 'rgba(231,76,60,.15)', color: '#e74c3c' },
             modules: { bg: 'rgba(79,195,247,.15)', color: '#4fc3f7' },
+            guardian: { bg: 'rgba(29,158,117,.15)', color: 'var(--accent)' },
         };
         return {
             background: map[cat]?.bg ?? 'var(--bg4)',
@@ -777,8 +785,9 @@ export default function OptimizerTab() {
                         <div>
                             <strong>Not ranked yet</strong>
                             <p>
-                                Keys (the Vault), Bits (Guardian chips) and Guild Tokens — the Guild Store sells
-                                gems, bits, cells, shards and relics, so value tokens by what those buy above.
+                                Keys (the Vault) and Guild Tokens — the Guild Store sells gems, bits, cells, shards
+                                and relics, so value tokens by what those buy above. Guardian chip slots and which
+                                chips to equip are your call (see Gear → Guardian).
                             </p>
                         </div>
                     </div>
@@ -834,7 +843,7 @@ interface OptPanelProps {
 }
 
 const COST_UNIT: Record<OptCurrency, string> = {
-    stones: '', coins: ' 🪙', research: ' 🔬', medals: ` ${MEDAL_SYMBOL}`, shards: ' shards', gems: ' 💎',
+    stones: '', coins: ' 🪙', research: ' 🔬', medals: ` ${MEDAL_SYMBOL}`, shards: ' shards', gems: ' 💎', bits: ' bits',
 };
 const pct = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`;
 // Coin prices: whole coins below 1,000 (discounts leave fractions).
@@ -842,7 +851,7 @@ const coinsText = (v: number) => formatGameNumber(v < 1000 ? Math.round(v) : v);
 
 // Short badges, so the name keeps its room on a phone.
 const CAT_BADGE: Partial<Record<OptCategory, string>> = {
-    workshop: 'WS', labs: 'LAB', enhancements: 'ENH', cards: 'CARD', bots: 'BOT', modules: 'MOD',
+    workshop: 'WS', labs: 'LAB', enhancements: 'ENH', cards: 'CARD', bots: 'BOT', modules: 'MOD', guardian: 'GRD',
 };
 
 const fmtWaves = (w: number) => (w < 10 ? w.toFixed(1) : Math.round(w).toLocaleString());

@@ -25,7 +25,7 @@ export type UWAbbr = 'CL' | 'SM' | 'DW' | 'CF' | 'ILM' | 'GT' | 'PS' | 'BH' | 'S
 export type TabName =
     | 'profile' | 'perks' | 'tiers' | 'workshop'
     | 'labs' | 'cards' | 'uw' | 'puws' | 'relics'
-    | 'bots' | 'modules' | 'optimizer' | 'enemies' | 'runcoins' | 'runlength' | 'whatif' | 'tournament' | 'creators' | 'share' | 'account';
+    | 'bots' | 'modules' | 'guardian' | 'optimizer' | 'enemies' | 'runcoins' | 'runlength' | 'whatif' | 'tournament' | 'creators' | 'share' | 'account';
 
 // ── Workshop Types ────────────────────────────────────────────
 export type WSCategory = 'attack' | 'defense' | 'utility';
@@ -301,10 +301,10 @@ export interface TTTData {
 // values stay as 'uw'/'uwp'/'mast'/'assist' for badge display.
 export type OptCategory =
     | 'uw' | 'uwp' | 'mast' | 'assist' | 'stones'
-    | 'workshop' | 'labs' | 'cards' | 'enhancements' | 'bots' | 'modules';
+    | 'workshop' | 'labs' | 'cards' | 'enhancements' | 'bots' | 'modules' | 'guardian';
 
 // What a cost is paid in.
-export type OptCurrency = 'stones' | 'coins' | 'research' | 'medals' | 'shards' | 'gems';
+export type OptCurrency = 'stones' | 'coins' | 'research' | 'medals' | 'shards' | 'gems' | 'bits';
 
 export interface OptCandidate {
     category: OptCategory;
@@ -367,4 +367,22 @@ export interface AppState {
     importedBattles: BattleReport[];   // BattleHistory from the last game data import
     battleReportChoice: number;        // which report calibrates the optimizer: -1 = pasted, else importedBattles index
     cloudSaveData: CloudSaveData | null;  // cloud save if pulled, null otherwise
+    guardianData: GuardianData;
+}
+
+// ── Guardian ──────────────────────────────────────────────────
+// Chips by the game's save index (constants/guardianData.ts CHIPS).
+export interface GuardianPreset {
+    name: string;
+    extraSlots: number;      // chip slots bought beyond the first (0–2)
+    chips: number[];         // chip in each slot, by save index (-1 = empty)
+    levels: number[];        // 3 stat levels per chip, by save index (27)
+}
+
+export interface GuardianData {
+    unlocked: boolean;
+    chipsOwned: boolean[];   // by save index
+    skinsOwned: number;      // each owned skin: +0.6% coins
+    presets: GuardianPreset[];   // the game's Guardian presets
+    presetFor: number[];     // site preset i → Guardian preset (the game's global preset)
 }

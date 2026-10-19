@@ -53,6 +53,7 @@ import {
     calcBlackHoleReach, calcConsumeFraction, calcSmitePerProc, calcCLChanceQty,
 } from './uwdps';
 import { calcDamageMeter, calcCoreUWDamageMult } from './towerDamage';
+import { damageMeterFactor } from './guardian';
 import type { BattleReport } from './battleReport';
 import { extraDamage } from './battleReport';
 import { BOTS_CONFIG } from '../constants/botData';
@@ -150,7 +151,9 @@ export function edpsParts(snap: OptimizerSnapshot, ttt?: number): EdpsParts {
         ilm: uw('ILM'),
         ps: uw('PS'),
         bh: calcBlackHoleReach(uwData, modBonuses, presetIdx, wsData, labData, cardData),
-        tower: ctx.towerDamage * ctx.critMult * ctx.hitRate * sl * taken,
+        // Damage/Meter (and Guardian Scout) on tower shots — engine/guardian.ts.
+        tower: ctx.towerDamage * ctx.critMult * ctx.hitRate * sl * taken
+            * damageMeterFactor(snap.guardian, presetIdx, damageMeter, range),
         smite: calcSmitePerProc(uwData),
         ...calcCLChanceQtyParts(uwData, modBonuses),
         consume: calcConsumeFraction(uwData),

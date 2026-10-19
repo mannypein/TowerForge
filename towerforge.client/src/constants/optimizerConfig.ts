@@ -53,6 +53,7 @@ export const CURRENCY_PANELS: { currency: OptCurrency; label: string; cats: OptC
     { currency: 'shards', label: 'Module Shards', cats: ['modules'] },
     { currency: 'medals', label: 'Medals', cats: ['bots'] },
     { currency: 'gems', label: 'Gems', cats: ['cards'] },
+    { currency: 'bits', label: 'Bits', cats: ['guardian'] },
 ];
 export const CURRENCY_CATS: OptCategory[] = CURRENCY_PANELS.flatMap(p => p.cats);
 
@@ -76,6 +77,7 @@ export const OPT_PANELS: {
         { cat: 'modules', label: 'Module slot levels', costType: 'shards', row: 2, maxSteps: 60 },
         { cat: 'bots', label: 'Bots and Event Shop trades', costType: 'medals', row: 2, maxSteps: 40 },
         { cat: 'cards', label: 'Card slots', costType: 'gems', row: 2, maxSteps: 21 },
+        { cat: 'guardian', label: 'Guardian chips', costType: 'bits', row: 2, maxSteps: 60 },
     ];
 
 // ── GC Scoring ────────────────────────────────────────────────

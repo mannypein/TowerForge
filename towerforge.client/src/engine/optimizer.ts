@@ -165,10 +165,10 @@ import type {
     CardData,
     ModBonuses,
     PerkData,
-    ModuleType,
-} from '../types/gameTypes';
+    ModuleType, GuardianData } from '../types/gameTypes';
 import { conditioned, conditionedSkip, conditionHealth } from './battleConditions';
 import type { TourneyConditions } from './battleConditions';
+import { activeChips, withChipLevel } from './guardian';
 
 // ── State Snapshot ────────────────────────────────────────────
 // Subset of AppState the optimizer needs. Passed by value (cloned).
@@ -184,6 +184,8 @@ export interface OptimizerSnapshot {
     moduleState: AppState['moduleState'];
     enhData: EnhData;
     botData: AppState['botData'];
+    // The Guardian (chips per Guardian preset; engine/guardian.ts). Omitted = none.
+    guardian?: GuardianData;
     excludedUWs?: string[];   // UW abbrs to skip in uw / uwp candidates
     // What upgrades are scored on: tower eDPS (Glass Cannon), coins per
     // hour (Farming, calibrated by `farm`) or survival (eHP, calibrated by
@@ -830,6 +832,36 @@ export function buildCandidates(
         }
     }
 
+    // ── Guardian chips (bits) ──────────────────────────────────
+    // Every stat of every equipped chip, one level a step. Scout (tower
+    // damage), Bounty, Summon and Fetch (coins) score; Attack and Ally
+    // aren't modeled and drop out (engine/guardian.ts).
+    if (cat === 'guardian' && snap.guardian) {
+        for (const a of activeChips(snap.guardian, snap.presetIdx)) {
+            a.chip.stats.forEach((stat, k) => {
+                const curLv = a.levels[k];
+                if (curLv >= stat.max) return;
+                const after = cloneSnapshot(snap);
+                after.guardian = withChipLevel(after.guardian!, snap.presetIdx, a.chip.index, k, curLv + 1);
+                const delta = edpsDeltaPct(basEDPS, getScore(after));
+                const cost = stat.cost(curLv + 1);
+                candidates.push({
+                    category: 'guardian',
+                    label: `${a.chip.name} — ${stat.name}`,
+                    subLabel: `${stat.fmt(stat.value(curLv))} → ${stat.fmt(stat.value(curLv + 1))}`,
+                    fromLv: curLv,
+                    toLv: curLv + 1,
+                    cost,
+                    costType: 'bits',
+                    costKnown: true,
+                    scorePct: delta,
+                    scorePerCost: perCost(delta, cost),
+                    ref: [String(a.chip.index), String(k)],
+                });
+            });
+        }
+    }
+
     // ── Module slot levels (shards) ────────────────────────────
     // Main and assist slot of each type, 5 levels a step; a module can't
     // pass its rarity's cap, so steps past it show no gain.
@@ -968,6 +1000,13 @@ export function applyUpgrade(
             const medals = [...(entry.medals ?? [])];
             medals[Number(stat)] = c.toLv;
             snap.botData[name] = { ...entry, medals };
+            break;
+        }
+
+        case 'guardian': {
+            const [chip, stat] = (c.ref ?? []).map(Number);
+            if (!snap.guardian || !Number.isInteger(chip) || !Number.isInteger(stat)) break;
+            snap.guardian = withChipLevel(snap.guardian, snap.presetIdx, chip, stat, c.toLv);
             break;
         }
 

@@ -39,7 +39,8 @@ What each currency buys (wiki Currencies page) and how it's ranked:
 | Medals | bot stat levels vs Event Shop trades (per medal) | bots: 100 + 40 × (L − 1) a level (wiki bot Cost pages, every bot); trades 40, 65, 90, 130, 175, 230, then 380 |
 | Gems | card slots: the best owned card not in the preset, into a free slot or the next one bought (per gem) | wiki Cards: 50 → 10,000 gems, 22 slots |
 | Elite Cells | not a path: a table of lab boosts (×1.5 at 15/h … ×8 at 1M/h) and the extra lab hours per cell, on the top lab | wiki Currencies |
-| Keys, Bits, Guild Tokens | not ranked (Vault, Guardian chips, Guild Store) | — |
+| Bits | Guardian chip stats, each equipped chip's next level (per Bit) | wiki Chips tables and TheTowerSDK guardian upgrades — matched at every level (`constants/guardianData.ts`) |
+| Keys, Guild Tokens | not ranked (Vault, Guild Store) | — |
 
 - **Medal trades** are worth what 15 stones / 250 shards buy next on their own
   paths (`pathGain`): stones after the ones already held, shards from zero
@@ -119,6 +120,35 @@ Cannon) or survival (other builds).
   Optimizer (waves score, Enemy Health Level Skip panel), What If and the
   module search — in Legend a skip point adds ×0.45 of what it would on a
   campaign run.
+
+## Guardian (2026-10-19)
+
+`engine/guardian.ts`, Gear → Guardian. The chips the Guardian runs for a
+preset (its Guardian preset via the game's global preset; slots = 1 +
+bought) and what the counted ones do:
+- **Scout** — while active (duration ÷ cooldown of the time), enemies
+  count as Range Bonus × farther for Damage/Meter. Damage/Meter adds
+  DPM × distance to tower damage (wiki: Damage × DPM% × range), so tower
+  shots get 1 + DPM × d × (1 + uptime × (bonus − 1)), d = half the range
+  (the code's assumption). Damage/Meter itself is now in the tower-shot
+  part too, so its workshop, lab and enhancement levels score.
+- **Bounty** — tags Targets enemies per cooldown, at most the non-Common
+  ~80% of kills (T18 W6000 spawn mix); each pays × Multiplier: kill coins
+  × (1 + tagged share × (Multiplier − 1)). Coins per tagged kill = an
+  average kill (assumption).
+- **Summon** — 2 enemies a second while active: kills × (1 + 2 × duration
+  ÷ cooldown ÷ kills per second); each pays an average kill (assumption).
+  Its Cash Bonus is in-run cash — not counted (AFK).
+- **Fetch** — finds per second = find chance × (1 + double find) ÷
+  cooldown. The run's fetched coins (`GuardianCoinsFetched`) are their own
+  share of its coins and scale with finds; the loot (gems, medals, shards,
+  modules) is shown per hour from the run.
+- **Skins** — +0.6% coins each, always on (wiki).
+- **Attack** and **Ally** — not counted (coverage.md says why).
+
+The Bits panel ranks each equipped chip's next stat level per Bit for the
+goal; slots (200 / 300 Bits) and which chips to equip are left to the
+player. What If takes the equipped chips' levels too.
 
 ## Chance mechanics and variance (2026-10-18)
 

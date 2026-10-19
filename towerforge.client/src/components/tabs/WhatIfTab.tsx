@@ -48,6 +48,7 @@ const COST_LABEL: [OptCurrency, string, (v: number) => string][] = [
     ['research', 'Lab time', v => `${formatLabTime(v)} 🔬`],
     ['medals', 'Medals', v => `${v.toLocaleString()} ${MEDAL_SYMBOL}`],
     ['shards', 'Module Shards', v => `${formatGameNumber(Math.round(v))} shards`],
+    ['bits', 'Bits', v => `${v.toLocaleString()} bits`],
 ];
 
 function CostLine({ costs }: { costs: Costs }) {
@@ -70,12 +71,13 @@ export default function WhatIfTab() {
     const battleReportText = useGameStore(s => s.battleReportText);
     const importedBattles = useGameStore(s => s.importedBattles);
     const battleReportChoice = useGameStore(s => s.battleReportChoice);
+    const guardianData = useGameStore(s => s.guardianData);
 
     const account: AccountState = useMemo(() => ({
         activePreset, profile, perkData, wsData, enhData, labData, cardData, uwData, relicData, botData,
-        moduleState, battleReportText, importedBattles, battleReportChoice,
+        moduleState, battleReportText, importedBattles, battleReportChoice, guardianData,
     }), [activePreset, profile, perkData, wsData, enhData, labData, cardData, uwData, relicData, botData,
-        moduleState, battleReportText, importedBattles, battleReportChoice]);
+        moduleState, battleReportText, importedBattles, battleReportChoice, guardianData]);
 
     const build = (profile.build || 'Glass Cannon') as BuildType;
     const base = useMemo(() => snapshotFromState(account), [account]);

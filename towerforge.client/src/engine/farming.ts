@@ -10,6 +10,10 @@
 //    • Golden Combo (GT+): GT-period income × ((1 + 0.0003(L+1))^kills − 1)
 //    • Wave Skip: skipped waves pay the previous wave ×1.1
 //    • Critical Coin and Coins/Wave as small additive streams
+//    • Guardian (engine/guardian.ts): Bounty and Summon scale kill coins
+//      (tagged kills × Multiplier, extra summoned kills); Fetch's coins are
+//      their own stream, scaled by its finds per second; each owned skin
+//      +0.6% coins
 //
 //  Calibration: a pasted Battle Report gives the real coverage of each
 //  effect and how much Golden Combo / Wave Skip / Critical Coin / Coins
@@ -31,6 +35,8 @@ import {
 import { activeCard as activeCardIn, cardValue, labMult as labMultIn, masteredCardMult } from './statHelpers';
 import type { BattleReport } from './battleReport';
 import type { OptimizerSnapshot } from './optimizer';
+import { bountyExtra, fetchRate, summonExtra } from './guardian';
+import { SKIN_COIN_BONUS } from '../constants/guardianData';
 
 export const FARM_EFFECTS = ['gt', 'bh', 'sl', 'dw', 'gb', 'orb'] as const;
 export type FarmEffect = typeof FARM_EFFECTS[number];
@@ -55,13 +61,16 @@ export interface FarmInputs {
     critCoin: number;                      // relative Critical Coin output
     coinsPerWave: number;                  // relative Coins/Wave output
     waveSkip: number;                      // expected extra skipped waves per wave
+    bounty: number;                        // Guardian Bounty: extra share of kill coins
+    summon: number;                        // Guardian Summon: extra kills, as a share
+    fetch: number;                         // Guardian Fetch: finds per second
 }
 
 export interface FarmCalibration {
     source: 'report' | 'estimate';
     anchor: FarmInputs;
     coverage: Record<FarmEffect, number>;  // share of kills covered at the anchor (0–1)
-    shares: { kill: number; crit: number; cpw: number };  // of non-wave-skip income, excluding Golden Combo
+    shares: { kill: number; crit: number; cpw: number; fetch: number };  // of non-wave-skip income, excluding Golden Combo
     comboShare: number;                    // Golden Combo share of non-wave-skip income
     comboKillsPerSec: number;              // kills per GT-second feeding Golden Combo
     waveSkipExtra: number;                 // wave-skip coins ÷ all other coins
@@ -218,7 +227,14 @@ export function readFarmInputs(snap: OptimizerSnapshot): FarmInputs {
     const coinsPerWave = (WS_COIN_PER_WAVE.valueAt(ws?.utility[cpwIdx] ?? 0) + (subs['Coins/Wave'] ?? 0))
         * labMult(snap, 'Coins/Wave Lab', 1) * coinsCard * relic * generator;
 
-    return { base, mult, reach, uptime, gilded: gildedSniperChance(mb), gtDuration, comboLevel, critCoin, coinsPerWave, waveSkip };
+    const kps = mb.run?.killsPerSec ?? 8;
+    const skins = snap.guardian?.unlocked ? 1 + SKIN_COIN_BONUS * snap.guardian.skinsOwned : 1;
+    return {
+        base: base * skins, mult, reach, uptime, gilded: gildedSniperChance(mb), gtDuration, comboLevel, critCoin, coinsPerWave, waveSkip,
+        bounty: bountyExtra(snap.guardian, snap.presetIdx, kps),
+        summon: summonExtra(snap.guardian, snap.presetIdx, kps),
+        fetch: fetchRate(snap.guardian, snap.presetIdx),
+    };
 }
 
 // ── Model pieces ──────────────────────────────────────────────
@@ -296,7 +312,7 @@ export function buildFarmCalibration(snap: OptimizerSnapshot, report: BattleRepo
             source: 'estimate',
             anchor,
             coverage,
-            shares: { kill, crit, cpw: 0 },
+            shares: { kill, crit, cpw: 0, fetch: 0 },
             comboShare: kill * w * b,
             comboKillsPerSec,
             waveSkipExtra: 1.1 * anchor.waveSkip,
@@ -319,7 +335,8 @@ export function buildFarmCalibration(snap: OptimizerSnapshot, report: BattleRepo
     const crit = c.criticalCoin / nonSkip;
     const cpw = c.coinsPerWave / nonSkip;
     const comboShare = c.goldenCombo / nonSkip;
-    const kill = Math.max(0.01, 1 - crit - cpw - comboShare);
+    const fetch = Math.min(0.9, (c.fetched ?? 0) / nonSkip);   // Guardian Fetch coins
+    const kill = Math.max(0.01, 1 - crit - cpw - comboShare - fetch);
 
     // Back out the kills per GT-second that reproduce the observed Golden Combo.
     const killRate = report.totalEnemies > 0 ? report.totalEnemies / report.gameTimeSec : 5;
@@ -335,7 +352,7 @@ export function buildFarmCalibration(snap: OptimizerSnapshot, report: BattleRepo
         source: 'report',
         anchor,
         coverage,
-        shares: { kill, crit, cpw },
+        shares: { kill, crit, cpw, fetch },
         comboShare,
         comboKillsPerSec,
         waveSkipExtra: c.waveSkip / nonSkip,
@@ -359,9 +376,11 @@ export function coinRate(snap: OptimizerSnapshot, calib: FarmCalibration): numbe
     const ratioOr1 = (n: number, d: number) => (d > 0 ? n / d : 1);
     const sit0 = situational(a, calib.coverage);
     const sit1 = situational(x, cov);
-    const killRatio = ratioOr1(x.base, a.base) * ratioOr1(sit1, sit0);
+    const guardian = ((1 + x.bounty) * (1 + x.summon)) / ((1 + a.bounty) * (1 + a.summon));
+    const killRatio = ratioOr1(x.base, a.base) * ratioOr1(sit1, sit0) * guardian;
 
     const { kill, crit, cpw } = calib.shares;
+    const fetch = calib.shares.fetch ?? 0;
     const w0 = gtIncomeShare(a, calib.coverage);
     const w1 = gtIncomeShare(x, cov);
     const combo0 = comboBonus(a, calib.comboKillsPerSec);
@@ -371,8 +390,8 @@ export function coinRate(snap: OptimizerSnapshot, calib: FarmCalibration): numbe
     const comboAt = (killR: number, w: number, b: number, b0: number) =>
         b0 > 0 ? calib.comboShare * killR * ratioOr1(w, w0) * (b / b0) : kill * killR * w * b;
 
-    const before = kill + crit + cpw + comboAt(1, w0, combo0, combo0);
-    const after = kill * killRatio
+    const before = kill + crit + cpw + fetch + comboAt(1, w0, combo0, combo0);
+    const after = fetch * ratioOr1(x.fetch, a.fetch) + kill * killRatio
         + crit * ratioOr1(x.critCoin, a.critCoin) * ratioOr1(sit1, sit0)
         + cpw * ratioOr1(x.coinsPerWave, a.coinsPerWave)
         + comboAt(killRatio, w1, combo1, combo0);

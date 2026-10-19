@@ -28,6 +28,9 @@ import type { OptGoal } from '../constants/optimizerConfig';
 import type { BattleReport } from './battleReport';
 import { readActiveModuleBonuses } from './modBonuses';
 import { healthSkipChance, healthSkipSources } from './levelSkip';
+import { activeChips, bountyExtra, damageMeterFactor, fetchRate, summonExtra, withChipLevel } from './guardian';
+import { calcDamageMeter } from './towerDamage';
+import { CHIPS, statBits } from '../constants/guardianData';
 import { conditionedSkip } from './battleConditions';
 import { killerMix, pathRunGains, wavesSpread } from './runLength';
 import { calcTTTDisplayStats } from './ttt';
@@ -42,7 +45,7 @@ import {
     workshopCost, workshopDiscount,
 } from './upgradeCosts';
 
-export type ChangeKind = 'uw' | 'uwp' | 'workshop' | 'lab' | 'enhancement' | 'module' | 'bot';
+export type ChangeKind = 'uw' | 'uwp' | 'workshop' | 'lab' | 'enhancement' | 'module' | 'bot' | 'guardian';
 
 // Something the page can set a level on.
 export interface UpgradeTarget {
@@ -113,6 +116,13 @@ export function upgradeTargets(snap: OptimizerSnapshot): UpgradeTarget[] {
             current: e.medals?.[i] ?? 0, max: st.values.length,
         }));
     }
+    // Guardian: the chips this preset's Guardian preset has equipped.
+    for (const a of activeChips(snap.guardian, snap.presetIdx)) {
+        a.chip.stats.forEach((st, k) => out.push({
+            kind: 'guardian', key: `${a.chip.index}|${k}`, group: 'Guardian chips', label: `${a.chip.name} — ${st.name}`,
+            current: a.levels[k], max: st.max,
+        }));
+    }
     return out;
 }
 
@@ -159,6 +169,9 @@ export function applyChange(snap: OptimizerSnapshot, c: Change): void {
             snap.botData[a] = { ...e, medals };
             break;
         }
+        case 'guardian':
+            if (snap.guardian) snap.guardian = withChipLevel(snap.guardian, snap.presetIdx, Number(a), Number(b), c.level);
+            break;
     }
 }
 
@@ -216,6 +229,10 @@ export function changeCost(snap: OptimizerSnapshot, t: UpgradeTarget, level: num
         }
         case 'bot':
             return { medals: botMedalCost(from, level) };
+        case 'guardian': {
+            const stat = CHIPS.find(c => c.index === Number(a))?.stats[Number(b)];
+            return stat ? { bits: statBits(stat, from, level) } : {};
+        }
     }
 }
 
@@ -301,6 +318,10 @@ function buildChain(
     add({ group: 'Tower', label: 'Tower damage', before: 1, after: c1.towerDamage / c0.towerDamage, kind: 'times' });
     add({ group: 'Tower', label: 'Attacks per second', before: c0.attackSpeed, after: c1.attackSpeed, kind: 'perSecond' });
     add({ group: 'Tower', label: 'Crit multiplier (average)', before: c0.critMult, after: c1.critMult, kind: 'times' });
+    // Damage/Meter on tower shots, Guardian Scout's longer distance included.
+    const dm = (s: OptimizerSnapshot, range: number) => damageMeterFactor(s.guardian, s.presetIdx,
+        calcDamageMeter(s.presetIdx, s.wsData, s.labData, s.enhData, s.relicData), range);
+    add({ group: 'Tower', label: 'Damage/Meter bonus (Scout included)', before: dm(base, t0.range), after: dm(after, t1.range), kind: 'times' });
     add({ group: 'Tower', label: 'Projectiles per attack (Multishot)', before: c0.projectiles.multishot, after: c1.projectiles.multishot, kind: 'times' });
     add({ group: 'Tower', label: 'Hits per projectile (Bounce Shot)', before: c0.projectiles.bounce, after: c1.projectiles.bounce, kind: 'times' });
     add({ group: 'Tower', label: 'Fire rate from Rapid Fire', before: c0.projectiles.rapid, after: c1.projectiles.rapid, kind: 'times' });
@@ -369,6 +390,14 @@ function buildChain(
     for (const e of FARM_EFFECTS) {
         add({ group: 'Coin bonuses', label: `${FARM_EFFECT_LABELS[e]} coin bonus (average)`, before: f0[e], after: f1[e], kind: 'times' });
     }
+    // Guardian chips (engine/guardian.ts).
+    const kps = (s: OptimizerSnapshot) => s.modBonuses.run?.killsPerSec ?? 8;
+    add({ group: 'Coin bonuses', label: 'Guardian Bounty (average on kill coins)', kind: 'times',
+        before: 1 + bountyExtra(base.guardian, base.presetIdx, kps(base)), after: 1 + bountyExtra(after.guardian, after.presetIdx, kps(after)) });
+    add({ group: 'Coin bonuses', label: 'Guardian Summon (extra kills)', kind: 'times',
+        before: 1 + summonExtra(base.guardian, base.presetIdx, kps(base)), after: 1 + summonExtra(after.guardian, after.presetIdx, kps(after)) });
+    add({ group: 'Coin bonuses', label: 'Guardian Fetch finds per hour', kind: 'count',
+        before: 3600 * fetchRate(base.guardian, base.presetIdx), after: 3600 * fetchRate(after.guardian, after.presetIdx) });
     return links;
 }
 

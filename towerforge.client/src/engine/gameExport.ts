@@ -24,8 +24,9 @@ import type { SubRarity } from '../constants/moduleData';
 import type {
     Currencies, TierWaves, WSPreset, WSCategory, EnhData, EnhCategoryData, UWData,
     CardData, CardEntry, LabData, ModuleState, ModuleEntry, ModuleType, ModuleRarity,
-    SubSlot, Loadout, LoadoutSlots, AssistData, League,
+    SubSlot, Loadout, LoadoutSlots, AssistData, League, GuardianData, GuardianPreset,
 } from '../types/gameTypes';
+import { CHIPS } from '../constants/guardianData';
 
 type Raw = Record<string, unknown>;
 
@@ -50,6 +51,7 @@ export interface GameImport {
     league: League;                    // highest league reached ('' = unknown)
     wallUnlocked: boolean;             // a workshop preset has Wall Health
     presetNames: string[];             // per app preset ('' = keep the default name)
+    guardian: GuardianData | null;     // null when the file has no Guardian fields
 }
 
 export interface ModuleImport {
@@ -544,6 +546,49 @@ export function parseGameExport(raw: Raw): GameImport {
         league: typeof raw.HighestLeague === 'number' ? GAME_LEAGUES[raw.HighestLeague] ?? '' : '',
         wallUnlocked: (workshop ?? []).some(p => (p.defense[WS_STATS.defense.findIndex(([n]) => n === 'Wall Health')] ?? 0) > 0),
         presetNames: parsePresetNames(raw),
+        guardian: parseGuardian(raw),
+    };
+}
+
+// The Guardian: owned chips, the game's Guardian presets (slots bought,
+// equipped chips, 3 levels per chip — chips by save index, see
+// constants/guardianData.ts) and which one each site preset uses
+// (GlobalPresets[i].GuardiansIndex). The live fields are the current
+// preset's. Checked on a real account (docs/game-export-format.md).
+function parseGuardian(raw: Raw): GuardianData | null {
+    if (typeof raw.GuardianUnlocked !== 'boolean' && !Array.isArray(raw.GuardianChipLevel)) return null;
+    const levels = (v: unknown) => CHIPS.flatMap((c, i) =>
+        [0, 1, 2].map(k => clamp(num(arr(v)[i * 3 + k]), 0, c.stats[k].max)));
+    const chips = (v: unknown) => [0, 1, 2].map(i => {
+        const n = num(arr(v)[i] ?? -1);
+        return Number.isInteger(n) && n >= 0 && n < CHIPS.length ? n : -1;
+    });
+    const live: GuardianPreset = {
+        name: 'Preset 1',
+        extraSlots: clamp(num(raw.GuardianSlotsUnlocked), 0, 2),
+        chips: chips(raw.GuardianChipSlot),
+        levels: levels(raw.GuardianChipLevel),
+    };
+    const presets: GuardianPreset[] = arr(raw.GuardianPresets).filter(isObj).map((p, i) => ({
+        name: typeof p.PresetName === 'string' && p.PresetName.trim() ? p.PresetName : `Preset ${i + 1}`,
+        extraSlots: clamp(num(p.SlotsUnlocked), 0, 2),
+        chips: chips(p.ChipSlot),
+        levels: levels(p.ChipLevel),
+    }));
+    const current = clamp(num(raw.CurrentGuardianPreset), 0, Math.max(0, presets.length - 1));
+    if (presets.length === 0) presets.push(live);
+    else presets[current] = { ...live, name: presets[current].name };
+    const presetFor = Array.from({ length: APP_PRESETS }, (_, i) => {
+        const g = arr(raw.GlobalPresets)[i];
+        const idx = isObj(g) && typeof g.GuardiansIndex === 'number' ? g.GuardiansIndex : current;
+        return clamp(idx, 0, presets.length - 1);
+    });
+    return {
+        unlocked: raw.GuardianUnlocked === true,
+        chipsOwned: CHIPS.map((_, i) => arr(raw.GuardianChipUnlocked)[i] === true),
+        skinsOwned: Math.max(1, arr(raw.GuardianSkinUnlocked).filter(v => v === true).length),
+        presets,
+        presetFor,
     };
 }
 
