@@ -27,6 +27,7 @@ import { applyGoal, chosenReport, runModels, snapshotFromState } from '../../eng
 import { CELL_BOOSTS } from '../../engine/upgradeCosts';
 import { BattleReportPanel, EconomyStats, EhpStats } from './BuildPanels';
 import { buildRunLengthModel, pathRunGains, pathSkipGains } from '../../engine/runLength';
+import { conditionedSkip } from '../../engine/battleConditions';
 import { formatLabTime } from '../../engine/upgradeCosts';
 import { healthSkipSources, skipUpgradePath } from '../../engine/levelSkip';
 import type { SkipUpgrade } from '../../engine/levelSkip';
@@ -85,6 +86,7 @@ export default function OptimizerTab() {
     const updateProfile = useGameStore(s => s.updateProfile);
     const importedBattles = useGameStore(s => s.importedBattles);
     const cardData = useGameStore(s => s.cardData);
+    const labData = useGameStore(s => s.labData);
     const currencies = useGameStore(s => s.currencies);
     const [savedGoal, setSavedGoal] = useState<OptGoal | null>(loadGoal);
     const [coinWeight, setCoinWeight] = useState<number>(loadWeight);
@@ -121,8 +123,8 @@ export default function OptimizerTab() {
     const battleReportText = useGameStore(s => s.battleReportText);
     const battleReportChoice = useGameStore(s => s.battleReportChoice);
     const models = useMemo(
-        () => runModels({ importedBattles, cardData, activePreset, battleReportText, battleReportChoice }),
-        [importedBattles, cardData, activePreset, battleReportText, battleReportChoice],
+        () => runModels({ importedBattles, cardData, activePreset, battleReportText, battleReportChoice, profile, labData }),
+        [importedBattles, cardData, activePreset, battleReportText, battleReportChoice, profile, labData],
     );
     const { run: runModel, coinsAt, worth } = models;
     const runGains = (cat: OptCategory): StepRunGain[] | undefined => {
@@ -736,7 +738,7 @@ export default function OptimizerTab() {
                                 {group.label}
                             </div>
                             {group.currency === 'coins' && wavesMode && skipPath.length > 0 && runModel && (
-                                <SkipPanel path={skipPath} runModel={runModel} coinsAt={coinsAt} />
+                                <SkipPanel path={skipPath} runModel={runModel} coinsAt={coinsAt} skipScale={conditionedSkip(1, models.conditions)} />
                             )}
                             {OPT_PANELS.filter(p => group.cats.includes(p.cat)).map(panel => (
                                 <OptPanel
@@ -854,12 +856,15 @@ const SKIP_SOURCE: Record<SkipUpgrade['source'], { badge: string; name: string }
 
 // Enemy Health Level Skip, Glass Cannon waves mode: each point of skip slows
 // how fast enemies get tougher, so it moves the death wave a long way.
-function SkipPanel({ path, runModel, coinsAt }: {
+// In a tournament the league's Skip Reduction and Skip Decay shrink each
+// point (`skipScale`).
+function SkipPanel({ path, runModel, coinsAt, skipScale }: {
     path: SkipUpgrade[];
     runModel: NonNullable<ReturnType<typeof buildRunLengthModel>>;
     coinsAt?: (wave: number) => number;
+    skipScale: number;
 }) {
-    const gains = pathSkipGains(runModel, path.map(u => u.points), coinsAt);
+    const gains = pathSkipGains(runModel, path.map(u => u.points * skipScale), coinsAt);
     const rows = path.map((u, i) => ({ u, ...gains[i] }));
     const totalWaves = gains.reduce((sum, g) => sum + g.waves, 0);
     return (

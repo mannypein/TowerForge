@@ -335,41 +335,76 @@ reports count kills per type, so the mix can be **calibrated per player**.
 - **Tournaments:** different scaling curve (above); league conditions and
   "heat" that ramps with wave (SDK `tournament-heat-bc.ts`); Legend adds Damage
   Decay / Health Decay from w1500 and More Elites from w2000.
-- **Tournament battle conditions (checked 2026-10-18, wiki Tournaments page +
-  TheTowerSDK v29 `data/tournaments`):**
+- **Tournament battle conditions (checked 2026-10-18):**
   - Leagues (enemy scaling "tier +"): Copper T1+, Silver T3+, Gold T5+,
-    Platinum T8+, Champion T12+, Legend T17+, Mythic T23+.
-  - More Bosses is fixed per league and doesn't ramp: a boss every 10 waves in
-    Copper, 9 Silver, 8 Gold, 7 Platinum, 6 Champion, 5 Legend, 4 Mythic.
-  - Random conditions a week: 0 Copper, 1 Silver … 5 Legend, 6 Mythic. From
-    Platinum up, Death Defy Down or Energy Shields Down is also on.
-  - Heat starts weak and reaches full strength at wave 1000 (wiki); the
-    SDK's ramp table (95% → 5% "effectiveness" by W1000) is its own fit.
-  - Conditions a tournament can draw (wiki list, "Tiers/Tournament"): the
-    four resistances (Death Ray, Thorns, Plasma Cannon, Orb), Enemy Attack
-    Speed, Knockback Resistance, More Enemies, Enemy Speed, Armored Enemies,
-    Energy Shields Down, Death Defy Down, Ultimate Weapon Durations, the
-    Protector / Tank / Basic / Boss / Ranged / Fast Ultimates, Mass
-    Enforcement, Skip Decay, Skip Reduction - Multiply.
-  - **Disagreement:** the wiki says Gold, Platinum, Champion and Legend
-    always have the Enemy Level Skip condition at 10/20/30/50%; the SDK says
-    v29 has no guaranteed skip-subtract condition in any league (no index-22
-    heat entry) and that its earlier 10/20/30/50 were wrong. Not used.
-  - The battle history doesn't record which conditions a run had, and the
-    strengths aren't in any source, so the player enters what the game shows.
+    Platinum T8+, Champion T12+, Legend T17+, Mythic T23+ (wiki, SDK).
+  - **Fixed per league, in every tournament** (wiki Tiers page, "Tournament
+    Overheat", v28):
+    | League | More Bosses | Skip Reduction - Multiply | Skip Decay |
+    |---|---|---|---|
+    | Copper | every 10 waves | — | — |
+    | Silver | every 9 | — | — |
+    | Gold | every 8 | ×0.9 | 1% every 80 waves |
+    | Platinum | every 7 | ×0.75 | 1% every 60 waves |
+    | Champion | every 6 | ×0.6 | 1% every 40 waves |
+    | Legend | every 5 | ×0.45 | 1% every 20 waves |
+    | Mythic | every 4 (SDK) | ×0.3 (SDK, v29 game data) | not known |
+    Legend also: More Fleets from W1000 (one every 100 waves), Damage Decay
+    −35 levels / 10 waves and Health Decay −50 levels / 10 waves from W1500,
+    More Elites from W2000 (one every 5 waves). From Platinum up, Death Defy
+    Down or Energy Shields Down (one of the two) ramps like the others.
+  - **Random conditions:** 1 a week in Silver … 5 in Legend, 6 in Mythic.
+  - **Heat — how strong they are by wave:** "v26 BCs and Heat", a Google
+    Sheet crowdsourced in game by the J Plays Discord (Cdcooper13, LTK,
+    RichardSz, AshDs, Summer, Gorgar), linked from the Tower Knowledge Hub
+    (the-tower.notion.site, "Battle Conditions & Heat Info by Tournament Wave
+    Count"). Values step up at W0, 20, 40, 60, 80, 100, 150, 200 … 500, 600 …
+    1000 and hold between steps; full strength at W1000. Champion and Legend
+    share one ramp; Platinum's resistances, Armored Enemies, Enemy Speed and
+    Enemy Attack Speed climb more gently (e.g. Orb Resistance at W100: 20%
+    damage in Legend, 30% in Platinum). The full table is in
+    `constants/tournamentData.ts`. Examples at W100 (Legend): UW Durations
+    −3s, Boss's Ultimate +30%, Enemy Speed +90%, Armored Enemies 15 hits;
+    at W1000: −10s, +100%, +198%, 100 hits.
+  - **Cross-check:** TheTowerSDK's heat table (`TOURNAMENT_HEAT_WAVE_TABLE`,
+    read from game code) has the same wave steps, and its two columns are
+    exactly the sheet's Thorns Resistance for Legend and Platinum.
+  - **Disagreements:** the SDK says Silver uses the gentler column and Gold
+    and up the steep one; the sheet shows Platinum on the gentle ramp. The
+    site follows the sheet (it was measured in game) — Silver and Gold use
+    Platinum's ramp, Mythic Legend's: the code's assumption. The v26 sheet
+    also has a ramping Enemy Level Skip condition (−1% → −33%); v28 replaced
+    it with the fixed Multiply and Decay above, and the SDK finds no skip
+    subtract in any v29 league. The wiki's older "ELS 10/20/30/50%" for
+    Gold … Legend is from before v28.
+  - **Skip Decay** reduces the chance by 1% every N waves, cumulatively. The
+    SDK applies it as a multiplier (`applySkipDecay`: chance × (1 − 1%·steps));
+    whether the game takes points off instead isn't confirmed. The site uses
+    the SDK's form, averaged over the run.
+  - **Battle-condition labs** weaken conditions: BC Reduction 2%/level (10
+    levels), each condition's own lab 1%/level (Group 2: 20 levels; Groups
+    3–4: 10), added together (SDK `getTotalBcModifierFraction`). The SDK gives
+    Skip Reduction - Multiply no lab of its own, so only BC Reduction counts
+    there.
+  - **Enemy Speed** (Tower Knowledge Hub tip): it makes enemies reach their
+    top speed sooner — around W800–900 instead of ~W1200 in a tournament —
+    rather than adding x% at once. How tournament enemy speed grows with
+    waves isn't documented, so it isn't counted.
+  - The battle history doesn't record which conditions a run had.
 - **Tournament simulator (2026-10-18, Optimizer → Tournament,
-  `engine/battleConditions.ts`):** the player ticks this week's conditions
-  and types each strength the game shows near the wave their runs end, and
-  ticks the ones their recent tournaments had too. Waves = the change in the
-  push score from the recent set to this week's, through the tournament
-  deaths (`runWavesChange`, luck-averaged). Counted: Enemy Speed (enemy
-  speed ×), UW Durations (seconds off CF/GT/PS/BH through their duration
-  bonus), Skip Reduction - Multiply and Skip Decay (skip chance; SDK order
-  × then −), Boss's Ultimate (boss health, weighted by how often bosses end
-  the runs). Code's assumptions: one strength per condition for the whole
-  run (the one near the end, where the run is decided); Skip Decay at its
-  average over the run, about half its end value. The rest are listed on
-  the page with why they aren't counted.
+  `engine/battleConditions.ts`):** pick the league; tick this week's random
+  conditions and the ones recent tournaments had. Each condition's strength
+  comes from the heat table at the wave the run ends (settled: the
+  conditions move the end, which moves their strength), less the player's
+  labs. Waves = the change in the push score from the recent set to this
+  week's, through the tournament deaths (`runWavesChange`, luck-averaged).
+  Counted: UW Durations (seconds off CF/GT/PS/BH through their duration
+  bonus) and Boss's Ultimate (boss health, weighted by how often bosses end
+  the runs). The league's fixed Skip Reduction and Skip Decay are in every
+  tournament, so they don't move this week's end — but they shrink what a
+  skip upgrade adds, which the Optimizer, What If and the module search
+  count whenever a tournament run is the Battle Report
+  (`GoalModels.conditions`, from the profile's league).
 
 ## 4. Enemy Level Skip (deterministic)
 

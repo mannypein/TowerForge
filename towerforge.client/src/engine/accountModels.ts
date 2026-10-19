@@ -26,7 +26,9 @@ import type { RunLengthModel } from './runLength';
 import { buildRunModel, projectRun, runSettingsFromCards } from './runCoins';
 import type { RunProjection } from './runCoins';
 import { defaultBattleIndex } from './gameExport';
-import { conditioned } from './battleConditions';
+import { conditioned, leagueConditions } from './battleConditions';
+import type { TourneyConditions } from './battleConditions';
+import { LEAGUE_HEAT } from '../constants/tournamentData';
 
 export type AccountState = Pick<AppState,
     'activePreset' | 'profile' | 'perkData' | 'wsData' | 'enhData' | 'labData' | 'cardData' | 'uwData'
@@ -69,6 +71,9 @@ export function snapshotFromState(s: AccountState): OptimizerSnapshot {
 
 export interface GoalModels {
     run: RunLengthModel | null;        // Run Length, from the deaths in the history
+    // Tournament runs: the league's fixed battle conditions (Skip Reduction,
+    // Skip Decay), which every tournament has — so a skip upgrade adds less.
+    conditions?: TourneyConditions;
     worth: number;                     // skipWorth (0 without Run Length)
     coinsAt?: (wave: number) => number; // coins for a run to a wave (Coins per Run)
     projectAt?: (wave: number) => RunProjection;   // coins and real time for a run to a wave
@@ -79,7 +84,7 @@ export interface GoalModels {
 // deaths on the tournament curve (and has no Coins per Run — tournaments
 // pay differently), a campaign run against deaths on its own tier.
 export function runModels(s: Pick<AccountState, 'importedBattles' | 'cardData' | 'activePreset'
-    | 'battleReportText' | 'battleReportChoice'>): GoalModels {
+    | 'battleReportText' | 'battleReportChoice'> & Partial<Pick<AccountState, 'profile' | 'labData'>>): GoalModels {
     const chosen = activeBattleReport(s.battleReportText, s.importedBattles, s.battleReportChoice);
     const tournament = !!chosen?.tournament;
     const run = buildRunLengthModel(s.importedBattles, { tournament, tier: chosen?.tier });
@@ -89,8 +94,10 @@ export function runModels(s: Pick<AccountState, 'importedBattles' | 'cardData' |
     const projectAt = coinModel && run
         ? (wave: number) => projectRun(coinModel.calibration, settings, wave, run.tier)
         : undefined;
+    const heat = LEAGUE_HEAT.find(l => l.league === s.profile?.league);
     return {
         run,
+        conditions: tournament && run && heat ? leagueConditions(heat, run.typicalWave, s.labData ?? {}) : undefined,
         worth: run ? skipWorth(run) : 0,
         coinsAt: projectAt ? (wave: number) => projectAt(wave).coins : undefined,
         projectAt,
@@ -104,8 +111,8 @@ export function applyGoal(
     models: GoalModels, coinWeight = 0.5,
 ): void {
     const pushWaves = pushGoalOf(build) === 'waves';
-    // Calibrated under the snapshot's battle conditions, the ones the run had.
-    const cal = conditioned(snap);
+    // Calibrated under the battle conditions the run had.
+    const cal = conditioned({ ...snap, conditions: snap.conditions ?? models.conditions });
     const wantsWaves = goal === 'waves' || (goal === 'blend' && pushWaves);
     const wantsEhp = goal === 'survival' || (goal === 'blend' && !pushWaves);
     snap.farm = goal === 'coins' || goal === 'blend' ? buildFarmCalibration(cal, report) : undefined;
@@ -117,4 +124,6 @@ export function applyGoal(
     snap.blend = goal === 'blend' ? { push: pushWaves ? 'waves' : 'ehp', coinWeight } : undefined;
     snap.skipWorth = wantsWaves && models.run ? models.worth : undefined;
     snap.killers = wantsWaves && models.run ? killerMix(models.run) : undefined;
+    // Set before the calibration by the Tournament page; else the league's own.
+    snap.conditions = snap.conditions ?? models.conditions;
 }

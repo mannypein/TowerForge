@@ -28,6 +28,7 @@ import type { OptGoal } from '../constants/optimizerConfig';
 import type { BattleReport } from './battleReport';
 import { readActiveModuleBonuses } from './modBonuses';
 import { healthSkipChance, healthSkipSources } from './levelSkip';
+import { conditionedSkip } from './battleConditions';
 import { killerMix, pathRunGains, wavesSpread } from './runLength';
 import { calcTTTDisplayStats } from './ttt';
 import { buildDamageContext } from './uwdps';
@@ -266,7 +267,7 @@ function goalPct(
     const b = JSON.parse(JSON.stringify(before)) as OptimizerSnapshot;
     applyGoal(b, goal, build, report, models);
     const a = { ...after, farm: b.farm, ehp: b.ehp, edps: b.edps, metric: b.metric, edpsMode: b.edpsMode,
-        blend: b.blend, skipWorth: b.skipWorth, killers: b.killers };
+        blend: b.blend, skipWorth: b.skipWorth, killers: b.killers, conditions: b.conditions };
     return ratioPct(goalScore(a), goalScore(b));
 }
 
@@ -344,7 +345,7 @@ function buildChain(
         add({ group: 'Damage to each enemy', label: 'Consume (share of health)', before: p0.consume * 100, after: p1.consume * 100, kind: 'percent' });
     }
 
-    add({ group: 'Level skip', label: 'Enemy Health Level Skip', before: skipOf(base), after: skipOf(after), kind: 'points',
+    add({ group: 'Level skip', label: 'Enemy Health Level Skip', before: skipOf(base, models), after: skipOf(after, models), kind: 'points',
         waves: wavesOf(split?.skipLog ?? 0) });
     if (build === 'Glass Cannon' && models.run) {
         const killers = Object.entries(killerMix(models.run)) as [EnemyType, number][];
@@ -371,9 +372,11 @@ function buildChain(
     return links;
 }
 
-const skipOf = (s: OptimizerSnapshot) => healthSkipChance(healthSkipSources(
+// Skip as the run gets it: in a tournament, after the league's Skip
+// Reduction and Skip Decay.
+const skipOf = (s: OptimizerSnapshot, models: GoalModels) => conditionedSkip(healthSkipChance(healthSkipSources(
     s.wsData[s.presetIdx], s.labData, s.enhData, s.relicData, s.modBonuses.subs ?? {},
-));
+)), models.conditions);
 
 export function whatIf(
     base: OptimizerSnapshot, changes: Change[], targets: UpgradeTarget[], build: BuildType,
@@ -398,7 +401,7 @@ export function whatIf(
     const damagePct = goalPct(base, after, 'damage', build, report, models);
     const pushPct = goalPct(base, after, 'waves', build, report, models);
     const coinsHourPct = goalPct(base, after, 'coins', build, report, models);
-    const skipPoints = skipOf(after) - skipOf(base);
+    const skipPoints = skipOf(after, models) - skipOf(base, models);
 
     let waves: WhatIfResult['waves'] = null;
     let coinsRun: WhatIfResult['coinsRun'] = null;
@@ -418,7 +421,7 @@ export function whatIf(
             const one = JSON.parse(JSON.stringify(base)) as OptimizerSnapshot;
             applyChange(one, c);
             one.modBonuses = readActiveModuleBonuses(one.moduleState, one.perkData, one.labData, one.cardData, one.modBonuses.run);
-            perChange.push({ kind: c.kind, key: c.key, waves: wavesFor(goalPct(base, one, 'waves', build, report, models), skipOf(one) - skipOf(base)) });
+            perChange.push({ kind: c.kind, key: c.key, waves: wavesFor(goalPct(base, one, 'waves', build, report, models), skipOf(one, models) - skipOf(base, models)) });
         }
         const s = wavesSpread(run, pushPct, skipPoints, models.worth);
         spread = {

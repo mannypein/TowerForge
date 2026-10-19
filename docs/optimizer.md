@@ -107,12 +107,18 @@ Cannon) or survival (other builds).
   result is for an average week of the player's own tournaments.
 - "Save as a loadout" adds (or replaces) a loadout named "Best for
   tournaments"; the equipped loadout doesn't change.
-- **This week's conditions:** with battle conditions entered on the page,
-  the search scores under them (`OptimizerSnapshot.conditions`, applied in
-  `getScore`; the calibration is built under the recent runs' conditions in
-  `applyGoal`), so a module that answers one — Chrono Field duration
-  against shorter UWs — is worth more that week. See
-  [run-simulation.md](run-simulation.md) §3 for the conditions.
+- **This week's conditions:** with conditions ticked on the page, the
+  search scores under them at the heat of the wave the run ends
+  (`OptimizerSnapshot.conditions`, applied in `getScore`; the calibration is
+  built under the recent runs' conditions in `applyGoal`), so a module that
+  answers one — Chrono Field duration against shorter UWs — is worth more
+  that week. A loadout that goes much further is re-read at the stronger
+  heat there. See [run-simulation.md](run-simulation.md) §3.
+- **Tournament Battle Report anywhere:** the league's fixed conditions
+  (Skip Reduction - Multiply, Skip Decay; profile league) scale every skip point in the
+  Optimizer (waves score, Enemy Health Level Skip panel), What If and the
+  module search — in Legend a skip point adds ×0.45 of what it would on a
+  campaign run.
 
 ## Chance mechanics and variance (2026-10-18)
 

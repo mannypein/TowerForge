@@ -2993,3 +2993,24 @@
         justify-content: flex-start;
     }
 }
+
+.tn-heat {
+    color: var(--gold);
+    font-family: var(--font-mono);
+}
+
+.tn-why {
+    display: block;
+    margin-top: 3px;
+    font-style: italic;
+}
+
+.tn-tag {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .3px;
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 1px 5px;
+}
