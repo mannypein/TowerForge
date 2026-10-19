@@ -2,8 +2,22 @@
 #  TowerForge Companion — Deploy Script
 #  Builds frontend + backend and pushes to the VPS in one go.
 #
-#  Usage: .\deploy.ps1
+#  Usage:
+#    .\deploy.ps1               new features: 1.18.0 -> 1.19.0
+#    .\deploy.ps1 -Bump patch   fixes only:   1.18.0 -> 1.18.1
+#    .\deploy.ps1 -Bump major   a big change: 1.18.0 -> 2.0.0
+#    .\deploy.ps1 -Bump none    redeploy the same version
+#
+#  Every deploy gets its own version (the site header shows it, from
+#  towerforge.client/package.json). If the deploy fails the bump is undone;
+#  if it succeeds the bump is committed as "Release vX.Y.Z", tagged and
+#  pushed. History: CHANGELOG.md.
 # ============================================================
+
+param(
+    [ValidateSet('minor', 'patch', 'major', 'none')]
+    [string]$Bump = 'minor'
+)
 
 $ErrorActionPreference = "Stop"
 
@@ -16,6 +30,28 @@ $STAGING       = "/home/ubuntu/deploy-staging"
 
 Write-Host "=== TowerForge Deploy ===" -ForegroundColor Cyan
 
+# ── Step 0: Version ─────────────────────────────────────────
+$PKG = "towerforge.client/package.json"
+$oldVersion = (Get-Content $PKG -Raw | ConvertFrom-Json).version
+if ($Bump -ne 'none') {
+    Push-Location towerforge.client
+    npm version $Bump --no-git-tag-version | Out-Null
+    Pop-Location
+}
+$version = (Get-Content $PKG -Raw | ConvertFrom-Json).version
+Write-Host "Version: $oldVersion -> $version" -ForegroundColor Cyan
+
+# Puts the version back if the deploy doesn't go through (only the
+# version fields change, not anything else in package.json).
+function Undo-Version {
+    if ($Bump -ne 'none' -and $version -ne $oldVersion) {
+        Push-Location (Join-Path $PSScriptRoot 'towerforge.client')
+        npm version $oldVersion --no-git-tag-version --allow-same-version | Out-Null
+        Pop-Location
+        Write-Host "Version put back to $oldVersion." -ForegroundColor Yellow
+    }
+}
+
 # ── Step 1: Test + build frontend ───────────────────────────
 Write-Host "`n[1/6] Testing and building frontend..." -ForegroundColor Yellow
 Push-Location towerforge.client
@@ -23,12 +59,14 @@ npm test
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Tests failed - nothing was deployed." -ForegroundColor Red
     Pop-Location
+    Undo-Version
     exit 1
 }
 npm run build
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Frontend build failed!" -ForegroundColor Red
     Pop-Location
+    Undo-Version
     exit 1
 }
 Pop-Location
@@ -38,6 +76,7 @@ Write-Host "`n[2/6] Building backend..." -ForegroundColor Yellow
 dotnet publish TowerForge.Server -c Release -r linux-x64 --self-contained true -o publish
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Backend build failed!" -ForegroundColor Red
+    Undo-Version
     exit 1
 }
 
@@ -48,6 +87,7 @@ Write-Host "`n[2b/6] Building TowerForge Link (downloads/TowerForgeLink.exe)..."
 dotnet publish TowerForge.Link -c Release -o towerforge.client/dist/downloads
 if ($LASTEXITCODE -ne 0) {
     Write-Host "TowerForge Link build failed!" -ForegroundColor Red
+    Undo-Version
     exit 1
 }
 
@@ -80,13 +120,28 @@ $remoteCmd = "sudo rm -rf $REMOTE_CLIENT/* && " +
              "rm -rf $STAGING"
 
 ssh $VPS_HOST $remoteCmd
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Putting the files in place on the server failed!" -ForegroundColor Red
+    Undo-Version
+    exit 1
+}
 
-Write-Host "`n=== Deploy complete! ===" -ForegroundColor Green
+Write-Host "`n=== Deploy complete! v$version ===" -ForegroundColor Green
 Write-Host "Live at https://towerforge.net" -ForegroundColor Green
+
+# ── Step 7: Record the release ──────────────────────────────
+if ($Bump -ne 'none') {
+    Write-Host "`n[7/7] Committing and tagging v$version..." -ForegroundColor Yellow
+    git commit -m "Release v$version" -- towerforge.client/package.json towerforge.client/package-lock.json CHANGELOG.md
+    git tag "v$version"
+    git push origin main
+    git push origin "v$version"
+}
 
 } catch {
     Write-Host "`n=== DEPLOY FAILED ===" -ForegroundColor Red
     Write-Host $_.Exception.Message -ForegroundColor Red
+    Undo-Version
 }
 
 Write-Host "`nPress Enter to close..." -ForegroundColor Gray

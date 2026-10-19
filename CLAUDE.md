@@ -30,7 +30,7 @@ Run from `towerforge.client/` unless noted.
 | Tests | `npm test` (Vitest; `npm run test:watch` to rerun on save) |
 | Type-check + build | `npm run build` (`tsc -b` also checks the test files) |
 | Lint | `npx eslint <files>` |
-| Deploy (repo root) | `powershell -ExecutionPolicy Bypass -File deploy.ps1` — runs the tests first and stops if any fail |
+| Deploy (repo root) | `powershell -ExecutionPolicy Bypass -File deploy.ps1` (new features) or `... deploy.ps1 -Bump patch` (fixes only) — bumps the version, runs the tests first and stops if any fail (the bump is undone), then commits "Release vX.Y.Z", tags and pushes. Add the release to `CHANGELOG.md` |
 | Import game icons (repo root) | `powershell -ExecutionPolicy Bypass -File import-icons.ps1` — trims, centers and resizes PNGs from `Desktop\Tower-Forge-Assets` |
 | Creator profile pictures | `npm run creator-avatars` — downloads each YouTube-linked creator's picture into `src/assets/creators/`; run after adding a YouTube link to `creatorCodes.ts` (a test fails until you do) |
 | Cost tables | `npm run upgrade-costs -- <unpacked thetowersdk package>` — rewrites `workshopCosts.ts`, `labCosts.ts` and `moduleCosts.ts` (steps in the script header) |
@@ -60,7 +60,7 @@ saveParser, towerAuth and gameTypes (`CloudSaveData`). Lint the files you change
 - New CSS goes in `tabs.css` with a short prefix per feature (`modg-` modules, `botg-` bots). Colors come from tokens in `variables.css` or the nearby block.
 - Every tab must work at phone width (375px) with no sideways scrolling.
 - Player-facing text uses the game's own words (stat names, rarities, "preset", "Bot+").
-- The site's version lives only in `towerforge.client/package.json` (`npm version <x.y.z> --no-git-tag-version`); Vite injects it as `__APP_VERSION__` for the header. Tag releases `vX.Y.Z` in git.
+- The site's version lives only in `towerforge.client/package.json`; Vite injects it as `__APP_VERSION__` for the header. **Every deploy bumps it** — `deploy.ps1` does it (minor for features, `-Bump patch` for fixes), commits "Release vX.Y.Z" and tags `vX.Y.Z`. Each release gets a line in `CHANGELOG.md`.
 
 ## Checking UI changes
 

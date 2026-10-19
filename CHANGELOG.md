@@ -1,0 +1,35 @@
+# Changelog
+
+Every deploy to towerforge.net gets its own version (shown in the site
+header, from `towerforge.client/package.json`). New features bump the middle
+number, fixes only the last. `deploy.ps1` does the bump, and on success
+commits it as "Release vX.Y.Z" and tags it — `.\deploy.ps1` for features,
+`.\deploy.ps1 -Bump patch` for fixes.
+
+Versions 1.1.0–1.18.0 were assigned on 2026-10-19 from the deploy times in
+the server's service log (one backend restart per deploy) and the commits
+each deploy shipped; the site said v1.0.0 until then. Times are US Eastern.
+
+| Version | Deployed | What changed |
+|---|---|---|
+| 1.18.0 | 2026-10-19 14:19 | **Get from emulator**: TowerForge Link, a small Windows helper that reads the game's data export off BlueStacks (and other emulators) — no hunting for the file. Notes from an end-of-push recording (docs). |
+| 1.17.0 | 2026-10-18 22:53 | Tournament battle conditions grow with the wave (heat), each league's fixed conditions; skip counts for less in tournaments. |
+| 1.16.0 | 2026-10-18 22:18 | Tournament page: best module loadout for tournament waves, this week's battle conditions. |
+| 1.15.1 | 2026-10-18 20:39 | Fix: waves measured against the runs that match the chosen Battle Report (tournament vs campaign). |
+| 1.15.0 | 2026-10-18 16:36 | What If: waves per change and per link, run-to-run spread, multishot/bounce/rapid fire; every damage source, run saver and drop read from battle history. |
+| 1.14.0 | 2026-10-18 15:55 | What If: time in range for every source, coins follow the longer run, "how it adds up" chain. |
+| 1.13.0 | 2026-10-18 15:20 | Enemy health labs scored for pushing, by which enemies end your runs. |
+| 1.12.0 | 2026-10-18 11:24 | Optimizer goals and every currency; What If page; workshop and labs ranked by waves. |
+| 1.11.0 | 2026-10-18 10:27 | Enemy Health Level Skip upgrades in the waves ranking. |
+| 1.10.0 | 2026-10-18 10:19 | Rank Glass Cannon upgrades by waves and coins per run. |
+| 1.9.0 | 2026-10-18 10:09 | Run Length (run simulator step 2, Glass Cannon). |
+| 1.8.0 | 2026-10-17 23:06 | Coins per Run (run simulator step 1). |
+| 1.7.0 | 2026-10-17 22:38 | Enemy Stats page (the in-game Wave Info panel). |
+| 1.6.0 | 2026-10-17 22:16 | Battle history kept across imports; the game's full number notation. |
+| 1.5.0 | 2026-10-17 15:18 | Creator Codes: names, "known for" and more links. |
+| 1.4.0 | 2026-10-17 13:40 | Creator Codes tab, with YouTube profile pictures. |
+| 1.3.0 | 2026-10-17 12:56 | Tabs grouped into five sections so the menu fits a phone. |
+| 1.2.1 | 2026-10-17 09:39 | Fix: Tier / Wave milestones checked against the exact best wave. |
+| 1.2.0 | 2026-10-16 16:57 | Import game data from a PDF. |
+| 1.1.0 | 2026-10-16 14:20 | Self-hosted visitor analytics (Umami). |
+| 1.0.0 | 2026-10-16 13:38 | First release. |
