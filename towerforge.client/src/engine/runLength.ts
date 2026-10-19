@@ -153,7 +153,7 @@ function averageMove(m: RunLengthModel, healthFactor: number, extraSkip: number)
     }
     const moves = m.used.map((d, i) => {
         const rate = 1 - d.healthLevel! / d.run.wave;
-        return deathWave(d.enemyHealth! * healthFactor, m.tier, Math.min(0.99, rate + extraSkip), m.tournament) - from[i];
+        return deathWave(d.enemyHealth! * healthFactor, m.tier, Math.max(0, Math.min(0.99, rate + extraSkip)), m.tournament) - from[i];
     });
     return moves.reduce((a, b) => a + b, 0) / moves.length;
 }
@@ -219,6 +219,14 @@ export function wavesSpread(
         return (moved - start) / LUCK_POINTS;
     });
     return { moves, ended: m.used.map(d => d.run.wave) };
+}
+
+// Waves gained (or lost, below 0) from a change that can go either way —
+// battle conditions: `logDamage` is the log of the flat-damage factor
+// (less damage < 0), `points` skip points (less skip < 0). Luck-averaged
+// like the path rows.
+export function runWavesChange(m: RunLengthModel, logDamage: number, points: number): number {
+    return luckyWaves(m, logDamage, points) - luckyWaves(m, 0, 0);
 }
 
 // Waves (and coins per run, when `coinsAt` gives coins for a run to a wave)

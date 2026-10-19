@@ -107,6 +107,12 @@ Cannon) or survival (other builds).
   result is for an average week of the player's own tournaments.
 - "Save as a loadout" adds (or replaces) a loadout named "Best for
   tournaments"; the equipped loadout doesn't change.
+- **This week's conditions:** with battle conditions entered on the page,
+  the search scores under them (`OptimizerSnapshot.conditions`, applied in
+  `getScore`; the calibration is built under the recent runs' conditions in
+  `applyGoal`), so a module that answers one — Chrono Field duration
+  against shorter UWs — is worth more that week. See
+  [run-simulation.md](run-simulation.md) §3 for the conditions.
 
 ## Chance mechanics and variance (2026-10-18)
 

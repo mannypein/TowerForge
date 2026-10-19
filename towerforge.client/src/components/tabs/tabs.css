@@ -2894,3 +2894,102 @@
     font-size: 11px;
     color: var(--gold);
 }
+
+/* Tournament: league and this week's battle conditions. */
+.tn-league {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    font-size: 12px;
+    color: var(--text-dim);
+}
+
+    .tn-league .en-sub {
+        flex-basis: 100%;
+    }
+
+.tn-bc {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.tn-bc-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px 12px;
+    align-items: center;
+    padding: 8px 10px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+}
+
+.tn-bc-name {
+    min-width: 0;
+    font-size: 12px;
+}
+
+    .tn-bc-name .en-sub {
+        display: block;
+    }
+
+.tn-bc-inputs {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px 12px;
+    font-size: 12px;
+    color: var(--text-dim);
+}
+
+.tn-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.tn-val {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+}
+
+    .tn-val input[type='number'] {
+        width: 64px;
+    }
+
+.tn-uncounted {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--text-dim);
+}
+
+    .tn-uncounted summary {
+        cursor: pointer;
+        color: var(--text);
+    }
+
+    .tn-uncounted ul {
+        margin: 6px 0 0;
+        padding-left: 18px;
+    }
+
+    .tn-uncounted li {
+        margin-bottom: 4px;
+    }
+
+@media (max-width: 560px) {
+    .tn-bc-row {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .tn-bc-inputs {
+        justify-content: flex-start;
+    }
+}

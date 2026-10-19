@@ -26,6 +26,7 @@ import type { RunLengthModel } from './runLength';
 import { buildRunModel, projectRun, runSettingsFromCards } from './runCoins';
 import type { RunProjection } from './runCoins';
 import { defaultBattleIndex } from './gameExport';
+import { conditioned } from './battleConditions';
 
 export type AccountState = Pick<AppState,
     'activePreset' | 'profile' | 'perkData' | 'wsData' | 'enhData' | 'labData' | 'cardData' | 'uwData'
@@ -103,11 +104,13 @@ export function applyGoal(
     models: GoalModels, coinWeight = 0.5,
 ): void {
     const pushWaves = pushGoalOf(build) === 'waves';
+    // Calibrated under the snapshot's battle conditions, the ones the run had.
+    const cal = conditioned(snap);
     const wantsWaves = goal === 'waves' || (goal === 'blend' && pushWaves);
     const wantsEhp = goal === 'survival' || (goal === 'blend' && !pushWaves);
-    snap.farm = goal === 'coins' || goal === 'blend' ? buildFarmCalibration(snap, report) : undefined;
-    snap.ehp = wantsEhp ? buildEhpCalibration(snap, report) : undefined;
-    snap.edps = goal === 'damage' || wantsWaves ? buildEdpsCalibration(snap, report) ?? undefined : undefined;
+    snap.farm = goal === 'coins' || goal === 'blend' ? buildFarmCalibration(cal, report) : undefined;
+    snap.ehp = wantsEhp ? buildEhpCalibration(cal, report) : undefined;
+    snap.edps = goal === 'damage' || wantsWaves ? buildEdpsCalibration(cal, report) ?? undefined : undefined;
     snap.metric = goal === 'coins' ? 'coins' : wantsEhp && goal !== 'blend' ? 'ehp' : 'edps';
     // Waves need damage by source; without it eDPS stands in.
     snap.edpsMode = wantsWaves && snap.edps ? 'waves' : 'damage';

@@ -167,6 +167,8 @@ import type {
     PerkData,
     ModuleType,
 } from '../types/gameTypes';
+import { conditioned, conditionedSkip, conditionHealth } from './battleConditions';
+import type { TourneyConditions } from './battleConditions';
 
 // ── State Snapshot ────────────────────────────────────────────
 // Subset of AppState the optimizer needs. Passed by value (cloned).
@@ -207,6 +209,9 @@ export interface OptimizerSnapshot {
     // score — waves (flat damage + skip, needs `edps`) or survival (`ehp`).
     // coinWeight 0–1 is how much coins count.
     blend?: { push: 'waves' | 'ehp'; coinWeight: number };
+    // Tournament battle conditions the score is read under
+    // (engine/battleConditions.ts); calibrations are built under them too.
+    conditions?: TourneyConditions;
 }
 
 // ── Deep Clone Snapshot ───────────────────────────────────────
@@ -258,7 +263,8 @@ export function goalScore(snap: OptimizerSnapshot): number {
     return getScore(snap);
 }
 
-function getScore(snap: OptimizerSnapshot): number {
+function getScore(raw: OptimizerSnapshot): number {
+    const snap = conditioned(raw);
     if (snap.blend && snap.farm) {
         const w = snap.blend.coinWeight;
         return coinRate(snap, snap.farm) ** w * pushScore(snap) ** (1 - w);
@@ -283,7 +289,7 @@ function wavesScore(snap: OptimizerSnapshot): number {
 function killerHealthFactor(snap: OptimizerSnapshot): number {
     let log = 0;
     for (const [type, share] of Object.entries(snap.killers ?? {}) as [EnemyType, number][]) {
-        log -= share * Math.log(Math.max(0.01, healthLabCut(snap.labData, type)));
+        log -= share * Math.log(Math.max(0.01, healthLabCut(snap.labData, type) * conditionHealth(type, snap.conditions)));
     }
     return Math.exp(log);
 }
@@ -295,7 +301,8 @@ function pushScore(snap: OptimizerSnapshot): number {
 }
 
 // Coins per hour and push score, each relative, for the rows of "coins and push".
-export function scoreParts(snap: OptimizerSnapshot): { coins: number; push: number } {
+export function scoreParts(raw: OptimizerSnapshot): { coins: number; push: number } {
+    const snap = conditioned(raw);
     return { coins: snap.farm ? coinRate(snap, snap.farm) : 1, push: pushScore(snap) };
 }
 
@@ -305,9 +312,14 @@ const pushesWaves = (snap: OptimizerSnapshot) =>
 // Enemy Health Level Skip chance, in waves mode once skip is worth something.
 function scoredSkip(snap: OptimizerSnapshot): number {
     if (!snap.skipWorth || !snap.edps || !pushesWaves(snap)) return 0;
-    return healthSkipChance(healthSkipSources(
+    return skipChanceOf(snap);
+}
+
+// Enemy Health Level Skip chance in points, under the snapshot's conditions.
+export function skipChanceOf(snap: OptimizerSnapshot): number {
+    return conditionedSkip(healthSkipChance(healthSkipSources(
         snap.wsData[snap.presetIdx], snap.labData, snap.enhData, snap.relicData, snap.modBonuses.subs ?? {},
-    ));
+    )), snap.conditions);
 }
 
 // Skip points a step adds (waves mode), so its waves can count them as skip.

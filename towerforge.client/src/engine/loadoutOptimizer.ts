@@ -16,10 +16,9 @@
 
 import type { LoadoutSlots, ModuleState, ModuleType } from '../types/gameTypes';
 import type { OptimizerSnapshot } from './optimizer';
-import { goalScore } from './optimizer';
+import { goalScore, skipChanceOf } from './optimizer';
 import { readActiveModuleBonuses } from './modBonuses';
 import { activeLoadout } from './statHelpers';
-import { healthSkipChance, healthSkipSources } from './levelSkip';
 
 const TYPES: ModuleType[] = ['cannon', 'armor', 'generator', 'core'];
 const POSITIONS = ['main', 'assist'] as const;
@@ -59,9 +58,7 @@ function withSlots(snap: OptimizerSnapshot, slots: LoadoutSlots): OptimizerSnaps
     };
 }
 
-const skipOf = (s: OptimizerSnapshot) => healthSkipChance(healthSkipSources(
-    s.wsData[s.presetIdx], s.labData, s.enhData, s.relicData, s.modBonuses.subs ?? {},
-));
+const skipOf = skipChanceOf;
 
 // A loadout's score and Enemy Health Level Skip chance, for one swap on its own.
 export function loadoutScore(snap: OptimizerSnapshot, slots: LoadoutSlots): { score: number; skip: number } {
