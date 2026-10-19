@@ -11,6 +11,8 @@ import { LABS, UWS, WS_ENH, WS_STATS } from '../constants/gameData';
 import { GAME_CARDS, MASTERY_LAB_CARDS, MASTERY_LAB_START, CARD_PRESET_SLOTS } from '../constants/gameExportMaps';
 import { SUB_EFFECTS, SUB_RARITIES } from '../constants/moduleData';
 import { battle, gameModule, labIndex, makeExport, research, zeros } from '../test/makeExport';
+import { useGameStore } from '../store/useGameStore';
+import { botsForPreset } from '../constants/botData';
 
 const labMax = (name: string) => LABS.flatMap(c => c.l).find(([n]) => n === name)![1];
 
@@ -348,5 +350,101 @@ describe('battle history across imports', () => {
         const kept = mergeBattles([], many);
         expect(kept).toHaveLength(MAX_STORED_BATTLES);
         expect(kept[0].wave).toBe(1007);     // the oldest 7 drop off
+    });
+});
+
+// 29.1.3 adds bots, labs being researched, the current league and the
+// export's own version and time (TTG's change notes; TTG's test export).
+describe('29.1.3 exports (ExportVersion 1)', () => {
+    // One bot preset row as the game writes it, levels in save order
+    // [secondary, range, cooldown, primary].
+    const row = (levels: number[], fields: Record<string, unknown> = {}) => ({
+        Unlocked: true, Active: true, Levels: levels, SelectedLevels: zeros(4), PlusUnlocked: false, PlusLevel: 0, ...fields,
+    });
+    const off = row(zeros(4), { Unlocked: false, Active: false });
+    const noBots = {
+        FlameBotPresets: [off, off, off, off, off], ThunderBotPresets: [off, off, off, off, off],
+        GoldenBotPresets: [off, off, off, off, off], AmplifyBotPresets: [off, off, off, off, off],
+        BotBotPresets: [off, off, off, off, off],
+    };
+
+    it('reads the format version, export time and current league; older files leave them empty', () => {
+        const imp = parseGameExport(makeExport({
+            ExportVersion: 1, ExportedAt: '2026-10-19T14:02:11.123Z', LeagueID: 4, HighestLeague: 5,
+        }));
+        expect(imp.exportVersion).toBe(1);
+        expect(imp.exportedAt).toBe(Date.UTC(2026, 9, 19, 14, 2, 11, 123));
+        expect(imp.currentLeague).toBe('Champion');
+        expect(imp.league).toBe('Legend');
+        const old = parseGameExport(makeExport());
+        expect([old.exportVersion, old.exportedAt, old.currentLeague, old.bots, old.labsRunning])
+            .toEqual([null, null, '', null, null]);
+    });
+
+    it('reads bot levels in the game’s stat order, per preset through its global preset', () => {
+        const imp = parseGameExport(makeExport({
+            ...noBots,
+            FlameBotPresets: [row([3, 4, 5, 6]), row([10, 0, 0, 1], { Active: false }), off, off, off],
+            GlobalPresets: [{ BotsIndex: 0 }, { BotsIndex: 1 }, { BotsIndex: 0 }],
+        }));
+        const b = imp.bots!;
+        // Flame Bot shows [Damage Reduction, Cooldown, Damage, Range] = save [3, 2, 0, 1].
+        expect(b.medals['Flame Bot'][0]).toEqual([6, 5, 3, 4]);
+        expect(b.medals['Flame Bot'][1]).toEqual([1, 0, 10, 0]);
+        expect(b.medals['Flame Bot'][2]).toEqual([6, 5, 3, 4]);
+        expect(b.owned).toMatchObject({ 'Flame Bot': true, 'Thunder Bot': false });
+        expect(b.loadouts[0]).toEqual(['Flame Bot']);
+        expect(b.loadouts[1]).toEqual([]);
+    });
+
+    it('takes the higher of the bought and picked level, up to the stat’s max', () => {
+        const imp = parseGameExport(makeExport({
+            ...noBots,
+            FlameBotPresets: [row([0, 0, 2, 99], { SelectedLevels: [0, 0, 7, 0] }), off, off, off, off],
+        }));
+        expect(imp.bots!.medals['Flame Bot'][0]).toEqual([25, 7, 0, 0]);
+    });
+
+    it('reads the labs being researched', () => {
+        const dmg = labIndex('Damage Lab');
+        const done = Array(260).fill('0001-01-01T00:00:00.000Z');
+        done[dmg] = '2026-10-20T08:00:00.000Z';
+        const imp = parseGameExport(makeExport({
+            ExportedAt: '2026-10-19T14:00:00.000Z',
+            LabActiveBool: [true, false, true, false, false],
+            LabResearchInt: [dmg, 0, 999, 0, 0],
+            LabSpeedUpSpeed: [2, 0, 0, 0, 0],
+            LabSpeedUpRemainingSeconds: [3600, 0, 0, 0, 0],
+            ResearchCompleteDate: done,
+        }));
+        const at = Date.UTC(2026, 9, 19, 14);
+        expect(imp.labsRunning).toEqual([
+            { lab: 'Damage Lab', labIndex: dmg, doneAt: Date.UTC(2026, 9, 20, 8), speedUp: 2, speedUpLeftSec: 3600, exportedAt: at },
+            { lab: null, labIndex: 999, doneAt: null, speedUp: 0, speedUpLeftSec: 0, exportedAt: at },
+        ]);
+    });
+
+    it('reads InGuild into the Guardian', () => {
+        expect(parseGameExport(makeExport({ GuardianUnlocked: true, InGuild: false })).guardian!.inGuild).toBe(false);
+        expect(parseGameExport(makeExport({ GuardianUnlocked: true })).guardian!.inGuild).toBeUndefined();
+    });
+
+    it('importing keeps Bot+ and its extra stats as entered, and sets which bots run', () => {
+        useGameStore.setState({
+            botData: { 'Amplify Bot': { owned: true, medals: [1, 1, 1, 1, 3], plusLv: 2 } },
+            botLoadouts: { 0: [], 1: ['Amplify Bot'] },
+        });
+        const raw = makeExport({
+            ...noBots,
+            AmplifyBotPresets: [row([0, 0, 0, 5]), row([0, 0, 0, 5], { Active: false }), off, off, off],
+            GlobalPresets: [{ BotsIndex: 0 }, { BotsIndex: 1 }],
+        });
+        useGameStore.getState().applyGameImport(parseGameExport(raw), raw);
+        const s = useGameStore.getState();
+        const p0 = botsForPreset(s.botData, 0)['Amplify Bot'];
+        expect(p0.medals).toEqual([5, 0, 0, 0, 3]);
+        expect(p0.plusLv).toBe(2);
+        expect(s.botLoadouts[0]).toEqual(['Amplify Bot']);
+        expect(s.botLoadouts[1]).toEqual([]);
     });
 });

@@ -8,7 +8,7 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import { useGameStore } from './store/useGameStore';
 import type { TabName } from './types/gameTypes';
 import { parseCloudSave } from './engine/saveParser';
-import { isGameExport, parseGameExport } from './engine/gameExport';
+import { isGameExport, parseGameExport, SUPPORTED_EXPORT_VERSION } from './engine/gameExport';
 import { trackEvent, trackTabView } from './analytics';
 import { isPdfFile, jsonFromPdf, looksLikePdf } from './engine/pdfImport';
 import CurrencyBar from './components/common/CurrencyBar';
@@ -224,23 +224,39 @@ export default function App() {
                 '✓ Imported from your game data:',
                 '• Currencies',
                 `• Tier progress${imp.highestTier ? ` (up to Tier ${imp.highestTier})` : ''}`,
-                ...(imp.userName ? [`• Player name${imp.league ? `, ${imp.league} league` : ''}${imp.presetNames.some(n => n) ? ', preset names' : ''}`] : []),
+                ...(imp.userName ? [`• Player name${imp.league ? `, ${imp.league} league` : ''}${imp.currentLeague && imp.currentLeague !== imp.league ? ` (now in ${imp.currentLeague})` : ''}${imp.presetNames.some(n => n) ? ', preset names' : ''}`] : []),
                 `• ${imp.battles.length} recent battles — used to calibrate the Farming and eHP optimizer`,
                 ...(imp.workshop ? ['• Workshop upgrades for all 5 presets (matched to your game presets)'] : []),
                 ...(imp.enhancements ? ['• Workshop enhancements (per preset)'] : []),
                 ...(imp.uws ? ['• Ultimate weapons and UW+ levels'] : []),
                 ...(imp.cards ? [`• Cards: stars, masteries and presets${imp.cardSlots > 0 ? ` (${imp.cardSlots} slots)` : ''}`] : []),
                 ...(imp.bannedPerks ? ['• Banned perks'] : []),
-                ...(imp.labs ? [`• ${Object.keys(imp.labs).length} labs`] : []),
+                ...(imp.labs ? [`• ${Object.keys(imp.labs).length} labs${imp.labsRunning?.length ? `, ${imp.labsRunning.length} being researched` : ''}`] : []),
                 ...(imp.modules ? [
                     `• Modules: ${imp.modules.state.library.length} unique modules, ${imp.modules.state.loadouts.length} presets, assist slots and slot levels`,
                 ] : []),
                 ...(imp.modules?.unnamed.length ? [
                     `  (${imp.modules.unnamed.length} more unique modules aren’t identified yet — those were skipped)`,
                 ] : []),
+                ...(imp.bots ? ['• Bots: medal levels and which bots run, per preset'] : []),
+                ...(imp.guardian?.unlocked ? [
+                    `• Guardian: chips, presets and skins${imp.guardian.inGuild === false
+                        ? ' (the file says you weren’t in a guild — the Guardian only fights in one; the game also says this if your guild hadn’t loaded yet)'
+                        : ''}`,
+                ] : []),
                 '',
-                'Not imported yet: bots and relics.',
-                'The game file doesn’t include bots, and we’re still confirming the rest, so what you entered there was left as it is.',
+                ...(imp.bots ? [
+                    'Not imported yet: Bot+ levels and relics.',
+                    'We’re still confirming those, so what you entered there was left as it is.',
+                ] : [
+                    'Not imported yet: bots and relics.',
+                    'Bots come with the game’s 29.1.3 export, and we’re still confirming relics, so what you entered there was left as it is.',
+                ]),
+                ...(imp.exportVersion !== null && imp.exportVersion > SUPPORTED_EXPORT_VERSION ? [
+                    '',
+                    `⚠ This file is a newer export format (version ${imp.exportVersion}) than TowerForge reads (version ${SUPPORTED_EXPORT_VERSION}). Some fields may have changed — check your numbers.`,
+                ] : []),
+                ...(imp.exportedAt && source !== 'link' ? ['', `Exported ${exportAge(imp.exportedAt / 1000)}.`] : []),
                 ...(source === 'pdf' ? ['', 'Read from a PDF — if something looks off, import the tool_export.json file itself.'] : []),
                 ...(note ? ['', note] : []),
             ];

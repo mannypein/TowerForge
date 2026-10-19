@@ -33,7 +33,7 @@ import type {
     SlotLevels,
     AssistEntry,
     TabName,
-    CloudSaveData, GuardianData,
+    CloudSaveData, GuardianData, LabRunning,
 } from '../types/gameTypes';
 import { mergeBattles } from '../engine/battleReport';
 import type { BattleReport } from '../engine/battleReport';
@@ -70,6 +70,7 @@ const KEYS = {
     modules: 'tc_modules',
     cloudSaveData: 'tc_cloud_save',
     guardian: 'tc_guardian',
+    labsRunning: 'tc_labs_running',
 } as const;
 
 // ── Default State ─────────────────────────────────────────────
@@ -328,6 +329,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     battleReportChoice: -1,
     cloudSaveData: null,
     guardianData: defaultGuardianData(),
+    labsRunning: [],
 
     // ── UI Actions ────────────────────────────────────────────────
     setActiveTab: (tab) => set({ activeTab: tab }),
@@ -356,12 +358,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
         const moduleState = migrateModuleState(loadKey<ModuleState>(KEYS.modules, defaultModuleState));
         const cloudSaveData = loadKey<CloudSaveData | null>(KEYS.cloudSaveData, null);
         const guardianData = { ...defaultGuardianData(), ...loadKey<Partial<GuardianData>>(KEYS.guardian, {}) };
+        const labsRunning = loadKey<LabRunning[]>(KEYS.labsRunning, []);
 
         set({
             profile, tierWaves, wsData, enhData,
             labData, cardData, uwData, relicData,
             perkData, botData, botLoadouts, moduleState, battleReportText, currencies, importedBattles, battleReportChoice, cloudSaveData,
-            guardianData,
+            guardianData, labsRunning,
         });
     },
 
@@ -401,6 +404,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             ...(imp.highestTier > 0 ? { highestTier: imp.highestTier, completedTier: imp.completedTier } : {}),
             ...(imp.fivePresets ? { presets: 5 as const } : {}),
             ...(imp.league ? { league: imp.league } : {}),
+            ...(imp.currentLeague ? { currentLeague: imp.currentLeague } : {}),
             ...(imp.wallUnlocked ? { wall: true } : {}),
             ...(imp.presetNames.some(n => n) ? { presetNames: imp.presetNames } : {}),
         };
@@ -437,15 +441,37 @@ export const useGameStore = create<GameStore>((set, get) => ({
             }
             : s.moduleState;
         const guardianData = imp.guardian ?? s.guardianData;
+        // Bots (29.1.3+ files): medal levels per preset and which bots run;
+        // Bot+ and its extra stats keep what was entered.
+        let botData = s.botData;
+        let botLoadouts = s.botLoadouts;
+        if (imp.bots) {
+            botData = { ...s.botData };
+            for (const [name, byPreset] of Object.entries(imp.bots.medals)) {
+                const entry = s.botData[name] ?? { medals: [], plusLv: 0 };
+                const presets: Record<number, BotLevels> = { ...entry.presets };
+                for (const [i, medals] of Object.entries(byPreset)) {
+                    const cur = botsForPreset({ [name]: entry }, Number(i))[name];
+                    presets[Number(i)] = { medals: [...medals, ...cur.medals.slice(medals.length)], plusLv: cur.plusLv };
+                }
+                botData[name] = { ...entry, owned: imp.bots.owned[name] ?? false, presets };
+            }
+            botLoadouts = { ...s.botLoadouts, ...imp.bots.loadouts };
+        }
+        // A snapshot: an older file (no lab timers) clears the last one's.
+        const labsRunning = imp.labsRunning ?? [];
         set({
             currencies: imp.currencies,
             tierWaves,
             profile,
             importedBattles: battles,
             battleReportChoice: choice,
-            wsData, enhData, uwData, cardData, perkData, labData, moduleState, guardianData,
+            wsData, enhData, uwData, cardData, perkData, labData, moduleState, guardianData, botData, botLoadouts, labsRunning,
         });
         saveKey(KEYS.guardian, guardianData);
+        saveKey(KEYS.bots, botData);
+        saveKey(KEYS.botLoadouts, botLoadouts);
+        saveKey(KEYS.labsRunning, labsRunning);
         saveKey(KEYS.currencies, imp.currencies);
         saveKey(KEYS.tiers, tierWaves);
         saveKey(KEYS.profile, profile);
@@ -764,6 +790,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             battleReportChoice: -1,
             cloudSaveData: null,
             guardianData: defaultGuardianData(),
+            labsRunning: [],
         });
     },
 

@@ -1,13 +1,59 @@
 // ============================================================
 //  TowerForge Companion — Labs Tab
-//  179 labs across 11 categories with search and lock state.
+//  179 labs across 11 categories with search and lock state, and the
+//  labs being researched at the last import (29.1.3+ exports).
 // ============================================================
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useGameStore } from '../../store/useGameStore';
 import { LABS } from '../../constants/gameData';
 import NumericInput from '../common/NumericInput';
 import { milestoneReached } from '../../engine/statHelpers';
+import type { LabRunning } from '../../types/gameTypes';
+
+const span = (sec: number) => {
+    const m = Math.max(0, Math.round(sec / 60));
+    const d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60), min = m % 60;
+    return d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${min}m` : `${min}m`;
+};
+
+// The labs the game was researching when it exported. The finish time is
+// the game's own (ResearchCompleteDate); a speed-up's time left is as of
+// the export.
+function LabsRunning({ labs }: { labs: LabRunning[] }) {
+    const [now, setNow] = useState(() => Date.now());
+    useEffect(() => {
+        const t = setInterval(() => setNow(Date.now()), 60_000);
+        return () => clearInterval(t);
+    }, []);
+    return (
+        <div className="section" style={{ marginBottom: '10px' }}>
+            <div className="section-head">
+                <h3>Researching</h3>
+                <span className="s-badge">at your last import</span>
+            </div>
+            <div className="section-body">
+                {labs.map((r, i) => (
+                    <div key={i} className="field-row lab-run">
+                        <label className="field-label">
+                            {r.lab ?? `Lab #${r.labIndex}`}
+                            {r.speedUp > 1 && r.speedUpLeftSec > 0 && (
+                                <span className="field-sub">
+                                    ×{r.speedUp} speed-up, {span(r.speedUpLeftSec)} left when exported
+                                </span>
+                            )}
+                        </label>
+                        <span className="lab-run-time">
+                            {r.doneAt === null ? '—'
+                                : r.doneAt <= now ? 'Done — collect it in the game'
+                                    : `Done in ${span((r.doneAt - now) / 1000)} · ${new Date(r.doneAt).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })}`}
+                        </span>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
 
 export default function LabsTab() {
     const [search, setSearch] = useState('');
@@ -16,6 +62,7 @@ export default function LabsTab() {
     const tierWaves = useGameStore(s => s.tierWaves);
     const setLabLevel = useGameStore(s => s.setLabLevel);
     const setAllLabs = useGameStore(s => s.setAllLabs);
+    const labsRunning = useGameStore(s => s.labsRunning);
 
     const completedTier = profile.completedTier || 0;
 
@@ -90,6 +137,8 @@ export default function LabsTab() {
                     {doneLabs} / {totalLabs} maxed
                 </span>
             </div>
+
+            {labsRunning.length > 0 && <LabsRunning labs={labsRunning} />}
 
             {/* ── Lab Groups ── */}
             {filteredGroups.filter(group =>

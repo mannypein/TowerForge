@@ -52,6 +52,43 @@ wrapped ("Preset 1" → "Preset1", treated as a default name). A file named
 | `PlayTime` | 📊 | Total play time in seconds (63 on the test account). |
 | `GameStartedDate` | 📊 | Account creation date (UTC). |
 
+## Export format 1 (game 29.1.3)
+
+From TTG's change notes for 29.1.3 and their test export (build 1253,
+`DataVersion` 31, a fresh account — values are 0 / false, so array orders
+can't be checked from it). The importer reads that file as before; the new
+fields are below. Dates are now always UTC with exactly 3 decimals
+(`2026-10-19T14:02:11.123Z`; before, 0–3); `Date.parse` reads both.
+29.1.3 also adds Settings → External Tools Export (export by hand, or
+automatically every time the game saves).
+
+| Field | Status | Notes |
+|---|---|---|
+| `ExportVersion` | ✅ | 1. TTG bumps it when a field is renamed, removed or changes meaning — not for additions. Import warns when a file's version is above the one the site was written for (`SUPPORTED_EXPORT_VERSION` in gameExport.ts). |
+| `ExportedAt` | ✅ | When the file was written (UTC). The import message says how long ago; the lab speed-up time left is as of this. |
+| `LeagueID` | ✅ (assumed) | The league you're in now (`HighestLeague` is the best reached). Read with the `HighestLeague` numbers, 0 Copper … 6 Mythic — the code's assumption; only 0 seen so far (test account, `HighestLeague` 0 too). Kept as `profile.currentLeague`; the Tournament page starts on it. |
+| `TournamentRecords[]` | ❓ | Empty on the test account. |
+| `InGuild` | ✅ | Not in the save: the game fills it from live guild state when exporting, and it's false if guild data hasn't loaded yet (TTG). Kept as `guardianData.inGuild`; false shows a note on the Guardian tab — the Guardian only fights while you're in a guild (wiki: Guardian, Guilds). The models don't switch the Guardian off on it, because of the not-loaded case. |
+| `FlameBotPresets`, `ThunderBotPresets`, `GoldenBotPresets`, `AmplifyBotPresets`, `BotBotPresets` (5 rows each) | ✅ | One row per bot preset: `Unlocked`, `Active`, `Levels[4]`, `SelectedLevels[4]`, `PlusUnlocked`, `PlusLevel`. Site preset i reads row `GlobalPresets[i].BotsIndex`. `Levels` are in save order [secondary, range, cooldown, primary]; the game shows [primary, cooldown, secondary, range] — e.g. Flame Bot [Damage Reduction, Cooldown, Damage, Range] (TheTowerSDK `remapBotLevelsFromGameSaveOrder`, checked there on a real save). Each stat takes the higher of `Levels` and `SelectedLevels`, like the SDK; 0 = the base value, as on the Bots tab; clamped to the site's max. A bot is owned when any row has it unlocked, and runs in a preset when that row is `Active`. Still to check on a real 29.1.3 export that has bots. |
+| `PlusUnlocked`, `PlusLevel` | ⚪ for now | Bot+ keeps what the player entered: the site's Bot+ tables have 5 levels, v29's have 20–25 (TheTowerSDK). |
+| `SynchronicityPresets[5]` (`SynchronicityBots[5]` each), `BotPresetName[5]`, `CurrentBotPreset`, `FlameBotLevelCooldownSelected` (and Thunder, Golden, Amplify, Bot Bot) | ❓ | Synchronicity slots per bot preset (null on the test account), bot preset names, and the cooldown level picked per bot (0) — not used yet. |
+| `LabActiveBool[5]`, `LabResearchInt[5]`, `LabSpeedUpSpeed[5]`, `LabSpeedUpRemainingSeconds[5]`, `ResearchCompleteDate[260]` | ✅ | Labs being researched, per lab slot: running or not, the game's lab number (`GAME_LABS`), the speed-up multiplier and its time left as of `ExportedAt` (TTG). `ResearchCompleteDate` is read by lab number — the code's assumption (260 entries like `ResearchLevel`; unused = year 1). Shown at the top of the Labs tab ("Researching") with the time left. Whether `ResearchLevel` already counts a lab that's running isn't known, so the level being researched isn't shown. `LabSpeedUpEndTime` is left out by TTG (deprecated). |
+| `DisableAdsUnlockedBool`, `StarterPackUnlockedBool`, `EpicPackUnlockedBool` | ⚪ | Pack bonuses that are on (not purchase history). |
+| `MenuUnlocked`, `ProfileBannerUnlocked`, `TrackAvailable[12]` | ⚪ | Cosmetics. |
+| `ModulePity` (140 on the test account), `ModuleRarePity`, `CannonSubstatBans` (and Armor, Generator, Core), `CannonAutoRerollSubstats` (…), `AssistModulesAvailable` | 🔜 | Module pull pity, substat bans and auto-reroll picks. |
+| `UpgradesLockedFreeUpgrades`, `UpgradesDefenseLockedFreeUpgrades`, `UpgradesUtilityLockedFreeUpgrades` | 🔜 | Workshop stats locked out of in-run free upgrades — for the run simulator. |
+| `TierPreset`, `TournamentPreset`, `DissonantPreset` | ❓ | Battle presets for tier runs, tournaments and Dissonance. All 5 on the test account, which has 6 global presets — probably a 0-based global preset (the 6th), unconfirmed. |
+| `RangeLevelSelected`, `ShockwaveSizeLevelSelected`, `SwampRangeLevelSelected`, `InnerOrbDistance`, `SavedInnerOrbDistance`, `WorkshopOrbDistance`, `SavedWorkshopOrbDistance`, `SpotlightSmartMissilesOff`, `PoisonSwampStunOff`, `NukeAutomateToggle`, `DeathRayInstantKillToggle`, `SpawnAcceleratorToggle`, `EnergyShieldRestrictionToggle`, `DemonModeAutomateToggle`, `MissileBarrageAutomateToggle`, `DamageAdjustmentLog` | 🔜 | Sliders and toggles. `DamageAdjustmentLog` is the damage-cap slider: percent = 10^(value − max) (TTG); 37 on the test account. |
+| `LastGuildSeason` | ⚪ | 11 on the test account. |
+| `RoundActiveBool`, `CurrentWave`, `PerksPicked`, `RoundTime`, `HighestWaveReachedThisRound`, 138 `…ThisRound` counters | 🔜 | The run in progress. Only filled while `RoundActiveBool` is true — all 0 otherwise, so check it first (TTG). Named like `BattleHistory` plus `ThisRound` (`CoinsEarnedThisRound` = `CoinsEarned`). Cooldowns, ability state and seeds aren't exported. A later step: a live view / the run simulator. |
+
+**Removed in 29.1.3:** `BotsLevel`, `BotsUnlocked`, `BotsActive`,
+`SynchronicityBots`, `BotsUnlockedPresets`, `BotsLevelPresets`,
+`BotsActivePresets` — always 0 since v28 moved bots into presets; the site
+never read them.
+
+---
+
 ## Currencies
 
 | Field | Status | Notes |
@@ -151,8 +188,9 @@ wrapped ("Preset 1" → "Preset1", treated as a default name). A file named
 
 | Field | Status | Notes |
 |---|---|---|
-| `BotsUnlocked[4]`, `BotsActive[4]`, `BotsLevel[16]` | ⚪ | Old bot system — all empty on a real account that owns Golden Bot and Bot Bot. The current bot data (per-bot `…BotPresets` in the full save) isn't in the export, so bots can't be imported. |
-| `CurrentBotPreset`, `BotsUnlockedPresets[12]`, `BotsActivePresets[12]`, `BotsLevelPresets[48]` | ⚪ | Old bot presets — empty. |
+| `…BotPresets` (29.1.3+) | ✅ | Bot levels and which bots run, per preset — see [Export format 1](#export-format-1-game-29113). |
+| `BotsUnlocked[4]`, `BotsActive[4]`, `BotsLevel[16]` | ⚪ | Old bot system — all empty on a real account that owns Golden Bot and Bot Bot. Removed in 29.1.3. |
+| `CurrentBotPreset`, `BotsUnlockedPresets[12]`, `BotsActivePresets[12]`, `BotsLevelPresets[48]` | ⚪ | Old bot presets — empty. The preset lists were removed in 29.1.3. |
 | `SynchronicityUnlocked`, `SynchronicityLevel`, `SynchronicityBots[5]` | ❓ | Is this Bot+ / Bot Bot? |
 
 ## Modules
@@ -265,7 +303,7 @@ Everything else in a battle (damage by source, damage taken/blocked, healing by 
 
 1. What is a "cycle" (`…ThisCycle` fields)?
 2. ~~`HighestLeague`~~ — answered: 0 Copper … 6 Mythic.
-3. Bots: the export only has the old (empty) bot fields — can TTG add the current bot data?
+3. ~~Bots~~ — added in 29.1.3 (`…BotPresets`). Still to check on a real export: the level order, `LeagueID`'s numbers, `ResearchCompleteDate` by lab number, and what `TierPreset` / `TournamentPreset` / `DissonantPreset` point at.
 4. `RelicsUnlocked` — 2 = owned; the order of relic slots (release order?) still needs anchors.
 5. `Vault.UpgradesLevel` IDs and the Power/Harmony node lists — what do they unlock?
 6. `KilledBy` numbers — enemy type (owner); SDK order above, confirm with one known death.

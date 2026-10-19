@@ -101,7 +101,7 @@ export default function TournamentTab() {
         saveSim(next);
         setResult(null);
     };
-    const league = sim.league || state.profile.league || '';
+    const league = sim.league || state.profile.currentLeague || state.profile.league || '';
     const heat: LeagueHeat | undefined = LEAGUE_HEAT.find(l => l.league === league);
 
     // The account scored under the conditions of the runs its deaths come

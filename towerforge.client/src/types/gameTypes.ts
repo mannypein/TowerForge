@@ -62,6 +62,7 @@ export interface Profile {
     wall: boolean;
     highestTier: number;
     completedTier: number;
+    currentLeague?: League;   // league you're in now (the file's LeagueID, 29.1.3+); `league` is the highest reached
     excludedUWs?: string[];   // UW abbrs the optimizer should not suggest upgrades for
     presetNames?: string[];   // custom preset names (from the game import or typed in); blank = default
 }
@@ -368,6 +369,18 @@ export interface AppState {
     battleReportChoice: number;        // which report calibrates the optimizer: -1 = pasted, else importedBattles index
     cloudSaveData: CloudSaveData | null;  // cloud save if pulled, null otherwise
     guardianData: GuardianData;
+    labsRunning: LabRunning[];    // labs being researched at the last import (29.1.3+ exports)
+}
+
+// A lab being researched when the game exported (LabActiveBool / LabResearchInt,
+// ResearchCompleteDate; the speed-up as of the export).
+export interface LabRunning {
+    lab: string | null;        // site lab name; null when the game number isn't mapped
+    labIndex: number;          // the game's lab number
+    doneAt: number | null;     // ms, UTC
+    speedUp: number;           // speed-up multiplier (0 = none)
+    speedUpLeftSec: number;    // seconds of speed-up left at export
+    exportedAt: number | null; // ms, UTC
 }
 
 // ── Guardian ──────────────────────────────────────────────────
@@ -385,4 +398,5 @@ export interface GuardianData {
     skinsOwned: number;      // each owned skin: +0.6% coins
     presets: GuardianPreset[];   // the game's Guardian presets
     presetFor: number[];     // site preset i → Guardian preset (the game's global preset)
+    inGuild?: boolean;       // InGuild at export (29.1.3+); the Guardian only fights in a guild
 }

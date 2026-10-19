@@ -6,8 +6,10 @@
 //  Imported: currencies, tier progress, username, battle history, and
 //  the numbered arrays whose index → stat mapping was confirmed against
 //  a real account (workshop presets, enhancements, ultimate weapons,
-//  cards, perk bans, most labs — tables in constants/gameExportMaps).
-//  Bots, modules, relics and unconfirmed labs keep what players entered.
+//  cards, perk bans, most labs, modules, the Guardian — tables in
+//  constants/gameExportMaps). From 29.1.3 exports (ExportVersion 1) also
+//  bot levels per preset, labs being researched and the current league.
+//  Bot+, relics and unconfirmed labs keep what players entered.
 //
 //  Pure functions — no store imports.
 // ============================================================
@@ -25,7 +27,9 @@ import type {
     Currencies, TierWaves, WSPreset, WSCategory, EnhData, EnhCategoryData, UWData,
     CardData, CardEntry, LabData, ModuleState, ModuleEntry, ModuleType, ModuleRarity,
     SubSlot, Loadout, LoadoutSlots, AssistData, League, GuardianData, GuardianPreset,
+    BotLoadouts, LabRunning,
 } from '../types/gameTypes';
+import { BOTS_CONFIG } from '../constants/botData';
 import { CHIPS } from '../constants/guardianData';
 
 type Raw = Record<string, unknown>;
@@ -52,7 +56,25 @@ export interface GameImport {
     wallUnlocked: boolean;             // a workshop preset has Wall Health
     presetNames: string[];             // per app preset ('' = keep the default name)
     guardian: GuardianData | null;     // null when the file has no Guardian fields
+    // 29.1.3+ exports (ExportVersion 1) — null / '' on older files.
+    exportVersion: number | null;
+    exportedAt: number | null;         // ms, UTC
+    currentLeague: League;             // LeagueID: the league you're in now
+    bots: BotImport | null;            // bot levels and which are active, per preset
+    labsRunning: LabRunning[] | null;
 }
+
+// Bot levels per site preset (from the bot preset its global preset uses)
+// and the bots active in it. Bot+ levels aren't imported (see parseBots).
+export interface BotImport {
+    owned: Record<string, boolean>;
+    medals: Record<string, Record<number, number[]>>;   // bot → site preset → medal levels
+    loadouts: BotLoadouts;
+}
+
+// The export format this importer was written for (TTG bumps ExportVersion
+// when a field is renamed, removed or changes meaning; not for additions).
+export const SUPPORTED_EXPORT_VERSION = 1;
 
 export interface ModuleImport {
     state: ModuleState;                // library = unique modules the import can name
@@ -547,7 +569,85 @@ export function parseGameExport(raw: Raw): GameImport {
         wallUnlocked: (workshop ?? []).some(p => (p.defense[WS_STATS.defense.findIndex(([n]) => n === 'Wall Health')] ?? 0) > 0),
         presetNames: parsePresetNames(raw),
         guardian: parseGuardian(raw),
+        exportVersion: typeof raw.ExportVersion === 'number' ? raw.ExportVersion : null,
+        exportedAt: dateMs(raw.ExportedAt),
+        currentLeague: typeof raw.LeagueID === 'number' ? GAME_LEAGUES[raw.LeagueID] ?? '' : '',
+        bots: parseBots(raw),
+        labsRunning: parseLabsRunning(raw),
     };
+}
+
+// An ISO date in ms; null for missing or the game's empty date (year 1).
+function dateMs(v: unknown): number | null {
+    if (typeof v !== 'string') return null;
+    const t = Date.parse(v);
+    return Number.isFinite(t) && t > 0 ? t : null;
+}
+
+// ── Bots (29.1.3+ exports) ────────────────────────────────────
+// One list per bot (FlameBotPresets …), one row per bot preset: Unlocked,
+// Active, Levels, SelectedLevels, PlusUnlocked, PlusLevel; GlobalPresets[i]
+// .BotsIndex picks the row for site preset i. The save keeps a bot's four
+// levels as [secondary, range, cooldown, primary]; the game shows them — and
+// the site keeps them — as [primary, cooldown, secondary, range]
+// (TheTowerSDK remapBotLevelsFromGameSaveOrder, checked there against a real
+// save). Each stat takes the higher of Levels and SelectedLevels, as the SDK
+// does (a level can be picked below the one bought, e.g. Cooldown). Levels
+// count from 0 = the base value, like the site's. Bot+ levels stay as
+// entered: the site's Bot+ tables (5 levels) predate v29's (20–25 levels),
+// so they'd clash.
+const BOT_LISTS: [string, string][] = [
+    ['Flame Bot', 'FlameBotPresets'], ['Thunder Bot', 'ThunderBotPresets'], ['Golden Bot', 'GoldenBotPresets'],
+    ['Amplify Bot', 'AmplifyBotPresets'], ['Bot Bot', 'BotBotPresets'],
+];
+const fromSaveOrder = (l: number[]) => [l[3] ?? 0, l[2] ?? 0, l[0] ?? 0, l[1] ?? 0];
+
+function parseBots(raw: Raw): BotImport | null {
+    if (!BOT_LISTS.some(([, key]) => Array.isArray(raw[key]))) return null;
+    const out: BotImport = { owned: {}, medals: {}, loadouts: {} };
+    for (const [name, key] of BOT_LISTS) {
+        const rows = arr(raw[key]).filter(isObj);
+        const config = BOTS_CONFIG.find(b => b.name === name);
+        if (!config || rows.length === 0) continue;
+        out.owned[name] = rows.some(r => r.Unlocked === true);
+        out.medals[name] = {};
+        for (let i = 0; i < APP_PRESETS; i++) {
+            const g = arr(raw.GlobalPresets)[i];
+            const idx = isObj(g) && typeof g.BotsIndex === 'number' ? g.BotsIndex : 0;
+            const row = rows[clamp(idx, 0, rows.length - 1)];
+            const bought = fromSaveOrder(arr(row.Levels).map(num));
+            const picked = fromSaveOrder(arr(row.SelectedLevels).map(num));
+            out.medals[name][i] = bought
+                .map((v, k) => clamp(Math.max(v, picked[k]), 0, config.stats[k]?.values.length ?? 0));
+            if (row.Active === true && out.owned[name]) (out.loadouts[i] ??= []).push(name);
+        }
+    }
+    for (let i = 0; i < APP_PRESETS; i++) out.loadouts[i] ??= [];
+    return out;
+}
+
+// ── Labs being researched (29.1.3+ exports) ───────────────────
+// Per lab slot: LabActiveBool, LabResearchInt (the game's lab number),
+// LabSpeedUpSpeed and LabSpeedUpRemainingSeconds (as of ExportedAt);
+// ResearchCompleteDate is per lab number.
+function parseLabsRunning(raw: Raw): LabRunning[] | null {
+    const active = arr(raw.LabActiveBool);
+    if (active.length === 0) return null;
+    const exportedAt = dateMs(raw.ExportedAt);
+    const out: LabRunning[] = [];
+    active.forEach((on, slot) => {
+        if (on !== true) return;
+        const labIndex = num(arr(raw.LabResearchInt)[slot]);
+        out.push({
+            lab: GAME_LABS[labIndex] ?? null,
+            labIndex,
+            doneAt: dateMs(arr(raw.ResearchCompleteDate)[labIndex]),
+            speedUp: num(arr(raw.LabSpeedUpSpeed)[slot]),
+            speedUpLeftSec: num(arr(raw.LabSpeedUpRemainingSeconds)[slot]),
+            exportedAt,
+        });
+    });
+    return out;
 }
 
 // The Guardian: owned chips, the game's Guardian presets (slots bought,
@@ -584,6 +684,7 @@ function parseGuardian(raw: Raw): GuardianData | null {
         return clamp(idx, 0, presets.length - 1);
     });
     return {
+        ...(typeof raw.InGuild === 'boolean' ? { inGuild: raw.InGuild } : {}),
         unlocked: raw.GuardianUnlocked === true,
         chipsOwned: CHIPS.map((_, i) => arr(raw.GuardianChipUnlocked)[i] === true),
         skinsOwned: Math.max(1, arr(raw.GuardianSkinUnlocked).filter(v => v === true).length),

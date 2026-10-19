@@ -3201,3 +3201,24 @@
     font-size: 12px;
     color: var(--accent);
 }
+
+/* Guardian: the import said the player wasn't in a guild. */
+.grd-warn {
+    margin: 0 0 12px;
+    padding: 8px 10px;
+    border-left: 3px solid var(--gold);
+    background: var(--gold-glow);
+    border-radius: 4px;
+}
+
+/* Labs: labs being researched at the last import. */
+.lab-run {
+    flex-wrap: wrap;
+}
+
+.lab-run-time {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--text-dim);
+    text-align: right;
+}

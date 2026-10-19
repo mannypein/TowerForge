@@ -102,6 +102,14 @@ export default function GuardianTab() {
                 <em>Summon</em> add coins, <em>Fetch</em> finds loot — the Optimizer ranks their upgrades per Bit.
             </div>
 
+            {g.unlocked && g.inGuild === false && (
+                <p className="en-note grd-warn">
+                    Your last import says you weren&apos;t in a guild — the Guardian only fights while you&apos;re in one.
+                    The game also says this when your guild hadn&apos;t loaded yet, so if you are in a guild, export again
+                    and re-import. The models still count your chips.
+                </p>
+            )}
+
             <div className="section" style={{ marginBottom: '12px' }}>
                 <div className="section-head"><h3>Guardian</h3></div>
                 <div className="section-body grd-settings">
