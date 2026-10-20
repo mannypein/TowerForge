@@ -14,19 +14,23 @@ export const MAX_SHARE_BYTES = 512 * 1024;
 const API_BASE = '/api/shares';
 
 // Bots: medal levels plus which bots are active in each preset, so viewers
-// can flip through the sender's presets the same way the Cards tab does.
+// can flip through the sender's presets the same way the Bots tab does.
+// presetNames: the sender's preset names (shares from 2026-10-20 on).
 export interface SharedBots {
     current: BotData;
     loadouts?: BotLoadouts;
     presetCount?: number;
+    presetNames?: string[];
 }
 
 // Modules: loadouts are the module "presets"; the library is included so
 // viewers can resolve the module IDs stored in each loadout slot.
+// activeLoadout: the equipped preset (shares from 2026-10-20 on).
 export interface SharedModules {
     loadouts: Loadout[];
     library: ModuleEntry[];
     slotLevels: SlotLevels;
+    activeLoadout?: string;
 }
 
 export interface SharePayload {

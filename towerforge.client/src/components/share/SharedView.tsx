@@ -2,42 +2,64 @@
 //  TowerForge Companion — Shared Stats Viewer
 //  Full-page, read-only view opened from a ?share= link.
 //  Replaces the app shell, so it never touches the viewer's data.
+//  Each section is drawn to fit the screen (phones included); Export
+//  Image saves it as the fixed-width poster kept off-screen next to
+//  it, so an export looks the same from any screen (shareTheme).
+//  Bots and Modules switch between the sender's presets, like the
+//  Bots and Modules tabs.
 // ============================================================
 
 import { useEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { fetchShare } from '../../engine/shareApi';
 import type { SharePayload } from '../../engine/shareApi';
 import UWShareCard from './UWShareCard';
 import CardsShareCard from './CardsShareCard';
 import BotsShareCard from './BotsShareCard';
 import ModulesShareCard from './ModulesShareCard';
-import { exportNodeAsPng } from './shareTheme';
+import { exportNodeAsPng, SHARE_OFFSCREEN_STYLE } from './shareTheme';
 import { BOTS_CONFIG, botsForPreset, getPresetBots, isBotEntryOwned } from '../../constants/botData';
-import { PRESET_NAMES } from '../../constants/gameData';
+import { presetLabel } from '../../constants/gameData';
 
 interface Props {
     code: string;
+}
+
+function exportCard(node: HTMLDivElement | null, filename: string) {
+    if (!node) return;
+    exportNodeAsPng(node, filename).catch(() => alert('Image export failed. Please try again.'));
+}
+
+// One section: its preset buttons, Export Image, the on-page card, and
+// the off-screen poster that Export Image saves.
+function ShareSection({ controls, onExport, poster, children }: {
+    controls?: ReactNode;
+    onExport: () => void;
+    poster: ReactNode;
+    children: ReactNode;
+}) {
+    return (
+        <section className="shr-section">
+            <div className="shr-toolbar">
+                {controls}
+                <span className="shr-spacer" />
+                <button className="btn btn-accent" onClick={onExport}>📸 Export Image</button>
+            </div>
+            {children}
+            <div style={SHARE_OFFSCREEN_STYLE} aria-hidden="true">{poster}</div>
+        </section>
+    );
 }
 
 export default function SharedView({ code }: Props) {
     const [payload, setPayload] = useState<SharePayload | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [botPreset, setBotPreset] = useState(0);
+    const [loadoutId, setLoadoutId] = useState<string | null>(null);
     const uwRef = useRef<HTMLDivElement>(null);
     const cardsRef = useRef<HTMLDivElement>(null);
     const botsRef = useRef<HTMLDivElement>(null);
     const modulesRef = useRef<HTMLDivElement>(null);
-
-    // Bot presets mirror the Cards tab: fixed preset names, each with its own
-    // set of active bots. Older shares without loadouts show levels only.
-    const sharedBots = payload?.bots;
-    const botPresetCount = sharedBots?.loadouts ? (sharedBots.presetCount ?? 2) : 0;
-    const ownedBotNames = sharedBots
-        ? BOTS_CONFIG.filter(b => isBotEntryOwned(sharedBots.current[b.name])).map(b => b.name)
-        : [];
-    const presetActiveBots = botPresetCount > 0
-        ? getPresetBots(sharedBots?.loadouts, botPreset, ownedBotNames)
-        : undefined;
 
     useEffect(() => {
         let cancelled = false;
@@ -49,26 +71,49 @@ export default function SharedView({ code }: Props) {
         return () => { cancelled = true; };
     }, [code]);
 
-    function exit() {
-        window.location.href = '/';
-    }
+    // Bots: the sender's presets, each with its own levels and active bots.
+    // Older shares without loadouts show one set of levels.
+    const sharedBots = payload?.bots;
+    const botPresetCount = sharedBots?.loadouts ? (sharedBots.presetCount ?? 2) : 0;
+    const ownedBotNames = sharedBots
+        ? BOTS_CONFIG.filter(b => isBotEntryOwned(sharedBots.current[b.name])).map(b => b.name)
+        : [];
+    const presetActiveBots = botPresetCount > 0
+        ? getPresetBots(sharedBots?.loadouts, botPreset, ownedBotNames)
+        : undefined;
+    const botProps = sharedBots ? {
+        bots: botsForPreset(sharedBots.current, botPreset),
+        title: botPresetCount > 0 ? presetLabel(sharedBots.presetNames, botPreset) : 'Medal levels',
+        activeBots: presetActiveBots,
+    } : null;
 
-    function exportCard(node: HTMLDivElement | null, filename: string) {
-        if (!node) return;
-        exportNodeAsPng(node, filename).catch(() => alert('Image export failed. Please try again.'));
-    }
+    // Modules: one preset at a time, the equipped one first.
+    const sharedModules = payload?.modules;
+    const loadouts = sharedModules?.loadouts ?? [];
+    const equippedId = sharedModules?.activeLoadout;
+    const loadout = loadouts.find(l => l.id === loadoutId)
+        ?? loadouts.find(l => l.id === equippedId) ?? loadouts[0];
+    // Assist slots show when the sender uses them anywhere.
+    const showAssists = loadouts.some(l => Object.values(l.slots).some(s => s?.assist))
+        || Object.values(sharedModules?.slotLevels ?? {}).some(s => (s?.assist ?? 0) > 0);
+    const moduleProps = sharedModules && loadout ? {
+        loadout,
+        library: sharedModules.library ?? [],
+        slotLevels: sharedModules.slotLevels,
+        equipped: loadout.id === equippedId,
+        showAssists,
+    } : null;
 
     return (
-        <div style={{ minHeight: '100vh', background: 'var(--bg, #0f1117)', color: 'var(--text, #e8eaf0)' }}>
-            <div className="flex-row" style={{ padding: '14px 18px', borderBottom: '1px solid var(--border, #2a2f3d)' }}>
-                <span style={{ fontSize: '13px', color: 'var(--text-dim, #8a90a0)' }}>
-                    Shared stats · code <strong style={{ letterSpacing: '2px' }}>{code.toUpperCase()}</strong>
-                </span>
-                <span style={{ flex: 1 }} />
-                <button className="btn btn-dim" onClick={exit}>Back to TowerForge</button>
-            </div>
+        <div className="shr-page">
+            <header className="shr-top">
+                <span className="app-logo shr-logo">Tower<span className="logo-forge">Forge</span></span>
+                <span className="shr-code">Shared stats · code <strong>{code.toUpperCase()}</strong></span>
+                <span className="shr-spacer" />
+                <a className="btn btn-dim" href="/">Open TowerForge</a>
+            </header>
 
-            <div style={{ padding: '18px', maxWidth: '1140px', margin: '0 auto' }}>
+            <main className="shr-body">
                 {error && (
                     <div className="empty-state">
                         <div className="icon">🔗</div>
@@ -77,85 +122,71 @@ export default function SharedView({ code }: Props) {
                     </div>
                 )}
 
-                {!error && !payload && (
-                    <p style={{ color: 'var(--text-dim, #8a90a0)' }}>Loading shared stats…</p>
-                )}
+                {!error && !payload && <p className="shr-loading">Loading shared stats…</p>}
 
                 {payload?.uw && (
-                    <section style={{ marginBottom: '28px' }}>
-                        <div className="flex-row" style={{ marginBottom: '10px' }}>
-                            <span style={{ flex: 1 }} />
-                            <button className="btn btn-accent" onClick={() => exportCard(uwRef.current, 'towerforge-shared-uws.png')}>
-                                📸 Export Image
-                            </button>
-                        </div>
-                        <div style={{ overflowX: 'auto' }}>
-                            <UWShareCard ref={uwRef} snapshot={payload.uw} />
-                        </div>
-                    </section>
+                    <ShareSection
+                        onExport={() => exportCard(uwRef.current, 'towerforge-shared-uws.png')}
+                        poster={<UWShareCard ref={uwRef} snapshot={payload.uw} poster />}
+                    >
+                        <UWShareCard snapshot={payload.uw} />
+                    </ShareSection>
                 )}
 
                 {payload?.cards && (
-                    <section>
-                        <div className="flex-row" style={{ marginBottom: '10px' }}>
-                            <span style={{ flex: 1 }} />
-                            <button className="btn btn-accent" onClick={() => exportCard(cardsRef.current, 'towerforge-shared-cards.png')}>
-                                📸 Export Image
-                            </button>
-                        </div>
-                        <div style={{ overflowX: 'auto' }}>
-                            <CardsShareCard ref={cardsRef} snapshot={payload.cards} />
-                        </div>
-                    </section>
+                    <ShareSection
+                        onExport={() => exportCard(cardsRef.current, 'towerforge-shared-cards.png')}
+                        poster={<CardsShareCard ref={cardsRef} snapshot={payload.cards} poster />}
+                    >
+                        <CardsShareCard snapshot={payload.cards} />
+                    </ShareSection>
                 )}
 
-                {sharedBots && (
-                    <section style={{ marginTop: '28px' }}>
-                        <div className="flex-row" style={{ marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
-                            {Array.from({ length: botPresetCount }, (_, idx) => (
-                                <button
-                                    key={idx}
-                                    className={`preset-btn ${botPreset === idx ? 'active' : ''}`}
-                                    onClick={() => setBotPreset(idx)}
-                                >
-                                    {PRESET_NAMES[idx]}
-                                </button>
-                            ))}
-                            <span style={{ flex: 1 }} />
-                            <button className="btn btn-accent" onClick={() => exportCard(botsRef.current, 'towerforge-shared-bots.png')}>
-                                📸 Export Image
-                            </button>
-                        </div>
-                        <div style={{ overflowX: 'auto' }}>
-                            <BotsShareCard
-                                ref={botsRef}
-                                bots={botsForPreset(sharedBots.current, botPreset)}
-                                title={botPresetCount > 0 ? PRESET_NAMES[botPreset] : 'Medal levels'}
-                                activeBots={presetActiveBots}
-                            />
-                        </div>
-                    </section>
+                {botProps && (
+                    <ShareSection
+                        controls={botPresetCount > 1 && (
+                            <div className="preset-tabs shr-presets">
+                                {Array.from({ length: botPresetCount }, (_, idx) => (
+                                    <button
+                                        key={idx}
+                                        className={`preset-btn ${botPreset === idx ? 'active' : ''}`}
+                                        onClick={() => setBotPreset(idx)}
+                                    >
+                                        {presetLabel(sharedBots?.presetNames, idx)}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                        onExport={() => exportCard(botsRef.current, 'towerforge-shared-bots.png')}
+                        poster={<BotsShareCard ref={botsRef} {...botProps} poster />}
+                    >
+                        <BotsShareCard {...botProps} />
+                    </ShareSection>
                 )}
 
-                {payload?.modules && (
-                    <section style={{ marginTop: '28px' }}>
-                        <div className="flex-row" style={{ marginBottom: '10px' }}>
-                            <span style={{ flex: 1 }} />
-                            <button className="btn btn-accent" onClick={() => exportCard(modulesRef.current, 'towerforge-shared-modules.png')}>
-                                📸 Export Image
-                            </button>
-                        </div>
-                        <div style={{ overflowX: 'auto' }}>
-                            <ModulesShareCard
-                                ref={modulesRef}
-                                loadouts={payload.modules.loadouts ?? []}
-                                library={payload.modules.library ?? []}
-                                slotLevels={payload.modules.slotLevels}
-                            />
-                        </div>
-                    </section>
+                {moduleProps && (
+                    <ShareSection
+                        controls={loadouts.length > 1 && (
+                            <div className="modg-presets shr-presets">
+                                {loadouts.map(lo => (
+                                    <button
+                                        key={lo.id}
+                                        className={`modg-preset ${lo.id === loadout?.id ? 'viewing' : ''} ${lo.id === equippedId ? 'equipped' : ''}`}
+                                        onClick={() => setLoadoutId(lo.id)}
+                                        title={lo.id === equippedId ? 'Equipped' : undefined}
+                                    >
+                                        {lo.name || 'Preset'}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                        onExport={() => exportCard(modulesRef.current, 'towerforge-shared-modules.png')}
+                        poster={<ModulesShareCard ref={modulesRef} {...moduleProps} poster />}
+                    >
+                        <ModulesShareCard {...moduleProps} />
+                    </ShareSection>
                 )}
-            </div>
+            </main>
         </div>
     );
 }

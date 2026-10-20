@@ -1,80 +1,97 @@
 // ============================================================
 //  TowerForge Companion — Modules Share Card
-//  Viewer/export poster: each loadout with its main and assist modules.
+//  One module preset, drawn like the Modules tab (the game's Modules
+//  screen): the tower with its primary and assist slots around it,
+//  each module's badge in its rarity's glow with the slot level, and
+//  next to it the modules by name, rarity and stars.
 // ============================================================
 
 import type { Ref } from 'react';
-import type { ModuleType, SlotLevels, Loadout, ModuleEntry } from '../../types/gameTypes';
-import { RARITIES } from '../../constants/moduleRarities';
-import { SHARE_COLORS, SHARE_CARD_ROOT_STYLE } from './shareTheme';
+import type { Loadout, ModuleEntry, ModuleType, SlotLevels } from '../../types/gameTypes';
+import { RARITIES, moduleMaxLevel, rarityColor, rarityStars } from '../../constants/moduleRarities';
+import { BOARD } from '../../constants/moduleBoard';
+import type { SlotKey } from '../../constants/moduleBoard';
+import ModuleBadge from '../common/ModuleBadge';
+import TowerArt from '../common/TowerArt';
+import { shareRootStyle } from './shareTheme';
 import { ShareHeader, ShareFooter } from './shareCommon';
 
 const TYPE_ORDER: ModuleType[] = ['cannon', 'armor', 'generator', 'core'];
+const TYPE_LABELS: Record<ModuleType, string> = { cannon: 'Cannon', armor: 'Armor', generator: 'Generator', core: 'Core' };
 
-export default function ModulesShareCard({ ref, loadouts, library, slotLevels }: {
-    ref: Ref<HTMLDivElement>;
-    loadouts: Loadout[];
+export default function ModulesShareCard({ ref, loadout, library, slotLevels, equipped, showAssists, poster }: {
+    ref?: Ref<HTMLDivElement>;
+    loadout: Loadout;
     library: ModuleEntry[];
     slotLevels: SlotLevels;
+    equipped?: boolean;
+    showAssists: boolean;   // the sender has assist slots (an assist module or slot level anywhere)
+    poster?: boolean;
 }) {
     const byId = new Map(library.map(m => [m.id, m]));
+    const modAt = (type: ModuleType, slot: SlotKey) => byId.get(loadout.slots[type]?.[slot] ?? '') ?? null;
+    // A slot's level, shown no higher than the module's rarity allows (as in game).
+    const levelAt = (type: ModuleType, slot: SlotKey, mod: ModuleEntry | null) => {
+        const lv = slotLevels?.[type]?.[slot] ?? 0;
+        return mod ? Math.min(lv, moduleMaxLevel(mod.rarity)) : lv;
+    };
 
-    function slotText(modId: string, type: ModuleType, pos: 'main' | 'assist') {
-        const mod = byId.get(modId);
-        if (!mod) return { name: '—', meta: '', lvl: '' };
-        const rarity = RARITIES.find(r => r.k === mod.rarity)?.label ?? mod.rarity;
-        return {
-            name: mod.name,
-            meta: rarity,
-            lvl: `Lv ${slotLevels?.[type]?.[pos] ?? 0}`,
-        };
+    function slot(type: ModuleType, key: SlotKey) {
+        const isAssist = key === 'assist';
+        if (isAssist && !showAssists) return <span key={`${type}-${key}`} className="modg-slot small" />;
+        const mod = modAt(type, key);
+        return (
+            <div key={`${type}-${key}`} className={`modg-slot ${isAssist ? 'small' : 'big'}`}>
+                <ModuleBadge type={type} module={mod} size={isAssist ? 'var(--slot-small)' : 'var(--slot-big)'}
+                    title={`${TYPE_LABELS[type]} ${isAssist ? 'assist' : 'primary'}${mod ? ` — ${mod.name}` : ' — empty'}`} />
+                <span className="modg-slot-lv">Lv.{levelAt(type, key, mod)}</span>
+            </div>
+        );
     }
 
+    // The list: every primary, then the assists that hold a module.
+    const rows = TYPE_ORDER.flatMap(type => (['main', 'assist'] as SlotKey[])
+        .filter(key => key === 'main' || modAt(type, key))
+        .map(key => ({ type, key, mod: modAt(type, key) })));
+
     return (
-        <div ref={ref} style={SHARE_CARD_ROOT_STYLE}>
-            <ShareHeader title="Module Loadouts" subtitle={`${loadouts.length} loadout${loadouts.length === 1 ? '' : 's'}`} />
+        <div ref={ref} style={shareRootStyle(poster)}>
+            <ShareHeader title="Modules" subtitle={`${loadout.name || 'Preset'}${equipped ? ' · equipped' : ''}`} />
 
-            {loadouts.length === 0 ? (
-                <div style={{ fontSize: 16, color: SHARE_COLORS.dim }}>No loadouts saved.</div>
-            ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
-                    {loadouts.map(lo => (
-                        <div
-                            key={lo.id}
-                            style={{
-                                background: SHARE_COLORS.panel,
-                                border: `1px solid ${SHARE_COLORS.border}`,
-                                borderRadius: 10,
-                                padding: 16,
-                            }}
-                        >
-                            <div style={{ fontSize: 19, fontWeight: 700, marginBottom: 10 }}>{lo.name}</div>
-
-                            {TYPE_ORDER.map(type => (
-                                <div key={type} style={{ marginBottom: 8 }}>
-                                    <div style={{ fontSize: 12, letterSpacing: 2, textTransform: 'uppercase', color: SHARE_COLORS.dim }}>
-                                        {type}
-                                    </div>
-                                    {(['main', 'assist'] as const).map(pos => {
-                                        const t = slotText(lo.slots[type]?.[pos] ?? '', type, pos);
-                                        const color = pos === 'assist' ? SHARE_COLORS.gold : SHARE_COLORS.accent;
-                                        return (
-                                            <div key={pos} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, marginTop: 3 }}>
-                                                <span>
-                                                    <span style={{ color, marginRight: 8, fontSize: 12 }}>{pos === 'main' ? 'Main' : 'Asst'}</span>
-                                                    {t.name}
-                                                    {t.meta && <span style={{ color: SHARE_COLORS.dim, fontSize: 12 }}> · {t.meta}</span>}
-                                                </span>
-                                                <span style={{ color: SHARE_COLORS.dim, fontSize: 12 }}>{t.lvl}</span>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            ))}
-                        </div>
-                    ))}
+            <div className="shr-mod">
+                <div className="modg-board">
+                    <div className="modg-side">
+                        <div className="modg-pair">{BOARD[0].map(([t, s]) => slot(t, s))}</div>
+                        <div className="modg-pair">{BOARD[2].map(([t, s]) => slot(t, s))}</div>
+                    </div>
+                    <TowerArt />
+                    <div className="modg-side">
+                        <div className="modg-pair">{BOARD[1].map(([t, s]) => slot(t, s))}</div>
+                        <div className="modg-pair">{BOARD[3].map(([t, s]) => slot(t, s))}</div>
+                    </div>
                 </div>
-            )}
+
+                <div className="shr-mod-list">
+                    {rows.map(({ type, key, mod }) => {
+                        const color = rarityColor(mod?.rarity);
+                        const stars = rarityStars(mod?.rarity);
+                        return (
+                            <div key={`${type}-${key}`} className="shr-mod-row">
+                                <ModuleBadge type={type} module={mod} size={44} />
+                                <div className="shr-mod-info">
+                                    <div className="shr-mod-name" style={{ color: mod ? color : undefined }}>{mod?.name ?? 'Empty'}</div>
+                                    <div className="shr-mod-meta">
+                                        {TYPE_LABELS[type]}{key === 'assist' ? ' assist' : ''}
+                                        {mod && <> · <span style={{ color }}>{RARITIES.find(r => r.k === mod.rarity)?.label ?? mod.rarity}</span></>}
+                                        {stars > 0 && <span className="shr-mod-stars" style={{ color }}> {'★'.repeat(stars)}</span>}
+                                    </div>
+                                </div>
+                                <span className="shr-mod-lv">Lv.{levelAt(type, key, mod)}</span>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
 
             <ShareFooter />
         </div>

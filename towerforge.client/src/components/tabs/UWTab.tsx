@@ -106,7 +106,7 @@ export default function UWTab() {
         <div>
             {/* ── Off-screen share card (rendered for export only) ── */}
             <div style={SHARE_OFFSCREEN_STYLE} aria-hidden="true">
-                <UWShareCard ref={shareRef} />
+                <UWShareCard ref={shareRef} poster />
             </div>
 
             {/* ── Export action ── */}

@@ -817,6 +817,7 @@
 .botg-page {
     max-width: 900px;
     margin: 0 auto;
+    container: bots / inline-size;
 }
 
 .botg-list {
@@ -1171,7 +1172,9 @@
     }
 
 /* Phones: tighter boxes so 4 fit across */
-@media (max-width: 520px) {
+/* Narrow: by the bot list's width (the Bots tab, or a shared card), so a
+   wide shared-stats poster keeps full size even when exported on a phone. */
+@container bots (max-width: 500px) {
     .botg-card {
         padding: 8px 8px 8px;
     }
@@ -1405,22 +1408,9 @@
     filter: drop-shadow(0 0 4px var(--mod-color));
 }
 
-    .modg-badge-frame path {
-        fill: rgba(10, 14, 30, 0.85);
-        stroke: var(--mod-color);
-        stroke-width: 5;
-    }
-
 .modg-badge.empty .modg-badge-frame {
     filter: none;
 }
-
-    .modg-badge.empty .modg-badge-frame path {
-        fill: rgba(10, 14, 30, 0.5);
-        stroke: #3b4a80;
-        stroke-width: 3;
-        stroke-dasharray: 8 6;
-    }
 
 .modg-badge-art {
     position: relative;
@@ -3321,4 +3311,241 @@
     font-size: 12px;
     color: var(--text-dim);
     text-align: right;
+}
+
+/* ── Shared stats page (?share=) ─────────────────────────────── */
+/* Someone's stats, read-only. Each section fits the screen; the Bots and
+   Modules cards reuse the tabs' game-style pieces (botg-, modg-). Sizes
+   inside a card follow the card's width (@container), so the off-screen
+   poster that Export Image saves keeps full size on any screen. */
+.shr-page {
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+}
+
+.shr-top {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+}
+
+    .shr-top .btn {
+        text-decoration: none;
+    }
+
+.shr-logo {
+    font-size: 18px;
+}
+
+.shr-code {
+    font-size: 13px;
+    color: var(--text-dim);
+}
+
+    .shr-code strong {
+        color: var(--text);
+        letter-spacing: 2px;
+    }
+
+.shr-spacer {
+    flex: 1;
+}
+
+.shr-body {
+    max-width: 1140px;
+    margin: 0 auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+}
+
+.shr-loading {
+    color: var(--text-dim);
+}
+
+.shr-toolbar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.shr-presets {
+    margin: 0;
+}
+
+/* Bots: two cards across when there's room, one on phones */
+.shr-bots {
+    container: bots / inline-size;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 440px), 1fr));
+    gap: 12px;
+    font-family: var(--font-ui);
+}
+
+    .shr-bots .botg-switch {
+        display: block;
+        cursor: default;
+    }
+
+.shr-bot-locked {
+    opacity: 0.5;
+}
+
+.shr-bot-note {
+    text-align: center;
+    font-size: 15px;
+    font-weight: 700;
+    color: #a9b2d8;
+    padding: 14px 0 8px;
+}
+
+.shr-stat-foot {
+    justify-content: center;
+    padding: 3px 2px;
+}
+
+.shr-plusbox {
+    grid-template-columns: 1fr auto auto;
+    grid-template-areas: "label value steps";
+    padding: 6px 10px;
+}
+
+/* Modules: the board, and the modules by name beside it (under it when narrow) */
+.shr-mod {
+    display: grid;
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+    gap: 16px;
+    align-items: center;
+    font-family: var(--font-ui);
+}
+
+    .shr-mod .modg-board {
+        --slot-big: 96px;
+        --slot-small: 72px;
+        --tower-w: 140px;
+        gap: 12px;
+        padding: 22px 6px;
+    }
+
+    .shr-mod .modg-side {
+        gap: 28px;
+    }
+
+    .shr-mod .modg-pair {
+        gap: 10px;
+    }
+
+    .shr-mod .modg-slot {
+        cursor: default;
+    }
+
+    .shr-mod .modg-slot:hover .modg-badge {
+        transform: none;
+    }
+
+    .shr-mod .modg-slot-lv {
+        font-size: 13px;
+    }
+
+.shr-mod-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.shr-mod-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #11152b;
+    border: 1px solid #33437a;
+    border-radius: 8px;
+    padding: 6px 10px;
+}
+
+.shr-mod-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.shr-mod-name {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.shr-mod-meta {
+    font-size: 12px;
+    color: var(--text-dim);
+}
+
+.shr-mod-stars {
+    letter-spacing: 1px;
+}
+
+.shr-mod-lv {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--text-bright);
+    white-space: nowrap;
+}
+
+/* By the card's width (its root is a size container) */
+@container (max-width: 760px) {
+    .shr-mod {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+@container (max-width: 560px) {
+    .shr-mod .modg-board {
+        --slot-big: 76px;
+        --slot-small: 56px;
+        --tower-w: 100px;
+        gap: 6px;
+    }
+
+    .shr-mod .modg-pair {
+        gap: 6px;
+    }
+}
+
+@container (max-width: 420px) {
+    .shr-mod .modg-board {
+        --slot-big: 60px;
+        --slot-small: 44px;
+        --tower-w: 56px;
+        gap: 4px;
+        padding: 14px 2px;
+    }
+
+    .shr-mod .modg-side {
+        gap: 20px;
+    }
+
+    .shr-mod .modg-pair {
+        gap: 4px;
+    }
+
+    .shr-mod .modg-slot-lv {
+        font-size: 11px;
+    }
+}
+
+@container (max-width: 300px) {
+    .shr-mod .modg-board {
+        --slot-big: 52px;
+        --slot-small: 38px;
+        --tower-w: 44px;
+    }
 }

@@ -1,13 +1,14 @@
 // ============================================================
 //  TowerForge Companion — Cards Share Card
-//  Off-screen poster: owned cards grouped by rarity.
+//  Owned cards grouped by rarity: 4 across on the poster, fewer on
+//  narrow screens.
 // ============================================================
 
 import type { Ref } from 'react';
 import { useGameStore } from '../../store/useGameStore';
 import { CARDS, CARD_MASTERY_VALS } from '../../constants/gameData';
 import type { CardData } from '../../types/gameTypes';
-import { SHARE_COLORS, SHARE_CARD_ROOT_STYLE } from './shareTheme';
+import { SHARE_COLORS, shareRootStyle } from './shareTheme';
 import { ShareHeader, ShareFooter } from './shareCommon';
 
 const RARITY_SECTIONS = [
@@ -18,7 +19,7 @@ const RARITY_SECTIONS = [
 
 // `snapshot` lets a shared link render someone else's data; without it the
 // card reads the logged-in player's store.
-export default function CardsShareCard({ ref, snapshot }: { ref: Ref<HTMLDivElement>; snapshot?: CardData }) {
+export default function CardsShareCard({ ref, snapshot, poster }: { ref?: Ref<HTMLDivElement>; snapshot?: CardData; poster?: boolean }) {
     const storeCardData = useGameStore(s => s.cardData);
     const cardData = snapshot ?? storeCardData;
 
@@ -26,7 +27,7 @@ export default function CardsShareCard({ ref, snapshot }: { ref: Ref<HTMLDivElem
     const maxed = owned.filter(([n]) => (cardData.data[n]?.s ?? 0) >= 7).length;
 
     return (
-        <div ref={ref} style={SHARE_CARD_ROOT_STYLE}>
+        <div ref={ref} style={shareRootStyle(poster)}>
             <ShareHeader
                 title="Card Library"
                 subtitle={`${owned.length}/${CARDS.length} owned · ${maxed} at 7★`}
@@ -43,7 +44,7 @@ export default function CardsShareCard({ ref, snapshot }: { ref: Ref<HTMLDivElem
                             <span style={{ fontSize: 14, color: SHARE_COLORS.dim }}>{group.length} owned</span>
                         </div>
 
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 220px), 1fr))', gap: 12 }}>
                             {group.map(([name, , , , vals, unit]) => {
                                 const entry = cardData.data[name];
                                 const stars = entry?.s ?? 0;

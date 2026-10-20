@@ -2,7 +2,11 @@
 //  TowerForge Companion — Share Image Theme
 //  Palette, poster sizing, and PNG export helper for the share
 //  images. Colors are hardcoded (not CSS vars) so exports look the
-//  same in light and dark theme.
+//  same in light and dark theme. Each card draws two ways: fluid on
+//  the shared-stats page (fits a phone), and as a fixed-width poster
+//  kept off-screen for Export Image, so an export looks the same from
+//  any screen. Cards are size containers: inside them, cqw units and
+//  @container rules follow the card's width, not the screen's.
 // ============================================================
 
 import type { CSSProperties } from 'react';
@@ -49,6 +53,20 @@ export const SHARE_CARD_ROOT_STYLE: CSSProperties = {
     padding: 40,
     boxSizing: 'border-box',
 };
+
+// The card's root: the poster (fixed width) or the on-page card (fluid).
+export function shareRootStyle(poster = false): CSSProperties {
+    return poster
+        ? { ...SHARE_CARD_ROOT_STYLE, containerType: 'inline-size' }
+        : {
+            ...SHARE_CARD_ROOT_STYLE,
+            containerType: 'inline-size',
+            width: '100%',
+            padding: 'clamp(12px, 3.5vw, 40px)',
+            border: `1px solid ${SHARE_COLORS.border}`,
+            borderRadius: 12,
+        };
+}
 
 export const SHARE_OFFSCREEN_STYLE: CSSProperties = {
     position: 'fixed',

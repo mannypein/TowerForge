@@ -1,18 +1,19 @@
 // ============================================================
 //  TowerForge Companion — UW Share Card
-//  Off-screen poster: 3×3 grid of the nine Ultimate Weapons.
+//  The nine Ultimate Weapons: 3×3 on the poster, fewer columns on
+//  narrow screens.
 // ============================================================
 
 import type { Ref } from 'react';
 import { useGameStore } from '../../store/useGameStore';
 import { UWS, UW_STAT_VALUES, UW_PLUS_DATA } from '../../constants/gameData';
 import type { UWAbbr, UWData } from '../../types/gameTypes';
-import { SHARE_COLORS, SHARE_CARD_ROOT_STYLE } from './shareTheme';
+import { SHARE_COLORS, shareRootStyle } from './shareTheme';
 import { ShareHeader, ShareFooter } from './shareCommon';
 
 // `snapshot` lets a shared link render someone else's data; without it the
 // card reads the logged-in player's store.
-export default function UWShareCard({ ref, snapshot }: { ref: Ref<HTMLDivElement>; snapshot?: UWData }) {
+export default function UWShareCard({ ref, snapshot, poster }: { ref?: Ref<HTMLDivElement>; snapshot?: UWData; poster?: boolean }) {
     const storeUwData = useGameStore(s => s.uwData);
     const uwData = snapshot ?? storeUwData;
 
@@ -20,13 +21,13 @@ export default function UWShareCard({ ref, snapshot }: { ref: Ref<HTMLDivElement
     const plusCount = UWS.filter(u => uwData.data[u.a]?.upOwn).length;
 
     return (
-        <div ref={ref} style={SHARE_CARD_ROOT_STYLE}>
+        <div ref={ref} style={shareRootStyle(poster)}>
             <ShareHeader
                 title="Ultimate Weapons"
                 subtitle={`${ownedCount}/9 owned · ${plusCount}/9 UW+ unlocked`}
             />
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 290px), 1fr))', gap: 16 }}>
                 {UWS.map(uw => {
                     const ud = uwData.data[uw.a];
                     const owned = ud?.own ?? false;

@@ -18,6 +18,13 @@ const FRAMES: Record<ModuleType, string> = {
     core: 'M50 4 L96 50 L50 96 L4 50 Z',
 };
 
+// The frame's paint, set on the shape itself rather than in CSS so the
+// share image export (html-to-image) keeps it: a rarity-colored outline,
+// or a dashed one for an empty slot.
+const framePaint = (color: string, empty: boolean) => (empty
+    ? { fill: 'rgba(10, 14, 30, 0.5)', stroke: '#3b4a80', strokeWidth: 3, strokeDasharray: '8 6' }
+    : { fill: 'rgba(10, 14, 30, 0.85)', stroke: color, strokeWidth: 5 });
+
 // How much of the badge the art fills, and how far down it sits, so it
 // fits inside each frame shape. Icons are trimmed to their art and
 // centered (import-icons.ps1), so these boxes are what the art fills.
@@ -47,7 +54,7 @@ export default function ModuleBadge({ type, module, size, title }: {
     return (
         <span className={`modg-badge ${module ? '' : 'empty'}`} style={style} title={title ?? module?.name}>
             <svg viewBox="0 0 100 100" className="modg-badge-frame" aria-hidden="true">
-                <path d={FRAMES[type]} />
+                <path d={FRAMES[type]} {...framePaint(color, !module)} />
             </svg>
             {module && (icon
                 ? <img src={icon} alt="" className="modg-badge-art"

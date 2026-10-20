@@ -14,6 +14,9 @@ import type { ModuleEntry, ModuleType, ModuleRarity, Loadout } from '../../types
 import { MODULE_MAX_LEVEL } from '../../constants/gameData';
 import NumericInput from '../common/NumericInput';
 import ModuleBadge from '../common/ModuleBadge';
+import TowerArt from '../common/TowerArt';
+import { BOARD } from '../../constants/moduleBoard';
+import type { SlotKey } from '../../constants/moduleBoard';
 import { RARITIES, moduleMaxLevel, rarityColor, rarityStars } from '../../constants/moduleRarities';
 import { SUB_RARITIES, UNIQUE_MODULES, SUB_EFFECTS, UNIQUE_EFFECT_MODEL } from '../../constants/moduleData';
 import type { SubRarity, RarityProgression, SubEffectDef } from '../../constants/moduleData';
@@ -148,37 +151,6 @@ const defaultModal = (): ModalState => ({
 const ASSIST_UNLOCK_TIER = 19;
 const ASSIST_UNLOCK_WAVE = 40;
 
-type SlotKey = 'main' | 'assist';
-
-// Board layout like the game: cannon top-left, armor bottom-left,
-// generator top-right, core bottom-right; assists on the outside.
-const BOARD: [ModuleType, SlotKey][][] = [
-    [['cannon', 'assist'], ['cannon', 'main']],
-    [['generator', 'main'], ['generator', 'assist']],
-    [['armor', 'assist'], ['armor', 'main']],
-    [['core', 'main'], ['core', 'assist']],
-];
-
-// Neon tower drawn in the middle of the board (decoration).
-function TowerArt() {
-    return (
-        <svg viewBox="0 0 120 190" className="modg-tower" aria-hidden="true">
-            <g fill="none" strokeWidth="3" strokeLinejoin="round">
-                <g stroke="#7fb4ff">
-                    <path d="M38 22 L82 22 L88 34 L88 62 L32 62 L32 34 Z" />
-                    <path d="M12 34 L32 34 L32 48 L12 48 Z" />
-                    <path d="M44 62 L76 62 L78 76 L42 76 Z" />
-                    <path d="M42 76 L78 76 L96 150 L24 150 Z" />
-                </g>
-                <g stroke="#ff4fa3">
-                    <path d="M48 32 L72 32 L72 52 L48 52 Z" />
-                    <path d="M54 88 L66 88 L72 140 L48 140 Z" />
-                    <path d="M24 150 L32 178 L48 178 L52 150 M68 150 L72 178 L88 178 L96 150" />
-                </g>
-            </g>
-        </svg>
-    );
-}
 
 export default function ModulesTab() {
     const [search, setSearch] = useState('');

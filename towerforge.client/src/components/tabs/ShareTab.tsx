@@ -10,6 +10,7 @@ import { createShare, shareUrl } from '../../engine/shareApi';
 import type { SharePayload } from '../../engine/shareApi';
 import { useAccountStore } from '../../store/useAccountStore';
 import MySharesList from '../share/MySharesList';
+import { activeLoadout } from '../../engine/statHelpers';
 
 type SectionKey = 'uw' | 'cards' | 'bots' | 'modules';
 
@@ -17,7 +18,7 @@ const SECTIONS: { key: SectionKey; label: string; hint: string }[] = [
     { key: 'uw', label: 'Ultimate Weapons', hint: 'Levels, UW+ status' },
     { key: 'cards', label: 'Card Library', hint: 'Stars, mastery levels' },
     { key: 'bots', label: 'Bots', hint: 'Medal levels, Bot+ and active bots per preset' },
-    { key: 'modules', label: 'Modules', hint: 'Loadout presets and slot levels' },
+    { key: 'modules', label: 'Modules', hint: 'Presets, equipped modules and slot levels' },
 ];
 
 export default function ShareTab() {
@@ -26,6 +27,7 @@ export default function ShareTab() {
     const botData = useGameStore(s => s.botData);
     const botLoadouts = useGameStore(s => s.botLoadouts);
     const presetCount = useGameStore(s => s.profile.presets || 2);
+    const presetNames = useGameStore(s => s.profile.presetNames);
     const moduleState = useGameStore(s => s.moduleState);
     const accountStatus = useAccountStore(s => s.status);
     const sharesChanged = useAccountStore(s => s.sharesChanged);
@@ -46,12 +48,13 @@ export default function ShareTab() {
         const payload: SharePayload = {};
         if (selected.uw) payload.uw = uwData;
         if (selected.cards) payload.cards = cardData;
-        if (selected.bots) payload.bots = { current: botData, loadouts: botLoadouts, presetCount };
+        if (selected.bots) payload.bots = { current: botData, loadouts: botLoadouts, presetCount, presetNames };
         if (selected.modules) {
             payload.modules = {
                 loadouts: moduleState.loadouts,
                 library: moduleState.library,
                 slotLevels: moduleState.slotLevels,
+                activeLoadout: activeLoadout(moduleState)?.id,
             };
         }
 

@@ -17,7 +17,7 @@ import {
 import { presetLabel } from '../../constants/gameData';
 import { readActiveModuleBonuses } from '../../engine/modBonuses';
 import { singularityHarnessRange } from '../../engine/moduleEffects';
-import { botIcon } from '../../constants/gameIcons';
+import BotBadge from '../common/BotBadge';
 
 // Lab bonuses per bot stat.
 // 'add' mode: bonus is added directly to the displayed stat value (same unit).
@@ -51,15 +51,6 @@ const BOT_LAB_BONUSES: Record<string, BotBonus[]> = {
         { mode: 'add', labName: 'Bot Bot Duration', statIdx: 0, delta: lv => lv * 0.5 },
         { mode: 'add', labName: 'Bot Bot Cooldown', statIdx: 1, delta: lv => -lv },
     ],
-};
-
-// Stand-in badges for bots without a game icon in assets/bots.
-const BOT_LOOK: Record<string, { glyph: string; color: string }> = {
-    'Flame Bot': { glyph: '🔥', color: '#5b8cff' },
-    'Thunder Bot': { glyph: '⚡', color: '#ff5a5a' },
-    'Golden Bot': { glyph: 'C', color: '#f2a93b' },
-    'Amplify Bot': { glyph: '✦', color: '#9d8cff' },
-    'Bot Bot': { glyph: '⚙', color: '#a9c1d6' },
 };
 
 // Adds a numeric delta to a display string like "72s" or "20.5s", keeping its format.
@@ -140,7 +131,6 @@ export default function BotsTab() {
                     const plusOwned = allBotsOwned && isBotPlusOwned(entry);
                     const plusLv = Math.min(entry.plusLv ?? 0, bot.plusMax);
                     const plusMaxed = plusLv >= bot.plusMax;
-                    const look = BOT_LOOK[bot.name] ?? { glyph: '●', color: 'var(--accent)' };
                     const bonuses = BOT_LAB_BONUSES[bot.name] ?? [];
 
                     const statValue = (idx: number): number => {
@@ -167,9 +157,7 @@ export default function BotsTab() {
                     return (
                         <div key={bot.name} className={`botg-card ${on ? 'on' : ''}`}>
                             <div className="botg-head">
-                                {botIcon(bot.name)
-                                    ? <img className="botg-icon-img" src={botIcon(bot.name)!} alt="" />
-                                    : <span className="botg-icon" style={{ color: look.color }}>{look.glyph}</span>}
+                                <BotBadge name={bot.name} />
                                 <span className="botg-name">{bot.name}</span>
                                 {!owned && <span className="botg-head-spacer" />}
                                 {owned && (

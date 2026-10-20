@@ -105,7 +105,7 @@ export default function CardsTab() {
                 <div>
                     {/* Off-screen share card (rendered for export only) */}
                     <div style={SHARE_OFFSCREEN_STYLE} aria-hidden="true">
-                        <CardsShareCard ref={shareRef} />
+                        <CardsShareCard ref={shareRef} poster />
                     </div>
 
                     {/* Card slots */}
