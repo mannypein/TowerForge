@@ -11,8 +11,8 @@ import type { OptimizerSnapshot } from './optimizer';
 import { buildRunLengthModel, skipWorth } from './runLength';
 import { runModels } from './accountModels';
 import { buildEdpsCalibration, edpsParts, edpsSurvivalScore } from './edps';
-import { calcTTT } from './ttt';
-import { UWS, UW_STONE_COSTS } from '../constants/gameData';
+import { calcCFPlusHiddenSlow, calcTTT } from './ttt';
+import { UWS, UW_PLUS_DATA, UW_STONE_COSTS } from '../constants/gameData';
 import { battle, makeExport } from '../test/makeExport';
 
 // Five T18 deaths with damage by source (made up).
@@ -103,6 +103,19 @@ describe('what can change', () => {
         expect(snap.uwData.data.CL!.sv[0]).toBe(12);
         expect(snap.uwData.data.CL).toMatchObject({ upOwn: true, upLvl: 1 });
     });
+
+    it('goes up to a UW+’s top level, as the UW tab does', () => {
+        // Chrono Loop: 14 levels, 0.10 → 0.75 rotation; the top one is upLvl 13 (0.65 hidden slow).
+        const snap = account(s => { s.uwData.data.CF = { ...s.uwData.data.CF!, upOwn: true, upLvl: 4 }; });
+        const t = target(snap, 'Chrono Field+ — Chrono Loop');
+        expect([t.current, t.max]).toEqual([5, 14]);
+        applyChange(snap, { kind: 'uwp', key: 'CF', level: t.max });
+        expect(snap.uwData.data.CF!.upLvl).toBe(13);
+        expect(calcCFPlusHiddenSlow(snap.uwData)).toBeCloseTo(0.65, 10);
+        // Lv 5 → 14 costs levels 6 … 14 (costs[4] … costs[12]).
+        expect(changeCost(account(s => { s.uwData.data.CF = { ...s.uwData.data.CF!, upOwn: true, upLvl: 4 }; }), t, 14))
+            .toEqual({ stones: UW_PLUS_DATA.CF.costs.slice(4, 13).reduce((a, b) => a + b, 0) });
+    });
 });
 
 describe('what a change costs', () => {
@@ -165,6 +178,15 @@ describe('what happens', () => {
         const chainWaves = t.chain.reduce((sum, l) => sum + (l.waves ?? 0), 0);
         expect(chainWaves).toBeCloseTo(t.waves!.gained, 6);
         expect(plain.chain.some(l => l.label.startsWith('Stronger battle conditions'))).toBe(false);
+        // A run one wave short of a step in the conditions gets to the step — not a loss.
+        const from = run.typicalWave;
+        const step = (w: number) => (w >= from + 1 ? { armoredHits: 1e6 } : {});
+        const small = whatIf(snap, [{ kind: 'uw' as const, key: 'CL|0', level: 11 }], upgradeTargets(snap), 'Glass Cannon', runs[4], {
+            ...models, calibConditions: {}, conditions: {}, startWave: from, conditionsAt: step,
+        });
+        expect(small.pushPct).toBeGreaterThan(0);
+        expect(small.waves!.gained).toBeGreaterThan(0.85);
+        expect(small.waves!.gained).toBeLessThanOrEqual(1);
         // No conditions: the same as campaign mode.
         const same = whatIf(snap, change, upgradeTargets(snap), 'Glass Cannon', runs[4], {
             ...models, calibConditions: {}, conditions: {}, conditionsAt: () => ({}),

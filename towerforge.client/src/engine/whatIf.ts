@@ -83,9 +83,11 @@ export function upgradeTargets(snap: OptimizerSnapshot): UpgradeTarget[] {
             kind: 'uw', key: `${uw.a}|${i}`, group: 'Ultimate Weapons', label: `${uw.n} — ${stat}`,
             current: d.sv[i] ?? 1, max,
         }));
+        // Level n = upLvl n − 1 (0 = locked); upLvl runs 0 … upMax, so the
+        // top level is upMax + 1 (Chrono Loop: 14 levels, 0.10 → 0.75).
         if (UW_PLUS_DATA[uw.a]) out.push({
             kind: 'uwp', key: uw.a, group: 'UW+', label: `${uw.n}+ — ${uw.up}`,
-            current: d.upOwn ? (d.upLvl ?? 0) + 1 : 0, max: uw.upMax,
+            current: d.upOwn ? (d.upLvl ?? 0) + 1 : 0, max: uw.upMax + 1,
         });
     }
     for (const sec of SECTIONS) {
@@ -472,7 +474,9 @@ export function whatIf(
     const settle = (s: OptimizerSnapshot) => {
         let push = goalPct(base, s, 'waves', build, report, models);
         let skip = skipOf(s, models) - skipOf(base, models);
+        const pushStart = push;   // the change itself, where runs end now
         let conditions = s.conditions;
+        let reach: number | undefined;   // tournaments: how far the run gets before stronger conditions stop it
         if (gc && models.run && models.conditionsAt) {
             const run = models.run;
             const from = models.startWave ?? run.typicalWave;
@@ -484,14 +488,22 @@ export function whatIf(
                 const r = read(w);
                 return pathRunGains(run, [r.push], undefined, [Math.max(0, r.skip)], models.worth)[0].waves;
             };
-            const end = read(settleGain(gain));
+            reach = settleGain(gain);
+            const end = read(reach);
             ({ push, skip } = end);
             conditions = end.at.conditions;
         }
-        return { push, skip, conditions };
+        return { push, skip, conditions, reach, pushStart };
+    };
+    // Waves for a settled change: no further than the conditions let it get.
+    const settledWaves = (r: { push: number; skip: number; reach?: number }, wavesFor: (g: number, s: number) => number) => {
+        const w = wavesFor(r.push, r.skip);
+        return r.reach !== undefined && r.reach >= 0 ? Math.min(w, Math.max(r.reach, 0)) : w;
     };
     const settled = settle(after);
-    const { push: pushPct, skip: skipPoints } = settled;
+    // Shown: what the change itself does to the push (where runs end now);
+    // the waves also count stronger conditions where the run then ends.
+    const { pushStart: pushPct, push: pushAtEnd, skip: skipPoints } = settled;
     // The changed run is read where it ends from here on (waves, split); the
     // chain reads the changes themselves where runs end now (atStart).
     const atStart = { ...after };
@@ -507,7 +519,7 @@ export function whatIf(
         const run = models.run;
         const wavesFor = (gain: number, skip: number) =>
             pathRunGains(run, [gain], undefined, [Math.max(0, skip)], models.worth)[0].waves;
-        const gained = wavesFor(pushPct, skipPoints);
+        const gained = settledWaves(settled, wavesFor);
         const from = models.startWave ?? run.typicalWave;
         const to = Math.round(from + gained);
         waves = { from, to, gained };
@@ -515,10 +527,9 @@ export function whatIf(
             const one = JSON.parse(JSON.stringify(base)) as OptimizerSnapshot;
             applyChange(one, c);
             one.modBonuses = readActiveModuleBonuses(one.moduleState, one.perkData, one.labData, one.cardData, one.modBonuses.run);
-            const own = settle(one);
-            perChange.push({ kind: c.kind, key: c.key, waves: wavesFor(own.push, own.skip) });
+            perChange.push({ kind: c.kind, key: c.key, waves: settledWaves(settle(one), wavesFor) });
         }
-        const s = wavesSpread(run, pushPct, skipPoints, models.worth);
+        const s = wavesSpread(run, pushAtEnd, skipPoints, models.worth);
         spread = {
             min: Math.min(...s.moves), max: Math.max(...s.moves),
             endedMin: Math.min(...s.ended), endedMax: Math.max(...s.ended), runs: s.ended.length,

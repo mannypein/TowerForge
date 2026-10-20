@@ -268,9 +268,16 @@ describe('tournament runs in the Optimizer and What If', () => {
 
     it('settles where a run ends even when conditions climb steeply', () => {
         // Gains 100 waves read where it starts, 2 fewer for every wave further: ends at 33⅓.
-        expect(settleGain(w => 100 - 2 * w)).toBeCloseTo(100 / 3, 0);
+        const w = settleGain(w => 100 - 2 * w);
+        expect(w).toBeGreaterThan(32.5);
+        expect(w).toBeLessThanOrEqual(100 / 3);
         expect(settleGain(w => -60 - w)).toBeCloseTo(-30, 0);
         expect(settleGain(() => 0)).toBe(0);
+        // One wave short of a step where the conditions jump: it stops at the step,
+        // and is never read past it (where it would look like a loss).
+        const atStep = settleGain(w => (w < 1 ? 1.4 : -5));
+        expect(atStep).toBeGreaterThan(0.85);
+        expect(atStep).toBeLessThan(1);
     });
 
     const m = buildRunLengthModel(battles, { tournament: true })!;

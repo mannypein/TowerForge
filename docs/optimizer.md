@@ -116,6 +116,16 @@ the same wave, survival (not GC) — plus the cost in every currency.
   uses a campaign run: when the Optimizer's Battle Report is a tournament
   run, it falls back to the usual campaign run (Tournament mode is for
   tournaments).
+- **Steps in the conditions (2026-10-20):** heat steps up at fixed waves
+  (W100, 150, 200 …). A run that would cross a step it can't get over
+  stops at it: settling keeps the furthest point the run is known to reach
+  (`settleGain`, to a tenth of a wave) and the gain is capped there — never
+  read past the step, where the stronger conditions would look like the
+  upgrade's loss. "Push" is what the change itself does where runs end now;
+  the waves also count the stronger conditions where the run then ends.
+- **UW+ levels:** What If's UW+ levels run 1 … upMax + 1 (upLvl 0 …
+  upMax), like the UW tab — Chrono Loop's top level is 14 (0.65 hidden
+  slow). It stopped one short before 2026-10-20.
 - **Why one level can buy more waves than the next:** enemy health rises
   in uneven steps (walls of 30–40% in one wave, then flat stretches), so a
   +10% damage step buys more waves where the next levels are flat. On the

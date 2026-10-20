@@ -60,17 +60,21 @@ export interface Scored { score: number; skip: number }
 // Conditions only get stronger with the wave, so the further it's read,
 // the less it gains: the answer is where gainAt(w) = w, between 0 and
 // gainAt(0). Found by halving that range (plain repeats can swing back and
-// forth when the conditions climb steeply).
-export function settleGain(gainAt: (w: number) => number, steps = 7): number {
+// forth when the conditions climb steeply). Conditions step up at fixed
+// waves, so gainAt can jump down past a step: the run then stops at the
+// step. The answer is the furthest point known to be reached
+// (gainAt(w) > w) — never read past a step it can't get over.
+// To within a tenth of a wave (at most 14 reads).
+export function settleGain(gainAt: (w: number) => number): number {
     const g0 = gainAt(0);
     if (Math.abs(g0) < 0.05) return g0;
     let lo = Math.min(0, g0);
     let hi = Math.max(0, g0);
-    for (let i = 0; i < steps; i++) {
+    for (let i = 0; i < 14 && hi - lo > 0.1; i++) {
         const mid = (lo + hi) / 2;
         if (gainAt(mid) > mid) lo = mid; else hi = mid;
     }
-    return (lo + hi) / 2;
+    return lo;
 }
 export const scoreOf = (s: OptimizerSnapshot): Scored => ({ score: goalScore(s), skip: skipChanceOf(s) });
 
