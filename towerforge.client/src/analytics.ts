@@ -5,9 +5,10 @@
 //  tag in index.html only reports from towerforge.net, so local
 //  dev and previews send nothing. No personal data is sent.
 //
-//  Tabs aren't separate URLs, so switching to a tab is reported as
-//  a page view of "/<tab>" — the dashboard's Pages list then shows
-//  which tabs people use.
+//  Each tab has its own address (routes.ts), so the tracker's own
+//  page views — it counts every address change — show which tabs
+//  people use. Before 2026-10-20 tabs had no address and were
+//  reported as "/<tab id>" (/whatif, /runcoins…).
 // ============================================================
 
 type Props = Record<string, unknown>;
@@ -18,10 +19,6 @@ interface Umami {
 }
 
 const umami = (): Umami | undefined => (window as unknown as { umami?: Umami }).umami;
-
-export function trackTabView(tab: string): void {
-    umami()?.track(props => ({ ...props, url: `/${tab}`, title: `TowerForge — ${tab}` }));
-}
 
 export function trackEvent(name: string, data?: Record<string, string | number>): void {
     umami()?.track(name, data);

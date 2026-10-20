@@ -11,6 +11,7 @@ suggests what to upgrade next.
   - `src/engine/` — calculations and the game-export importer. **Pure functions, no store imports.**
   - `src/constants/` — game data tables (`gameData.ts`, `moduleData.ts`, `botData.ts`), the export index maps (`gameExportMaps.ts`), and the Creator Codes list (`creatorCodes.ts` — add a creator's link only when it's confirmed as theirs). `workshopCosts.ts`, `labCosts.ts` and `moduleCosts.ts` are generated from TheTowerSDK — don't edit them by hand.
   - `src/components/tabs/` — one component per tab; styles in `tabs.css`, theme tokens in `src/styles/variables.css`.
+  - `src/routes.ts` — each tab's address (`/creators`, `/what-if`…; Profile is `/`). The address follows the open tab and the tab bar's entries are links. The server sends unknown paths to `index.html` (nginx `try_files`), so a new tab only needs a path here — never one the server uses (`/api`, `/analytics`, `/assets`, `/downloads`).
   - `src/assets/{modules,bots}/` — game icons, looked up by slug in `constants/gameIcons.ts`.
 - `TowerForge.Server/` — ASP.NET Core 8 API (accounts, saves, share links). On the server its data lives in `/var/lib/towerforge` (SQLite), outside the deploy folder.
 - `TowerForge.Link/` — TowerForge Link, a small Windows helper (.NET 8, one exe) that reads `tool_export.json` off an emulator with its adb for the site's "Get from emulator" button. How it works, safety and emulator ports: `docs/towerforge-link.md`. `deploy.ps1` publishes it to `downloads/TowerForgeLink.exe`.

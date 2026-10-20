@@ -180,6 +180,9 @@
     white-space: nowrap;
     transition: color var(--transition-fast), border-color var(--transition-fast);
     flex-shrink: 0;
+    line-height: normal;
+    text-align: center;
+    text-decoration: none;
 }
 
     .tab-btn:hover {
@@ -219,6 +222,9 @@
     cursor: pointer;
     white-space: nowrap;
     transition: color var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
+    line-height: normal;
+    text-align: center;
+    text-decoration: none;
 }
 
     .tab-sub:hover {

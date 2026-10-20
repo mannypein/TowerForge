@@ -8,8 +8,12 @@ server. Set up 2026-10-16 with Umami v3.4.0.
 
 - Every page load (towerforge.net and share links), with referrer, country,
   device, browser and OS — Umami's standard, anonymous counts.
-- **Tab views**: tabs aren't URLs, so switching tabs is reported as a page view
-  of `/<tab>` (`/optimizer`, `/modules`…) — see `src/analytics.ts`.
+- **Tab views**: since 2026-10-20 every tab has its own address
+  (`towerforge.net/creators`, `/what-if`… — `src/routes.ts`), and the tracker
+  counts each address change as a page view by itself (it wraps
+  `history.pushState` / `replaceState`, checked in the live script). Before
+  that, tab views were sent by hand as `/<tab id>` (`/whatif`, `/runcoins`,
+  `/uw`…), so older stats use those names; the old names still open their tabs.
 - **Event** `Import game data` when a game export imports successfully.
 - Only from `towerforge.net` / `www.towerforge.net` (`data-domains` on the tag in
   `towerforge.client/index.html`), so dev and previews send nothing.

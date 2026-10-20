@@ -1,7 +1,9 @@
 // ============================================================
 //  TowerForge Companion — App Shell
 //  Renders the header, tab bar, and active tab pane.
-//  All state is loaded here on mount via the store.
+//  All state is loaded here on mount via the store. Each tab has its
+//  own address (routes.ts): the address follows the open tab, back and
+//  forward follow the address, and the tab bar's entries are links.
 // ============================================================
 
 import { lazy, Suspense, useEffect, useState } from 'react';
@@ -9,7 +11,8 @@ import { useGameStore } from './store/useGameStore';
 import type { TabName } from './types/gameTypes';
 import { parseCloudSave } from './engine/saveParser';
 import { isGameExport, parseGameExport, SUPPORTED_EXPORT_VERSION } from './engine/gameExport';
-import { trackEvent, trackTabView } from './analytics';
+import { trackEvent } from './analytics';
+import { TAB_PATHS, tabFromPath } from './routes';
 import { isPdfFile, jsonFromPdf, looksLikePdf } from './engine/pdfImport';
 import CurrencyBar from './components/common/CurrencyBar';
 
@@ -102,6 +105,15 @@ const TAB_GROUPS: TabGroup[] = [
 
 const groupOf = (tab: TabName): TabGroup => TAB_GROUPS.find(g => g.tabs.some(t => t.id === tab)) ?? TAB_GROUPS[0];
 
+const HOME_TITLE = 'TowerForge — The Tower Companion';
+const titleOf = (tab: TabName) => (tab === 'profile'
+    ? HOME_TITLE
+    : `${groupOf(tab).tabs.find(t => t.id === tab)?.label ?? tab} — TowerForge`);
+
+// A plain click opens the tab here; Ctrl / ⌘ / Shift / middle click do
+// what they do on any link (new tab or window).
+const plainClick = (e: React.MouseEvent) => e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
+
 export default function App() {
     const [showLoginModal, setShowLoginModal] = useState(false);
     const [pdfBusy, setPdfBusy] = useState(false);
@@ -109,7 +121,10 @@ export default function App() {
     const [linkBusy, setLinkBusy] = useState(false);
     const [linkModal, setLinkModal] = useState<{ problem: string | null } | null>(null);
     // The tab last opened in each section, so going back to a section returns to it.
-    const [lastInGroup, setLastInGroup] = useState<Record<string, TabName>>({});
+    const [lastInGroup, setLastInGroup] = useState<Record<string, TabName>>(() => {
+        const tab = useGameStore.getState().activeTab;
+        return { [groupOf(tab).id]: tab };
+    });
     // ?share=CODE opens the read-only viewer instead of the app shell.
     const [shareCode] = useState(() => new URLSearchParams(window.location.search).get('share'));
     const activeTab = useGameStore(s => s.activeTab);
@@ -130,6 +145,33 @@ export default function App() {
         loadAll();
         if (!shareCode) void useAccountStore.getState().init();
     }, [loadAll, shareCode]);   // both stable — runs once on mount
+
+    // The address follows the open tab. A path that named another tab is a
+    // step in history; a home, unknown or differently spelled one is just
+    // corrected. Umami counts each address as a page view (analytics.ts).
+    useEffect(() => {
+        if (shareCode) return;
+        const path = TAB_PATHS[activeTab];
+        const { pathname, search } = window.location;
+        if (pathname !== path) {
+            const shown = tabFromPath(pathname);
+            if (shown !== null && shown !== activeTab) window.history.pushState(null, '', path);
+            else window.history.replaceState(null, '', path + search);
+        }
+        document.title = titleOf(activeTab);
+    }, [activeTab, shareCode]);
+
+    // Back and forward open the tab the address names.
+    useEffect(() => {
+        if (shareCode) return;
+        const onPop = () => {
+            const tab = tabFromPath(window.location.pathname) ?? 'profile';
+            setActiveTab(tab);
+            setLastInGroup(last => ({ ...last, [groupOf(tab).id]: tab }));
+        };
+        window.addEventListener('popstate', onPop);
+        return () => window.removeEventListener('popstate', onPop);
+    }, [setActiveTab, shareCode]);
 
     // ── Summary bar values ───────────────────────────────────────
     const ownedUWs = Object.values(uwData.data).filter(u => u?.own).length;
@@ -312,7 +354,6 @@ export default function App() {
     function openTab(tab: TabName) {
         setActiveTab(tab);
         setLastInGroup(last => ({ ...last, [groupOf(tab).id]: tab }));
-        trackTabView(tab);
     }
 
     // ── Active tab renderer ──────────────────────────────────────
@@ -414,28 +455,35 @@ export default function App() {
 
             {/* ── Sections, then the tabs of the open section ── */}
             <nav className="tab-bar" aria-label="Sections">
-                {TAB_GROUPS.map(group => (
-                    <button
-                        key={group.id}
-                        className={`tab-btn tab-group ${activeGroup.id === group.id ? 'active' : ''}`}
-                        onClick={() => openTab(lastInGroup[group.id] ?? group.tabs[0].id)}
-                    >
-                        {group.short
-                            ? <><span className="tab-long">{group.label}</span><span className="tab-short">{group.short}</span></>
-                            : group.label}
-                    </button>
-                ))}
+                {TAB_GROUPS.map(group => {
+                    const tab = lastInGroup[group.id] ?? group.tabs[0].id;
+                    return (
+                        <a
+                            key={group.id}
+                            href={TAB_PATHS[tab]}
+                            className={`tab-btn tab-group ${activeGroup.id === group.id ? 'active' : ''}`}
+                            aria-current={activeGroup.id === group.id ? 'true' : undefined}
+                            onClick={e => { if (plainClick(e)) { e.preventDefault(); openTab(tab); } }}
+                        >
+                            {group.short
+                                ? <><span className="tab-long">{group.label}</span><span className="tab-short">{group.short}</span></>
+                                : group.label}
+                        </a>
+                    );
+                })}
             </nav>
             {activeGroup.tabs.length > 1 && (
                 <nav className="tab-subbar" aria-label={activeGroup.label}>
                     {activeGroup.tabs.map(tab => (
-                        <button
+                        <a
                             key={tab.id}
+                            href={TAB_PATHS[tab.id]}
                             className={`tab-sub ${activeTab === tab.id ? 'active' : ''}`}
-                            onClick={() => openTab(tab.id)}
+                            aria-current={activeTab === tab.id ? 'page' : undefined}
+                            onClick={e => { if (plainClick(e)) { e.preventDefault(); openTab(tab.id); } }}
                         >
                             {tab.id === 'account' && accountUsername ? `👤 ${accountUsername}` : tab.label}
-                        </button>
+                        </a>
                     ))}
                 </nav>
             )}

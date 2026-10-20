@@ -1,0 +1,37 @@
+// Tab addresses: every tab has its own path, every path opens its tab,
+// and no tab takes a path the server uses itself.
+
+import { describe, expect, it } from 'vitest';
+import { RESERVED_PATHS, TAB_PATHS, tabFromPath } from './routes';
+import type { TabName } from './types/gameTypes';
+
+describe('tab addresses', () => {
+    const entries = Object.entries(TAB_PATHS) as [TabName, string][];
+
+    it('give every tab its own one-level path, Profile the home page', () => {
+        const paths = entries.map(([, p]) => p);
+        expect(new Set(paths).size).toBe(paths.length);
+        expect(TAB_PATHS.profile).toBe('/');
+        for (const p of paths) expect(p).toMatch(/^\/[a-z-]*$/);
+    });
+
+    it('open the tab they name, in any case and with a trailing slash', () => {
+        for (const [tab, path] of entries) expect(tabFromPath(path)).toBe(tab);
+        expect(tabFromPath('/Creators/')).toBe('creators');
+        expect(tabFromPath('')).toBe('profile');
+    });
+
+    it('take the old tab ids and long names too, and nothing else', () => {
+        expect(tabFromPath('/whatif')).toBe('whatif');
+        expect(tabFromPath('/runcoins')).toBe('runcoins');
+        expect(tabFromPath('/creator-codes')).toBe('creators');
+        expect(tabFromPath('/nope')).toBeNull();
+        expect(tabFromPath('/creators/extra')).toBeNull();
+    });
+
+    it('never take a path the server uses', () => {
+        for (const [, path] of entries) {
+            expect(RESERVED_PATHS.some(r => path === r || path.startsWith(`${r}/`))).toBe(false);
+        }
+    });
+});
