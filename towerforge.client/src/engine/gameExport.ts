@@ -8,8 +8,8 @@
 //  a real account (workshop presets, enhancements, ultimate weapons,
 //  cards, perk bans, most labs, modules, the Guardian — tables in
 //  constants/gameExportMaps). From 29.1.3 exports (ExportVersion 1) also
-//  bot levels per preset, labs being researched and the current league.
-//  Bot+, relics and unconfirmed labs keep what players entered.
+//  bot and Bot+ levels per preset, labs being researched and the current
+//  league. Relics and unconfirmed labs keep what players entered.
 //
 //  Pure functions — no store imports.
 // ============================================================
@@ -64,11 +64,13 @@ export interface GameImport {
     labsRunning: LabRunning[] | null;
 }
 
-// Bot levels per site preset (from the bot preset its global preset uses)
-// and the bots active in it. Bot+ levels aren't imported (see parseBots).
+// Bot and Bot+ levels per site preset (from the bot preset its global
+// preset uses) and the bots active in it.
 export interface BotImport {
     owned: Record<string, boolean>;
     medals: Record<string, Record<number, number[]>>;   // bot → site preset → medal levels
+    plusOwned: Record<string, boolean>;                 // Bot+ unlocked
+    plusLv: Record<string, Record<number, number>>;     // bot → site preset → Bot+ level
     loadouts: BotLoadouts;
 }
 
@@ -593,9 +595,10 @@ function dateMs(v: unknown): number | null {
 // (TheTowerSDK remapBotLevelsFromGameSaveOrder, checked there against a real
 // save). Each stat takes the higher of Levels and SelectedLevels, as the SDK
 // does (a level can be picked below the one bought, e.g. Cooldown). Levels
-// count from 0 = the base value, like the site's. Bot+ levels stay as
-// entered: the site's Bot+ tables (5 levels) predate v29's (20–25 levels),
-// so they'd clash.
+// count from 0 = the base value, like the site's. PlusLevel is the level of
+// the bot's one Bot+ ability, 0 = its unlock value, clamped to its max
+// (TheTowerSDK readUserBotDataRow / clampBotPlusStatLevel: PlusLevel goes to
+// Bot+ stat 0, the only one); it counts only where PlusUnlocked.
 const BOT_LISTS: [string, string][] = [
     ['Flame Bot', 'FlameBotPresets'], ['Thunder Bot', 'ThunderBotPresets'], ['Golden Bot', 'GoldenBotPresets'],
     ['Amplify Bot', 'AmplifyBotPresets'], ['Bot Bot', 'BotBotPresets'],
@@ -604,13 +607,15 @@ const fromSaveOrder = (l: number[]) => [l[3] ?? 0, l[2] ?? 0, l[0] ?? 0, l[1] ??
 
 function parseBots(raw: Raw): BotImport | null {
     if (!BOT_LISTS.some(([, key]) => Array.isArray(raw[key]))) return null;
-    const out: BotImport = { owned: {}, medals: {}, loadouts: {} };
+    const out: BotImport = { owned: {}, medals: {}, plusOwned: {}, plusLv: {}, loadouts: {} };
     for (const [name, key] of BOT_LISTS) {
         const rows = arr(raw[key]).filter(isObj);
         const config = BOTS_CONFIG.find(b => b.name === name);
         if (!config || rows.length === 0) continue;
         out.owned[name] = rows.some(r => r.Unlocked === true);
+        out.plusOwned[name] = out.owned[name] && rows.some(r => r.PlusUnlocked === true);
         out.medals[name] = {};
+        out.plusLv[name] = {};
         for (let i = 0; i < APP_PRESETS; i++) {
             const g = arr(raw.GlobalPresets)[i];
             const idx = isObj(g) && typeof g.BotsIndex === 'number' ? g.BotsIndex : 0;
@@ -619,6 +624,7 @@ function parseBots(raw: Raw): BotImport | null {
             const picked = fromSaveOrder(arr(row.SelectedLevels).map(num));
             out.medals[name][i] = bought
                 .map((v, k) => clamp(Math.max(v, picked[k]), 0, config.stats[k]?.values.length ?? 0));
+            out.plusLv[name][i] = row.PlusUnlocked === true ? clamp(Math.floor(num(row.PlusLevel)), 0, config.plusMax) : 0;
             if (row.Active === true && out.owned[name]) (out.loadouts[i] ??= []).push(name);
         }
     }

@@ -116,11 +116,12 @@ export interface RelicData {
 // ── Bots ──────────────────────────────────────────────────────
 export interface BotLevels {
     medals: number[];   // medal upgrade levels per stat (0 = Lv 0 base)
-    plusLv: number;     // Bot+ level
+    plusLv: number;     // Bot+ ability level (0 = the unlock value), when Bot+ is unlocked
 }
 
 export interface BotEntry extends BotLevels {
     owned?: boolean;    // bot unlocked (account-wide) — when owned, every stat sits at least at Lv 0
+    plusOwned?: boolean; // Bot+ unlocked (account-wide); older saves: any plusLv > 0
     // In game each bot preset keeps its own medal and Bot+ levels. A preset
     // that was never edited uses medals / plusLv above.
     presets?: { [presetIdx: number]: BotLevels };

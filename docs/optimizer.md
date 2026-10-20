@@ -36,7 +36,7 @@ What each currency buys (wiki Currencies page) and how it's ranked:
 | Coins | workshop (per coin), enhancements (per coin) | game table via TheTowerSDK; discount labs |
 | Lab time | labs (per hour of research) | SDK lab catalog; Labs Speed, relic, Labs Coin Discount |
 | Module Shards | module slot levels, 5 at a time (per shard; coins shown) | SDK module tables + wiki level 1; Module Shard/Coin Cost labs (1% a level) |
-| Medals | bot stat levels vs Event Shop trades (per medal) | bots: 100 + 40 × (L − 1) a level (wiki bot Cost pages, every bot); trades 40, 65, 90, 130, 175, 230, then 380 |
+| Medals | bot stat and Bot+ levels vs Event Shop trades (per medal) | bots: 100 + 40 × (L − 1) a level (wiki bot Cost pages, every bot); Bot+: 100 + 50 × (L − 1), Echoing Shot 100 + 200 × (L − 1); trades 40, 65, 90, 130, 175, 230, then 380 |
 | Gems | card slots: the best owned card not in the preset, into a free slot or the next one bought (per gem) | wiki Cards: 50 → 10,000 gems, 22 slots |
 | Elite Cells | not a path: a table of lab boosts (×1.5 at 15/h … ×8 at 1M/h) and the extra lab hours per cell, on the top lab | wiki Currencies |
 | Bits | Guardian chip stats, each equipped chip's next level (per Bit) | wiki Chips tables and TheTowerSDK guardian upgrades — matched at every level (`constants/guardianData.ts`) |
@@ -53,6 +53,20 @@ What each currency buys (wiki Currencies page) and how it's ranked:
   damage, so there's no share of damage to calibrate them from; Flame Bot's
   damage reduction only matters to tanky builds, and Thunder Bot's stuns
   would need a stun-uptime model in TTT. Bot+ (stones) isn't offered.
+- **Bot+** (game v29, checked 2026-10-19): once all five bots are owned,
+  each one's ability unlocks for 1,250 stones and then levels with medals —
+  Wild Fire ×1.5 +0.1 to 20 levels, Titan Shock 5% +1% to 20, Bonus Cells
+  ×1.25 +0.05 to 25, Echoing Shot 3 bullets +1 to 9, Maximum Power ×1.25
+  +0.05 to 20 (level 0 = the unlock value). Level L costs 100 + 50 × (L − 1)
+  medals, 100 + 200 × (L − 1) for Echoing Shot: 11,500 / 11,500 / 17,500 /
+  8,100 / 11,500 to max. TheTowerSDK 0.12.0 (`data/bots`, the plus tier and
+  `BOT_PLUS_*_V29`) and the "Total Medal Cost" rows of the wiki's bot pages
+  agree on every number. Each preset keeps its own Bot+ level; the unlock is
+  account-wide. Only Echoing Shot scores: "tower bullets within range count
+  as N bullets", so tower shots × N — always on, like Amplify Bot's Bonus
+  (the code's assumption). Not modeled: the wiki's 1/3 boost for Ultimate
+  Weapon projectiles, and Maximum Power ("boosts the Bot+ abilities of other
+  bots") — the SDK applies it to the part above 1, which isn't confirmed.
 - **Card pulls** are random (80/17/3% by rarity), so stars aren't ranked;
   lab slots, rushes and tickets aren't either.
 - Enhancement costs match every wiki level (the SDK prices up to 600 levels,

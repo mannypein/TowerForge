@@ -298,7 +298,8 @@ export default function OptimizerTab() {
             case 'bots': {
                 const [name, stat] = c.ref ?? [];
                 if (!name || name === 'trade' || stat === undefined) return false;   // trades happen in game
-                st.setBotMedal(name, st.activePreset, Number(stat), level);
+                if (stat === 'plus') st.setBotPlusLevel(name, st.activePreset, level);
+                else st.setBotMedal(name, st.activePreset, Number(stat), level);
                 return true;
             }
             case 'guardian': {

@@ -1,11 +1,11 @@
 // ============================================================
 //  TowerForge Companion — Bots Share Card
-//  Viewer/export poster: every bot's medal levels and Bot+.
+//  Viewer/export poster: every bot's medal levels and Bot+ ability.
 // ============================================================
 
 import type { Ref } from 'react';
 import type { BotData } from '../../types/gameTypes';
-import { BOTS_CONFIG, isBotEntryOwned } from '../../constants/botData';
+import { BOTS_CONFIG, isBotEntryOwned, isBotPlusOwned } from '../../constants/botData';
 import { SHARE_COLORS, SHARE_CARD_ROOT_STYLE } from './shareTheme';
 import { ShareHeader, ShareFooter } from './shareCommon';
 
@@ -32,7 +32,8 @@ export default function BotsShareCard({ ref, bots, title, activeBots }: {
                     const owned = isBotEntryOwned(entry);
                     const off = owned && activeBots !== undefined && !activeBots.includes(bot.name);
                     const medals = entry?.medals ?? [];
-                    const plusLv = entry?.plusLv ?? 0;
+                    const plusOwned = isBotPlusOwned(entry);
+                    const plusLv = Math.min(entry?.plusLv ?? 0, bot.plusMax);
 
                     return (
                         <div
@@ -72,10 +73,18 @@ export default function BotsShareCard({ ref, bots, title, activeBots }: {
                                         })}
                                     </div>
 
-                                    <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${SHARE_COLORS.border}`, fontSize: 14 }}>
-                                        <span style={{ color: plusLv >= bot.plusMax ? SHARE_COLORS.gold : SHARE_COLORS.text }}>
-                                            Bot+ {plusLv}/{bot.plusMax}
-                                        </span>
+                                    <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${SHARE_COLORS.border}`, fontSize: 14, display: 'flex', justifyContent: 'space-between' }}>
+                                        <span style={{ color: SHARE_COLORS.dim }}>Bot+ · {bot.plus.label}</span>
+                                        {plusOwned ? (
+                                            <span>
+                                                <strong style={{ color: plusLv >= bot.plusMax ? SHARE_COLORS.gold : SHARE_COLORS.text }}>
+                                                    {plusLv > 0 ? bot.plus.values[plusLv - 1] : bot.plus.lv0}
+                                                </strong>
+                                                <span style={{ color: SHARE_COLORS.dim, fontSize: 12 }}> · Lv {plusLv}/{bot.plusMax}</span>
+                                            </span>
+                                        ) : (
+                                            <span style={{ color: SHARE_COLORS.locked }}>Locked</span>
+                                        )}
                                     </div>
                                 </>
                             )}

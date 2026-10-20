@@ -5,11 +5,15 @@
 //  show the in-run value (medal level + labs + Bot Range relic +
 //  Singularity Harness). Medal levels are set with − / + on each box.
 //  Like in game, each preset keeps its own ON/OFF, medal and Bot+
-//  levels; only unlocking a bot is account-wide.
+//  levels; only unlocking a bot or its Bot+ is account-wide. Bot+ (game
+//  v29) shows once all five bots are owned: one ability per bot, unlocked
+//  for 1,250 Power Stones, then levelled with medals.
 // ============================================================
 
 import { useGameStore } from '../../store/useGameStore';
-import { BOTS_CONFIG, botsForPreset, getPresetBots, isBotEntryOwned } from '../../constants/botData';
+import {
+    BOT_PLUS_UNLOCK_STONES, BOTS_CONFIG, botsForPreset, getPresetBots, isBotEntryOwned, isBotPlusOwned,
+} from '../../constants/botData';
 import { presetLabel } from '../../constants/gameData';
 import { readActiveModuleBonuses } from '../../engine/modBonuses';
 import { singularityHarnessRange } from '../../engine/moduleEffects';
@@ -73,6 +77,7 @@ export default function BotsTab() {
     const setBotOwned = useGameStore(s => s.setBotOwned);
     const setBotMedal = useGameStore(s => s.setBotMedal);
     const setBotPlusLevel = useGameStore(s => s.setBotPlusLevel);
+    const setBotPlusOwned = useGameStore(s => s.setBotPlusOwned);
     const labData = useGameStore(s => s.labData);
     const relicData = useGameStore(s => s.relicData);
     const profile = useGameStore(s => s.profile);
@@ -132,7 +137,9 @@ export default function BotsTab() {
                     const owned = isBotEntryOwned(entry);
                     const on = owned && presetBots.includes(bot.name);
                     const medals = entry.medals ?? [];
-                    const plusLv = entry.plusLv ?? 0;
+                    const plusOwned = allBotsOwned && isBotPlusOwned(entry);
+                    const plusLv = Math.min(entry.plusLv ?? 0, bot.plusMax);
+                    const plusMaxed = plusLv >= bot.plusMax;
                     const look = BOT_LOOK[bot.name] ?? { glyph: '●', color: 'var(--accent)' };
                     const bonuses = BOT_LAB_BONUSES[bot.name] ?? [];
 
@@ -146,7 +153,7 @@ export default function BotsTab() {
                     };
 
                     const allMaxed = bot.stats.every((stat, idx) => (medals[idx] ?? 0) >= stat.values.length)
-                        && (!allBotsOwned || plusLv >= bot.plusMax);
+                        && (!plusOwned || plusMaxed);
 
                     const infos = bonuses
                         .filter((b): b is InfoBonus => b.mode === 'info' && (labData[b.labName] ?? 0) > 0)
@@ -229,27 +236,51 @@ export default function BotsTab() {
                                         </div>
                                     )}
 
-                                    <div className="botg-foot">
-                                        {allBotsOwned ? (
-                                            <span className="botg-plus">
-                                                Bot+
-                                                <button className="botg-step" disabled={plusLv <= 0}
-                                                    onClick={() => setBotPlusLevel(bot.name, activePreset, plusLv - 1)}>−</button>
-                                                <strong>{plusLv}/{bot.plusMax}</strong>
-                                                <button className="botg-step" disabled={plusLv >= bot.plusMax}
-                                                    onClick={() => setBotPlusLevel(bot.name, activePreset, plusLv + 1)}>+</button>
+                                    {allBotsOwned && (plusOwned ? (
+                                        <div className={`botg-plusbox ${plusMaxed ? 'maxed' : ''}`}>
+                                            <span className="botg-plusbox-label">Bot+ · {bot.plus.label}</span>
+                                            <span className="botg-plusbox-value">
+                                                {plusLv > 0 ? bot.plus.values[plusLv - 1] : bot.plus.lv0}
                                             </span>
-                                        ) : (
-                                            <span>Bot+ unlocks once all 5 bots are owned</span>
-                                        )}
+                                            <span className="botg-plusbox-steps">
+                                                <button className="botg-step" disabled={plusLv <= 0}
+                                                    onClick={() => setBotPlusLevel(bot.name, activePreset, plusLv - 1)}
+                                                    title="One Bot+ level down">−</button>
+                                                <span>{plusMaxed ? 'Max' : `Lv ${plusLv}/${bot.plusMax}`}</span>
+                                                <button className="botg-step" disabled={plusMaxed}
+                                                    onClick={() => setBotPlusLevel(bot.name, activePreset, plusLv + 1)}
+                                                    title="One Bot+ level up">+</button>
+                                            </span>
+                                            <button className="botg-plusbox-max" disabled={plusMaxed}
+                                                onClick={() => setBotPlusLevel(bot.name, activePreset, bot.plusMax)}
+                                                title={plusMaxed ? `${bot.plus.label} is maxed` : `Max ${bot.plus.label} (Lv ${bot.plusMax})`}>
+                                                {plusMaxed ? 'MAXED' : 'MAX'}
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <button className="botg-plus-unlock" onClick={() => setBotPlusOwned(bot.name, true)}
+                                            title={`Mark ${bot.name}+ as unlocked (${BOT_PLUS_UNLOCK_STONES.toLocaleString()} Power Stones in game)`}>
+                                            UNLOCK BOT+ · {bot.plus.label}
+                                        </button>
+                                    ))}
+
+                                    <div className="botg-foot">
+                                        {!allBotsOwned && <span>Bot+ unlocks once all 5 bots are owned</span>}
                                         <span style={{ flex: 1 }} />
                                         <button className="btn btn-dim botg-small" disabled={allMaxed}
                                             onClick={() => {
                                                 bot.stats.forEach((stat, idx) => setBotMedal(bot.name, activePreset, idx, stat.values.length));
-                                                if (allBotsOwned) setBotPlusLevel(bot.name, activePreset, bot.plusMax);
+                                                if (plusOwned) setBotPlusLevel(bot.name, activePreset, bot.plusMax);
                                             }}>
                                             {allMaxed ? '✓ All maxed' : 'Max all'}
                                         </button>
+                                        {plusOwned && (
+                                            <button className="btn btn-dim botg-small"
+                                                onClick={() => setBotPlusOwned(bot.name, false)}
+                                                title="Mark Bot+ as not unlocked">
+                                                Lock Bot+
+                                            </button>
+                                        )}
                                         <button className="btn btn-dim botg-small"
                                             onClick={() => setBotOwned(bot.name, false)}
                                             title="Mark this bot as not unlocked">

@@ -18,7 +18,7 @@
 // ============================================================
 
 import { LABS, UWS, UW_PLUS_DATA, UW_PLUS_UNLOCK_COSTS, UW_STONE_COSTS, WS_ENH, WS_STATS } from '../constants/gameData';
-import { BOTS_CONFIG } from '../constants/botData';
+import { BOTS_CONFIG, isBotPlusOwned } from '../constants/botData';
 import type { BuildType, ModuleType, OptCurrency } from '../types/gameTypes';
 import type { OptimizerSnapshot } from './optimizer';
 import { goalScore } from './optimizer';
@@ -29,7 +29,7 @@ import type { BattleReport } from './battleReport';
 import { readActiveModuleBonuses } from './modBonuses';
 import { healthSkipChance, healthSkipSources } from './levelSkip';
 import { activeChips, bountyExtra, damageMeterFactor, fetchRate, summonExtra, withChipLevel } from './guardian';
-import { calcDamageMeter } from './towerDamage';
+import { calcDamageMeter, echoingShotBullets } from './towerDamage';
 import { CHIPS, statBits } from '../constants/guardianData';
 import { conditionedSkip } from './battleConditions';
 import { killerMix, pathRunGains, wavesSpread } from './runLength';
@@ -41,7 +41,7 @@ import { healthLabCut } from './enemyStats';
 import { deathDefyChance, hitsSurvived, saverAverages } from './runSavers';
 import type { EnemyType } from './enemyStats';
 import {
-    botMedalCost, enhancementCost, enhancementDiscount, labLevelCost, MODULE_SLOT_MAX, moduleSlotCost,
+    botMedalCost, botPlusMedalCost, enhancementCost, enhancementDiscount, labLevelCost, MODULE_SLOT_MAX, moduleSlotCost,
     workshopCost, workshopDiscount,
 } from './upgradeCosts';
 
@@ -115,6 +115,11 @@ export function upgradeTargets(snap: OptimizerSnapshot): UpgradeTarget[] {
             kind: 'bot', key: `${bot.name}|${i}`, group: 'Bots', label: `${bot.name} — ${st.label}`,
             current: e.medals?.[i] ?? 0, max: st.values.length,
         }));
+        // Bot+ levels once it's unlocked (the 1,250-stone unlock isn't offered).
+        if (isBotPlusOwned(e)) out.push({
+            kind: 'bot', key: `${bot.name}|plus`, group: 'Bots', label: `${bot.name}+ — ${bot.plus.label}`,
+            current: e.plusLv ?? 0, max: bot.plusMax,
+        });
     }
     // Guardian: the chips this preset's Guardian preset has equipped.
     for (const a of activeChips(snap.guardian, snap.presetIdx)) {
@@ -164,6 +169,10 @@ export function applyChange(snap: OptimizerSnapshot, c: Change): void {
         case 'bot': {
             const e = snap.botData[a];
             if (!e) break;
+            if (b === 'plus') {
+                snap.botData[a] = { ...e, plusLv: c.level };
+                break;
+            }
             const medals = [...(e.medals ?? [])];
             medals[Number(b)] = c.level;
             snap.botData[a] = { ...e, medals };
@@ -227,8 +236,11 @@ export function changeCost(snap: OptimizerSnapshot, t: UpgradeTarget, level: num
             const { shards, coins } = moduleSlotCost(from, level, snap.labData);
             return { shards, coins };
         }
-        case 'bot':
-            return { medals: botMedalCost(from, level) };
+        case 'bot': {
+            if (b !== 'plus') return { medals: botMedalCost(from, level) };
+            const bot = BOTS_CONFIG.find(x => x.name === a);
+            return bot ? { medals: botPlusMedalCost(from, level, bot.plus.costStep) } : {};
+        }
         case 'guardian': {
             const stat = CHIPS.find(c => c.index === Number(a))?.stats[Number(b)];
             return stat ? { bits: statBits(stat, from, level) } : {};
@@ -326,6 +338,7 @@ function buildChain(
     add({ group: 'Tower', label: 'Hits per projectile (Bounce Shot)', before: c0.projectiles.bounce, after: c1.projectiles.bounce, kind: 'times' });
     add({ group: 'Tower', label: 'Fire rate from Rapid Fire', before: c0.projectiles.rapid, after: c1.projectiles.rapid, kind: 'times' });
     add({ group: 'Tower', label: 'Enemy hits per second', before: c0.hitRate, after: c1.hitRate, kind: 'perSecond' });
+    add({ group: 'Tower', label: 'Bullets each tower bullet counts as (Echoing Shot)', before: echoingShotBullets(base.botData), after: echoingShotBullets(after.botData), kind: 'times' });
 
     // Damage to each enemy on its way in, by source, with its share of your damage.
     const calib = buildEdpsCalibration(base, report);

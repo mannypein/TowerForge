@@ -20,7 +20,8 @@
 //  • Tower shots, rend armor and land mines scale with tower damage ×
 //    crits × hits per second (attack speed × Multishot × Bounce Shot ×
 //    Rapid Fire, towerDamage.calcProjectileFactors) × Spotlight; Chain
-//    Lightning procs on those same hits.
+//    Lightning procs on those same hits. Echoing Shot (Amplify Bot+)
+//    multiplies them by the bullets each tower bullet counts as.
 //  • Flame Bot (from the run's FlameBotDamage): burns for its Damage
 //    multiple of tower damage with crits (wiki), once per cooldown (Cooldown
 //    stat − 1 s per Flame Bot Cooldown lab level), so per enemy pass it
@@ -52,7 +53,7 @@ import {
     buildDamageContext, calcUWDPS, calcSpotlightMult, calcDamageTakenMult, calcSpotlightMissilesDPS,
     calcBlackHoleReach, calcConsumeFraction, calcSmitePerProc, calcCLChanceQty,
 } from './uwdps';
-import { calcDamageMeter, calcCoreUWDamageMult } from './towerDamage';
+import { calcDamageMeter, calcCoreUWDamageMult, echoingShotBullets } from './towerDamage';
 import { damageMeterFactor } from './guardian';
 import type { BattleReport } from './battleReport';
 import { extraDamage } from './battleReport';
@@ -153,7 +154,7 @@ export function edpsParts(snap: OptimizerSnapshot, ttt?: number): EdpsParts {
         bh: calcBlackHoleReach(uwData, modBonuses, presetIdx, wsData, labData, cardData),
         // Damage/Meter (and Guardian Scout) on tower shots — engine/guardian.ts.
         tower: ctx.towerDamage * ctx.critMult * ctx.hitRate * sl * taken
-            * damageMeterFactor(snap.guardian, presetIdx, damageMeter, range),
+            * damageMeterFactor(snap.guardian, presetIdx, damageMeter, range) * echoingShotBullets(botData),
         smite: calcSmitePerProc(uwData),
         ...calcCLChanceQtyParts(uwData, modBonuses),
         consume: calcConsumeFraction(uwData),

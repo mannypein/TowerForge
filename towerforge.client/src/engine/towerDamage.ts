@@ -22,6 +22,7 @@ import { calcCardMasteryBonuses } from './modBonuses';
 import { moduleMaxLevel } from '../constants/moduleRarities';
 import { amplifyingStrikeMult, projectFundingMult, restorativeBonusASMult, beingAnnihilatorBonus, superCritShare } from './moduleEffects';
 import { packageChancePct } from './ttt';
+import { botPlusValue, isBotPlusOwned } from '../constants/botData';
 
 import {
     MODULE_BASE_STATS,
@@ -48,9 +49,10 @@ import { activeCard, activeLoadout, cardValue, masteredCardMult } from './statHe
 
 // ── Bot Bonus Multiplier ─────────────────────────────────────────
 // Amplify Bot provides the DPS bonus; Bot Bot multiplies it if within range.
-// Echoing Shot (Amplify Bot+) multiplies bullet count.
-// Formula: DPS boost = Amplify Bot bonus × Bot Bot bonus × Echoing Shot multiplier
+// Formula: DPS boost = Amplify Bot bonus × Bot Bot bonus
 // Returns combined multiplicative bonus or 1 if no bots are active.
+// Echoing Shot (Amplify Bot+) isn't damage: it multiplies tower bullets —
+// see echoingShotBullets.
 function getBotBonusMult(botData: BotData): number {
     if (!botData) return 1;
 
@@ -66,15 +68,11 @@ function getBotBonusMult(botData: BotData): number {
         '2.05x', '2.10x', '2.15x', '2.20x', '2.25x', '2.30x', '2.35x', '2.40x', '2.45x', '2.50x',
     ];
 
-    // Echoing Shot medal values: 3 + level (level 0-9 → 3-12 projectiles)
-    const ECHOING_SHOT_VALUES = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
-
     const ampEntry = botData['Amplify Bot'];
     const botBotEntry = botData['Bot Bot'];
 
     let ampMult = 1;
     let botBotMult = 1;
-    let echoingShotMult = 1;
 
     // Get Amplify Bot bonus
     if (ampEntry?.owned) {
@@ -82,14 +80,6 @@ function getBotBonusMult(botData: BotData): number {
         const bonusLv = medals[2] ?? 0;
         if (bonusLv > 0 && bonusLv <= AMPLIFY_BOT_VALUES.length) {
             ampMult = parseFloat(AMPLIFY_BOT_VALUES[bonusLv - 1]);
-        }
-
-        // Get Echoing Shot multiplier (Amplify Bot+)
-        if (ampEntry.plusLv > 0 && medals[4] !== undefined) {
-            const echoingLv = medals[4] ?? 0;
-            if (echoingLv >= 0 && echoingLv < ECHOING_SHOT_VALUES.length) {
-                echoingShotMult = ECHOING_SHOT_VALUES[echoingLv];
-            }
         }
     }
 
@@ -102,7 +92,21 @@ function getBotBonusMult(botData: BotData): number {
         }
     }
 
-    return ampMult * botBotMult * echoingShotMult;
+    return ampMult * botBotMult;
+}
+
+// ── Echoing Shot (Amplify Bot+) ──────────────────────────────────
+// "Tower bullets within range count as {n} bullets" — 3 at unlock, +1 a
+// level to 12 (wiki: Amplify Bot; TheTowerSDK). Applied to tower shots only,
+// always on like Amplify Bot's Bonus (the code's assumption: the bot's
+// uptime and range aren't modeled). Not modeled: the 1/3 boost the wiki
+// gives Ultimate Weapon projectiles, and Bot Bot+'s Maximum Power on it
+// (whether it scales the whole ability or the part above 1 isn't confirmed).
+// 1 when Amplify Bot+ isn't unlocked.
+export function echoingShotBullets(botData: BotData | undefined): number {
+    const amp = botData?.['Amplify Bot'];
+    if (!amp?.owned || !isBotPlusOwned(amp)) return 1;
+    return botPlusValue('Amplify Bot', amp.plusLv ?? 0);
 }
 
 // ── Cumulative Increment Lookup (memoized per type) ───────────

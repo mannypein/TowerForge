@@ -17,6 +17,8 @@ reports set the baseline, so even unmodeled effects are already in it; only
 | All 9 UWs + UW+ | ✅ | uwdps.ts; Golden Tower for coins only |
 | Flame Bot | ✅ | From the run's FlameBotDamage (2026-10-18): ×Damage × tower damage × crits ÷ cooldown; burn stacks and Wild Fire (Bot+) not modeled |
 | Amplify Bot, Bot Bot | ✅ | Tower damage multiplier |
+| Echoing Shot (Amplify Bot+) | ◐ | Since 2026-10-19: tower shots × the bullets each counts as (3 + level, up to 12), always on like Amplify Bot's Bonus (uptime and range aren't modeled). The wiki's 1/3 boost for UW projectiles isn't modeled |
+| Other Bot+ abilities: Wild Fire, Titan Shock, Bonus Cells, Maximum Power | ✗ | Levels entered or imported (v29 tables, 2026-10-19) but not valued: Wild Fire's Enflamed bonus lasts by Flame Bot damage, Titan Shock needs enemy attack speed, Bonus Cells needs elite cells per run, and how Maximum Power boosts the other abilities (whole value or the part above 1) isn't confirmed |
 | Death Ray card | ◐ | Read from runs and shown; kills what it touches (not bosses or protected enemies), so it isn't flat damage; its upgrades (Double Death Ray lab) aren't valued |
 | Guardian Attack chip, Electrons, Spotlight damage | ◐ | Read from runs and shown, kept fixed. Attack deals a share of an enemy's missing health, so it doesn't move the flat-damage death point |
 | Guardian (2026-10-19) | ◐ | Gear → Guardian; imported from the export (chips, presets, slots, skins). Scout → tower shots through Damage/Meter; Bounty, Summon → kill coins; Fetch → its coins and loot by finds per second; skins +0.6% coins each. Ally (overheal past Max Recovery) not counted — how it combines with the usual cap isn't confirmed |
@@ -65,7 +67,7 @@ reports set the baseline, so even unmodeled effects are already in it; only
 | Coins: workshop, enhancements | ✅ | Game cost tables, discount labs |
 | Lab time | ✅ | Per hour of research; lab speed and relic |
 | Power Stones: UWs, UW+, masteries, assist modules | ✅ | Bot+ (1,250 stones) not offered |
-| Medals: bots, Event Shop trades | ✅ | Bots only where a model reads the stat |
+| Medals: bots, Bot+, Event Shop trades | ✅ | Bots and Bot+ levels (to v29's 20–25, 2026-10-19) only where a model reads the stat — Echoing Shot among the Bot+ abilities |
 | Module Shards: slot levels | ✅ | Shard cost lab; level caps by rarity |
 | Gems: card slots | ✅ | Card pulls random; lab slots and rushes not ranked |
 | Elite Cells: lab boosts | ◐ | Boost table; your cells per day now visible in run drops |

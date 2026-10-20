@@ -40,13 +40,16 @@ import type { BattleReport } from '../engine/battleReport';
 import { defaultBattleIndex } from '../engine/gameExport';
 import type { GameImport } from '../engine/gameExport';
 import { MAPPED_PERK_IDS } from '../constants/gameExportMaps';
-import { botsForPreset, isBotEntryOwned } from '../constants/botData';
+import { botsForPreset, isBotEntryOwned, isBotPlusOwned } from '../constants/botData';
 import { defaultGuardianData } from '../engine/guardian';
 
 // A bot entry with one preset's levels replaced (ownership made explicit so
 // a preset at all-Lv 0 can't make an old save read the bot as not owned).
 function withPresetLevels(entry: BotEntry, presetIdx: number, levels: BotLevels): BotEntry {
-    return { ...entry, owned: isBotEntryOwned(entry), presets: { ...entry.presets, [presetIdx]: levels } };
+    return {
+        ...entry, owned: isBotEntryOwned(entry), plusOwned: isBotPlusOwned(entry),
+        presets: { ...entry.presets, [presetIdx]: levels },
+    };
 }
 
 // ── localStorage Keys ─────────────────────────────────────────
@@ -251,6 +254,7 @@ interface GameStore extends AppState {
     setBotOwned: (botName: string, owned: boolean) => void;
     setBotMedal: (botName: string, presetIdx: number, medalIdx: number, value: number) => void;
     setBotPlusLevel: (botName: string, presetIdx: number, level: number) => void;
+    setBotPlusOwned: (botName: string, owned: boolean) => void;
     setBotLoadout: (presetIdx: number, bots: string[]) => void;
 
     // ── Optimizer ────────────────────────────────────────────────
@@ -441,8 +445,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
             }
             : s.moduleState;
         const guardianData = imp.guardian ?? s.guardianData;
-        // Bots (29.1.3+ files): medal levels per preset and which bots run;
-        // Bot+ and its extra stats keep what was entered.
+        // Bots (29.1.3+ files): medal and Bot+ levels per preset, which bots
+        // and Bot+ are unlocked, and which bots run.
         let botData = s.botData;
         let botLoadouts = s.botLoadouts;
         if (imp.bots) {
@@ -451,10 +455,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
                 const entry = s.botData[name] ?? { medals: [], plusLv: 0 };
                 const presets: Record<number, BotLevels> = { ...entry.presets };
                 for (const [i, medals] of Object.entries(byPreset)) {
-                    const cur = botsForPreset({ [name]: entry }, Number(i))[name];
-                    presets[Number(i)] = { medals: [...medals, ...cur.medals.slice(medals.length)], plusLv: cur.plusLv };
+                    presets[Number(i)] = { medals: [...medals], plusLv: imp.bots.plusLv[name]?.[Number(i)] ?? 0 };
                 }
-                botData[name] = { ...entry, owned: imp.bots.owned[name] ?? false, presets };
+                botData[name] = {
+                    ...entry, owned: imp.bots.owned[name] ?? false, plusOwned: imp.bots.plusOwned[name] ?? false, presets,
+                };
             }
             botLoadouts = { ...s.botLoadouts, ...imp.bots.loadouts };
         }
@@ -692,7 +697,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         // in every preset. Un-owning clears medals and Bot+ too.
         const botData = get().botData;
         const entry = botData[botName] ?? { medals: [], plusLv: 0 };
-        const next = { ...botData, [botName]: { ...entry, owned, medals: [], plusLv: 0, presets: {} } };
+        const next = { ...botData, [botName]: { ...entry, owned, plusOwned: false, medals: [], plusLv: 0, presets: {} } };
         set({ botData: next });
         saveKey(KEYS.bots, next);
     },
@@ -715,6 +720,18 @@ export const useGameStore = create<GameStore>((set, get) => ({
         const entry = botData[botName] ?? { medals: [], plusLv: 0 };
         const cur = botsForPreset({ [botName]: entry }, presetIdx)[botName];
         const next = { ...botData, [botName]: withPresetLevels(entry, presetIdx, { medals: cur.medals, plusLv: level }) };
+        set({ botData: next });
+        saveKey(KEYS.bots, next);
+    },
+
+    // Unlocking Bot+ (account-wide) starts it at Lv 0 in every preset;
+    // locking it clears its levels.
+    setBotPlusOwned: (botName, owned) => {
+        const botData = get().botData;
+        const entry = botData[botName] ?? { medals: [], plusLv: 0 };
+        const presets = Object.fromEntries(Object.entries(entry.presets ?? {})
+            .map(([i, p]) => [i, { ...p, plusLv: 0 }]));
+        const next = { ...botData, [botName]: { ...entry, owned: isBotEntryOwned(entry), plusOwned: owned, plusLv: 0, presets } };
         set({ botData: next });
         saveKey(KEYS.bots, next);
     },

@@ -79,6 +79,23 @@ describe('what can change', () => {
         expect(target(snap, 'Cannon — Main slot')).toMatchObject({ kind: 'module', max: 300 });
     });
 
+    it('lists Bot+ levels up to the v29 max once Bot+ is unlocked, priced in medals', () => {
+        const snap = account(s => {
+            s.botData['Amplify Bot'] = { owned: true, plusOwned: true, medals: [0, 0, 0, 0], plusLv: 0 };
+            s.botData['Golden Bot'] = { ...s.botData['Golden Bot'], plusOwned: true, plusLv: 10 };
+        });
+        const echo = target(snap, 'Amplify Bot+ — Echoing Shot');
+        expect(echo).toMatchObject({ kind: 'bot', current: 0, max: 9 });
+        expect(changeCost(snap, echo, 9)).toEqual({ medals: 8100 });                     // wiki total
+        expect(target(snap, 'Golden Bot+ — Bonus Cells')).toMatchObject({ current: 10, max: 25 });
+        expect(upgradeTargets(account()).some(t => t.label.startsWith('Golden Bot+'))).toBe(false);
+        const after = account(s => { s.botData['Amplify Bot'] = { ...snap.botData['Amplify Bot'] }; });
+        applyChange(after, { kind: 'bot', key: echo.key, level: 9 });
+        expect(after.botData['Amplify Bot'].plusLv).toBe(9);
+        expect(edpsParts(after).tower / edpsParts(snap).tower).toBeCloseTo(12 / 3, 9);   // 3 → 12 bullets
+        expect(edpsParts(after).cl).toBeCloseTo(edpsParts(snap).cl, 9);                  // UWs: not modeled
+    });
+
     it('sets a level on the copy', () => {
         const snap = account();
         applyChange(snap, { kind: 'uw', key: 'CL|0', level: 12 });

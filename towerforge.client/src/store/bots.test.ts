@@ -4,7 +4,7 @@
 
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useGameStore } from './useGameStore';
-import { botsForPreset, isBotEntryOwned } from '../constants/botData';
+import { BOTS_CONFIG, botPlusValue, botsForPreset, isBotEntryOwned, isBotPlusOwned } from '../constants/botData';
 
 const store = () => useGameStore.getState();
 
@@ -55,5 +55,58 @@ describe('bot levels per preset', () => {
         const view = botsForPreset(store().botData, 0);
         view['Golden Bot'].medals[0] = 99;
         expect(store().botData['Golden Bot'].medals[0]).toBe(5);
+    });
+});
+
+// Bot+ as of game v29: TheTowerSDK's data/bots plus tier and the wiki's bot
+// pages agree (2026-10-19).
+describe('Bot+ (v29)', () => {
+    const bot = (name: string) => BOTS_CONFIG.find(b => b.name === name)!;
+
+    it('has each ability’s v29 levels and values', () => {
+        expect(BOTS_CONFIG.map(b => [b.name, b.plus.label, b.plusMax])).toEqual([
+            ['Flame Bot', 'Wild Fire', 20], ['Thunder Bot', 'Titan Shock', 20], ['Golden Bot', 'Bonus Cells', 25],
+            ['Amplify Bot', 'Echoing Shot', 9], ['Bot Bot', 'Maximum Power', 20],
+        ]);
+        const ends = (name: string) => [bot(name).plus.lv0, bot(name).plus.values[0], bot(name).plus.values.at(-1)];
+        expect(ends('Flame Bot')).toEqual(['1.5x', '1.6x', '3.5x']);
+        expect(ends('Thunder Bot')).toEqual(['5%', '6%', '25%']);
+        expect(ends('Golden Bot')).toEqual(['1.25x', '1.30x', '2.50x']);
+        expect(ends('Amplify Bot')).toEqual(['3x', '4x', '12x']);
+        expect(ends('Bot Bot')).toEqual(['1.25x', '1.30x', '2.25x']);
+        expect(botPlusValue('Amplify Bot', 4)).toBe(7);
+        expect(botPlusValue('Amplify Bot', 30)).toBe(12);       // past the max
+        expect(botPlusValue('Golden Bot', 25)).toBeCloseTo(2.5, 9);
+    });
+
+    beforeEach(() => {
+        useGameStore.setState({
+            botData: {
+                'Amplify Bot': { owned: true, medals: [5, 5, 5, 5], plusLv: 0 },
+                'Bot Bot': { owned: true, medals: [], plusLv: 3 },     // old save: no Bot+ flag
+            },
+        });
+    });
+
+    it('unlocking Bot+ starts it at Lv 0 in every preset; locking clears it', () => {
+        store().setBotPlusOwned('Amplify Bot', true);
+        store().setBotPlusLevel('Amplify Bot', 1, 9);
+        expect(botsForPreset(store().botData, 1)['Amplify Bot']).toMatchObject({ plusOwned: true, plusLv: 9 });
+        expect(botsForPreset(store().botData, 0)['Amplify Bot']).toMatchObject({ plusOwned: true, plusLv: 0 });
+        store().setBotPlusOwned('Amplify Bot', false);
+        expect(botsForPreset(store().botData, 1)['Amplify Bot']).toMatchObject({ plusOwned: false, plusLv: 0 });
+        expect(botsForPreset(store().botData, 1)['Amplify Bot'].medals).toEqual([5, 5, 5, 5]);
+    });
+
+    it('keeps an old save’s Bot+ unlocked after a preset sets it to Lv 0', () => {
+        expect(isBotPlusOwned(store().botData['Bot Bot'])).toBe(true);
+        store().setBotPlusLevel('Bot Bot', 0, 0);
+        expect(botsForPreset(store().botData, 0)['Bot Bot']).toMatchObject({ plusOwned: true, plusLv: 0 });
+    });
+
+    it('locking a bot locks its Bot+ too', () => {
+        store().setBotPlusOwned('Amplify Bot', true);
+        store().setBotOwned('Amplify Bot', false);
+        expect(isBotPlusOwned(store().botData['Amplify Bot'])).toBe(false);
     });
 });

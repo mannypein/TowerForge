@@ -1,16 +1,42 @@
 // ============================================================
 //  TowerForge Companion — Bot Stat Definitions
-//  Bot names, stat labels, and per-level display values.
-//  Shared by the Bots tab and the bot share card.
+//  Bot names, stat labels, and per-level display values, and each
+//  bot's Bot+ ability (game v29). Shared by the Bots tab, the bot
+//  share card, the models, the Optimizer and What If.
 // ============================================================
 
 import type { BotData, BotEntry, BotLoadouts } from '../types/gameTypes';
+
+// ── Bot+ (game v29) ───────────────────────────────────────────
+// Once all five bots are owned, each one's Bot+ ability can be unlocked for
+// 1,250 Power Stones and then levelled with medals. Level 0 is the unlock
+// value and each level adds `step`; level L costs 100 + costStep × (L − 1)
+// medals. Checked 2026-10-19: TheTowerSDK 0.12.0 (data/bots, the plus tier
+// and BOT_PLUS_*_V29) and the wiki's five bot pages agree on every value,
+// level count and medal cost (totals 11,500 / 11,500 / 17,500 / 8,100 /
+// 11,500 medals). Before v29 the site had 5 levels for every bot.
+export const BOT_PLUS_UNLOCK_STONES = 1250;
+
+interface BotPlusLadder {
+    label: string;
+    base: number;       // value at level 0 (just unlocked)
+    step: number;       // added per level
+    max: number;        // highest level
+    unit: string;
+    costStep: number;   // medals added to each level's cost
+}
+
+// Display value of a ladder at a level, with as many decimals as its step.
+function ladderValue(p: BotPlusLadder, level: number): string {
+    const decimals = (String(p.step).split('.')[1] ?? '').length;
+    return `${(p.base + p.step * level).toFixed(decimals)}${p.unit}`;
+}
 
 // ── Bot Data Constants ────────────────────────────────────────
 // Each stat: array of display values per level (index 0 = level 1)
 const RAW_BOTS: {
     name: string;
-    plusMax: number;
+    plus: BotPlusLadder;
     stats: {
         label: string;
         values: string[];
@@ -18,7 +44,9 @@ const RAW_BOTS: {
 }[] = [
         {
             name: 'Flame Bot',
-            plusMax: 5,
+            // Enemies hit by Flame Bot become Enflamed as well as Burned and take
+            // ×{n} extra damage (wiki: Wild Fire).
+            plus: { label: 'Wild Fire', base: 1.5, step: 0.1, max: 20, unit: 'x', costStep: 50 },
             stats: [
                 {
                     label: 'Damage Reduction',
@@ -54,7 +82,9 @@ const RAW_BOTS: {
         },
         {
             name: 'Thunder Bot',
-            plusMax: 5,
+            // Enemies struck by Thunder Bot get a permanent {n}% lower attack speed,
+            // times the number of digits in the enemy's mass (wiki: Titan Shock).
+            plus: { label: 'Titan Shock', base: 5, step: 1, max: 20, unit: '%', costStep: 50 },
             stats: [
                 {
                     label: 'Duration',
@@ -88,7 +118,8 @@ const RAW_BOTS: {
         },
         {
             name: 'Golden Bot',
-            plusMax: 5,
+            // Elites killed in Golden Bot's range give ×{n} cells (wiki: Bonus Cells).
+            plus: { label: 'Bonus Cells', base: 1.25, step: 0.05, max: 25, unit: 'x', costStep: 50 },
             stats: [
                 {
                     label: 'Duration',
@@ -124,7 +155,10 @@ const RAW_BOTS: {
         },
         {
             name: 'Amplify Bot',
-            plusMax: 5,
+            // Tower bullets within range count as {n} bullets; UW projectiles are
+            // boosted by 1/3 of that (wiki: Echoing Shot). Its medal cost steps
+            // 200 a level, not 50.
+            plus: { label: 'Echoing Shot', base: 3, step: 1, max: 9, unit: 'x', costStep: 200 },
             stats: [
                 {
                     label: 'Duration',
@@ -160,7 +194,8 @@ const RAW_BOTS: {
         },
         {
             name: 'Bot Bot',
-            plusMax: 5,
+            // Boosts the other bots' Bot+ abilities by ×{n} (wiki: Maximum Power).
+            plus: { label: 'Maximum Power', base: 1.25, step: 0.05, max: 20, unit: 'x', costStep: 50 },
             stats: [
                 {
                     label: 'Duration',
@@ -211,10 +246,25 @@ function levelZeroValue(values: string[]): string {
 
 // Bot config with a derived Lv 0 (base unlock) value per stat. The original
 // values arrays are untouched — Lv 1 stays Lv 1; Lv 0 is the new base below it.
+// Bot+ gets the same shape: `values` from Lv 1, `lv0` the unlock value.
 export const BOTS_CONFIG = RAW_BOTS.map(bot => ({
     ...bot,
+    plusMax: bot.plus.max,
+    plus: {
+        ...bot.plus,
+        lv0: ladderValue(bot.plus, 0),
+        values: Array.from({ length: bot.plus.max }, (_, i) => ladderValue(bot.plus, i + 1)),
+    },
     stats: bot.stats.map(s => ({ ...s, lv0: levelZeroValue(s.values) })),
 }));
+
+// A bot's Bot+ ability at a level, as a number (level 0 = the unlock value;
+// clamped to its max). 0 for an unknown bot.
+export function botPlusValue(botName: string, level: number): number {
+    const p = RAW_BOTS.find(b => b.name === botName)?.plus;
+    if (!p) return 0;
+    return p.base + p.step * Math.min(p.max, Math.max(0, Math.floor(level)));
+}
 
 
 // Ownership is an explicit flag (an owned bot can sit at all-Lv 0). Legacy
@@ -225,6 +275,14 @@ export function isBotEntryOwned(entry: BotEntry | undefined): boolean {
     return (entry.medals ?? []).some(v => v > 0) || (entry.plusLv ?? 0) > 0;
 }
 
+// Bot+ unlocked (account-wide, like owning the bot). Saves from before the
+// flag count any Bot+ level above 0 as unlocked.
+export function isBotPlusOwned(entry: BotEntry | undefined): boolean {
+    if (!entry) return false;
+    if (entry.plusOwned !== undefined) return entry.plusOwned;
+    return (entry.plusLv ?? 0) > 0 || Object.values(entry.presets ?? {}).some(p => (p.plusLv ?? 0) > 0);
+}
+
 // Bot levels as one preset sees them (each preset keeps its own medal and
 // Bot+ levels, like in game), flattened so the calculators can read them.
 export function botsForPreset(botData: BotData, presetIdx: number): BotData {
@@ -232,6 +290,7 @@ export function botsForPreset(botData: BotData, presetIdx: number): BotData {
         const p = e.presets?.[presetIdx];
         return [name, {
             owned: isBotEntryOwned(e),
+            plusOwned: isBotPlusOwned(e),
             medals: [...(p?.medals ?? e.medals ?? [])],
             plusLv: p?.plusLv ?? e.plusLv ?? 0,
         }];

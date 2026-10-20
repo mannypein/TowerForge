@@ -292,6 +292,32 @@ describe('every currency', () => {
         expect(find(snap, 'bots', 'Amplify Bot — Duration')!.scorePct).toBeCloseTo(0, 9);   // not modeled
     });
 
+    // Echoing Shot: tower bullets count as 3 + level bullets, so 5 → 6 is
+    // +20% on tower shots — 1% of this run's damage. Bonus Cells (cells)
+    // isn't modeled and shows no gain.
+    it('prices Bot+ levels in medals and scores Echoing Shot on tower shots', () => {
+        const report = run();
+        const plus = (s: OptimizerSnapshot, lv: number) => {
+            s.botData = {
+                'Amplify Bot': { owned: true, plusOwned: true, medals: [0, 0, 5, 0], plusLv: lv },
+                'Golden Bot': { owned: true, plusOwned: true, medals: [0, 0, 0, 0], plusLv: 24 },
+                'Bot Bot': { owned: true, plusOwned: false, medals: [0, 0, 0, 0], plusLv: 0 },
+            };
+        };
+        const snap = snapshot(report, s => plus(s, 2));
+        snap.edps = buildEdpsCalibration(snap, report)!;
+        const echo = find(snap, 'bots', 'Amplify Bot+ — Echoing Shot')!;
+        expect(echo).toMatchObject({ fromLv: 2, toLv: 3, cost: 500, costType: 'medals' });
+        expect(edpsScore(snapshot(report, s => plus(s, 3)), snap.edps)).toBeCloseTo(1 + 0.01 * (6 / 5 - 1), 9);
+        expect(echo.scorePct).toBeGreaterThan(0);
+        const cells = find(snap, 'bots', 'Golden Bot+ — Bonus Cells')!;
+        expect(cells).toMatchObject({ fromLv: 24, toLv: 25, cost: 1300 });
+        expect(cells.scorePct).toBeCloseTo(0, 9);
+        expect(find(snap, 'bots', 'Bot Bot+ — Maximum Power')).toBeUndefined();     // Bot+ not unlocked
+        const maxed = snapshot(report, s => plus(s, 9));
+        expect(find(maxed, 'bots', 'Amplify Bot+ — Echoing Shot')).toBeUndefined();
+    });
+
     it('prices module slot levels in shards and coins (wiki Modules/Cost)', () => {
         const slot = find(snapshot(), 'modules', 'Cannon — Main slot')!;
         expect(slot).toMatchObject({ fromLv: 0, toLv: 5, cost: 35, coins: 50000, costType: 'shards' });

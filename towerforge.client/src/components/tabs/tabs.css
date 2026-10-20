@@ -1055,12 +1055,101 @@
     color: #a9b2d8;
 }
 
-.botg-plus {
+/* Bot+ ability: purple while it can still be levelled, gold once maxed. */
+.botg-plusbox {
+    display: grid;
+    grid-template-columns: 1fr auto auto auto;
+    grid-template-areas: "label value steps max";
+    align-items: center;
+    gap: 4px 10px;
+    margin-top: 8px;
+    padding: 4px 4px 4px 10px;
+    background: #1d1640;
+    border: 2px solid #9d6cff;
+    border-radius: 4px;
+}
+
+.botg-plusbox.maxed {
+    border-color: #a8873a;
+    background: #2a2834;
+}
+
+.botg-plusbox-label {
+    grid-area: label;
+    font-size: 13px;
+    font-weight: 700;
+    color: #d0a8ff;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.botg-plusbox-value {
+    grid-area: value;
+    font-size: 19px;
+    font-weight: 700;
+    color: #ffffff;
+}
+
+.botg-plusbox-steps {
+    grid-area: steps;
     display: inline-flex;
     align-items: center;
-    gap: 2px;
-    color: #d0a8ff;
+    font-size: 12px;
     font-weight: 700;
+    color: #d0c2f5;
+    white-space: nowrap;
+}
+
+.botg-plusbox.maxed .botg-plusbox-steps,
+.botg-plusbox.maxed .botg-plusbox-label {
+    color: #e8c062;
+}
+
+.botg-plusbox-max {
+    grid-area: max;
+    background: rgba(157, 108, 255, 0.2);
+    border: 1px solid rgba(157, 108, 255, 0.6);
+    border-radius: 3px;
+    color: #d0a8ff;
+    font-family: var(--font-ui);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    padding: 4px 10px;
+    cursor: pointer;
+}
+
+.botg-plusbox-max:hover:not(:disabled) {
+    background: rgba(157, 108, 255, 0.4);
+    color: #ffffff;
+}
+
+.botg-plusbox.maxed .botg-plusbox-max {
+    background: rgba(168, 135, 58, 0.15);
+    border-color: rgba(168, 135, 58, 0.5);
+    color: #e8c062;
+    cursor: default;
+}
+
+.botg-plus-unlock {
+    width: 100%;
+    margin-top: 8px;
+    padding: 8px;
+    font-family: var(--font-ui);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: #e9dcff;
+    background: linear-gradient(180deg, #2a1f5c 0%, #1d1640 100%);
+    border: 2px dashed #9d6cff;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.botg-plus-unlock:hover {
+    border-style: solid;
 }
 
 .botg-small {
@@ -1118,6 +1207,17 @@
     .botg-step {
         font-size: 15px;
         padding: 0 3px;
+    }
+
+    /* Bot+: name and value, then the level steps and MAX */
+    .botg-plusbox {
+        grid-template-columns: 1fr auto;
+        grid-template-areas: "label value" "steps max";
+        padding: 4px 4px 4px 8px;
+    }
+
+    .botg-plusbox-value {
+        font-size: 16px;
     }
 }
 

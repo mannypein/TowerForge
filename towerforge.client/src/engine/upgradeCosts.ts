@@ -14,7 +14,9 @@
 //  - Module slots: shards and coins a level (moduleCosts.ts), less 1% a
 //    level of the Module Shard Cost / Module Coin Cost labs (30% at 30).
 //  - Bots: every bot stat's level L costs 100 + 40 × (L − 1) medals (wiki
-//    bot Cost pages: 100 for level 1, 1,260 for level 30).
+//    bot Cost pages: 100 for level 1, 1,260 for level 30). Bot+ level L
+//    costs 100 + 50 × (L − 1), or 100 + 200 × (L − 1) for Amplify Bot's
+//    Echoing Shot (wiki bot pages, TheTowerSDK; constants/botData.ts).
 //  - Card slots (gems), Event Shop trades (medals) and Elite Cell lab
 //    boosts: the wiki's Cards and Currencies pages.
 //  Pure functions — no store imports.
@@ -100,6 +102,14 @@ export function moduleSlotCost(from: number, to: number, labs: LabData): { shard
 export function botMedalCost(from: number, to: number): number {
     let medals = 0;
     for (let l = from + 1; l <= to; l++) medals += 100 + 40 * (l - 1);
+    return medals;
+}
+
+// Medals to take a Bot+ ability from one level to another (level 0 comes
+// with the 1,250-stone unlock). `costStep` is the bot's, from BOTS_CONFIG.
+export function botPlusMedalCost(from: number, to: number, costStep: number): number {
+    let medals = 0;
+    for (let l = Math.max(0, from) + 1; l <= to; l++) medals += 100 + costStep * (l - 1);
     return medals;
 }
 

@@ -13,6 +13,7 @@ import { SUB_EFFECTS, SUB_RARITIES } from '../constants/moduleData';
 import { battle, gameModule, labIndex, makeExport, research, zeros } from '../test/makeExport';
 import { useGameStore } from '../store/useGameStore';
 import { botsForPreset } from '../constants/botData';
+import { echoingShotBullets } from './towerDamage';
 
 const labMax = (name: string) => LABS.flatMap(c => c.l).find(([n]) => n === name)![1];
 
@@ -429,21 +430,51 @@ describe('29.1.3 exports (ExportVersion 1)', () => {
         expect(parseGameExport(makeExport({ GuardianUnlocked: true })).guardian!.inGuild).toBeUndefined();
     });
 
-    it('importing keeps Bot+ and its extra stats as entered, and sets which bots run', () => {
+    // PlusLevel is the level of the bot's one Bot+ ability, 0 = its unlock
+    // value (TheTowerSDK readUserBotDataRow → clampBotPlusStatLevel, stat 0).
+    it('reads Bot+ per preset: unlocked, and its level up to the ability’s max', () => {
+        const imp = parseGameExport(makeExport({
+            ...noBots,
+            AmplifyBotPresets: [
+                row(zeros(4), { PlusUnlocked: true, PlusLevel: 4 }),
+                row(zeros(4), { PlusUnlocked: true, PlusLevel: 99 }),
+                row(zeros(4), { PlusUnlocked: false, PlusLevel: 7 }),
+                off, off,
+            ],
+            GoldenBotPresets: [row(zeros(4), { PlusUnlocked: true, PlusLevel: 25 }), off, off, off, off],
+            ThunderBotPresets: [row(zeros(4), { PlusLevel: 3 }), off, off, off, off],
+            GlobalPresets: [{ BotsIndex: 0 }, { BotsIndex: 1 }, { BotsIndex: 2 }],
+        }));
+        const b = imp.bots!;
+        expect(b.plusOwned).toMatchObject({ 'Amplify Bot': true, 'Golden Bot': true, 'Thunder Bot': false, 'Flame Bot': false });
+        expect([0, 1, 2].map(i => b.plusLv['Amplify Bot'][i])).toEqual([4, 9, 0]);   // 9 = Echoing Shot's max
+        expect(b.plusLv['Golden Bot'][0]).toBe(25);
+        expect(b.plusLv['Thunder Bot'][0]).toBe(0);                                     // not unlocked
+    });
+
+    it('importing sets medal and Bot+ levels, what is unlocked, and which bots run', () => {
         useGameStore.setState({
+            // Entered before Bot+ was imported: the old Bot+ stat sat in medals[4].
             botData: { 'Amplify Bot': { owned: true, medals: [1, 1, 1, 1, 3], plusLv: 2 } },
             botLoadouts: { 0: [], 1: ['Amplify Bot'] },
         });
         const raw = makeExport({
             ...noBots,
-            AmplifyBotPresets: [row([0, 0, 0, 5]), row([0, 0, 0, 5], { Active: false }), off, off, off],
+            AmplifyBotPresets: [
+                row([0, 0, 0, 5], { PlusUnlocked: true, PlusLevel: 6 }),
+                row([0, 0, 0, 5], { Active: false, PlusUnlocked: true, PlusLevel: 0 }),
+                off, off, off,
+            ],
             GlobalPresets: [{ BotsIndex: 0 }, { BotsIndex: 1 }],
         });
         useGameStore.getState().applyGameImport(parseGameExport(raw), raw);
         const s = useGameStore.getState();
-        const p0 = botsForPreset(s.botData, 0)['Amplify Bot'];
-        expect(p0.medals).toEqual([5, 0, 0, 0, 3]);
-        expect(p0.plusLv).toBe(2);
+        const p0 = botsForPreset(s.botData, 0);
+        const p1 = botsForPreset(s.botData, 1);
+        expect(p0['Amplify Bot']).toMatchObject({ owned: true, plusOwned: true, medals: [5, 0, 0, 0], plusLv: 6 });
+        expect(p1['Amplify Bot']).toMatchObject({ plusOwned: true, plusLv: 0 });
+        expect(echoingShotBullets(p0)).toBe(9);     // 3 at unlock + 6 levels
+        expect(echoingShotBullets(p1)).toBe(3);
         expect(s.botLoadouts[0]).toEqual(['Amplify Bot']);
         expect(s.botLoadouts[1]).toEqual([]);
     });

@@ -3,8 +3,9 @@
 
 import { describe, expect, it } from 'vitest';
 import {
-    formatLabTime, labLevelCost, labSpeed, workshopCost, workshopDiscount,
+    botMedalCost, botPlusMedalCost, formatLabTime, labLevelCost, labSpeed, workshopCost, workshopDiscount,
 } from './upgradeCosts';
+import { BOTS_CONFIG } from '../constants/botData';
 
 const near = (value: number | null, expected: number, digits = 3) =>
     expect((value ?? NaN) / expected).toBeCloseTo(1, digits);
@@ -61,5 +62,32 @@ describe('lab costs and times', () => {
         expect(formatLabTime(999 / 60)).toBe('16h 39m');
         expect(formatLabTime(1501 / 60)).toBe('1d 1h');
         expect(formatLabTime(0.1)).toBe('6m');
+    });
+});
+
+describe('bot medal costs', () => {
+    it('price a bot stat 100 + 40 a level (wiki bot Cost pages)', () => {
+        expect(botMedalCost(0, 1)).toBe(100);
+        expect(botMedalCost(29, 30)).toBe(1260);
+        expect(botMedalCost(0, 30)).toBe(20400);
+    });
+
+    // Every Bot+ ladder bought from its unlock (Lv 0) to its max, against the
+    // "Total Medal Cost" row of each bot page's Bot+ table (wiki, 2026-10-19).
+    it('price Bot+ levels like the wiki’s Bot+ tables', () => {
+        const total = (name: string) => {
+            const bot = BOTS_CONFIG.find(b => b.name === name)!;
+            return botPlusMedalCost(0, bot.plusMax, bot.plus.costStep);
+        };
+        expect(total('Flame Bot')).toBe(11500);
+        expect(total('Thunder Bot')).toBe(11500);
+        expect(total('Golden Bot')).toBe(17500);
+        expect(total('Amplify Bot')).toBe(8100);
+        expect(total('Bot Bot')).toBe(11500);
+        expect(botPlusMedalCost(0, 2, 50)).toBe(100 + 150);
+        expect(botPlusMedalCost(24, 25, 50)).toBe(1300);       // Golden Bot's last level
+        expect(botPlusMedalCost(1, 2, 200)).toBe(300);         // Echoing Shot 4 → 5
+        expect(botPlusMedalCost(8, 9, 200)).toBe(1700);
+        expect(botPlusMedalCost(5, 5, 50)).toBe(0);
     });
 });

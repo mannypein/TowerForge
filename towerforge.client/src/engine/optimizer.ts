@@ -147,11 +147,11 @@ import { healthSkipChance, healthSkipSources } from './levelSkip';
 import { healthLabCut } from './enemyStats';
 import type { EnemyType } from './enemyStats';
 import {
-    botMedalCost, CARD_SLOT_GEMS, enhancementCost, enhancementDiscount, labLevelCost, MEDAL_TRADE_GIVES,
+    botMedalCost, botPlusMedalCost, CARD_SLOT_GEMS, enhancementCost, enhancementDiscount, labLevelCost, MEDAL_TRADE_GIVES,
     MEDAL_TRADE_PRICES, MODULE_SLOT_MAX, moduleSlotCost, workshopCost, workshopDiscount,
 } from './upgradeCosts';
 import type { EdpsCalibration } from './edps';
-import { BOTS_CONFIG } from '../constants/botData';
+import { BOTS_CONFIG, isBotPlusOwned } from '../constants/botData';
 
 import type {
     AppState,
@@ -799,9 +799,10 @@ export function buildCandidates(
     }
 
     // ── Bots (medals) ──────────────────────────────────────────
-    // Every stat of every owned bot, one level a step. Only the stats a
-    // model reads score (Amplify Bot and Bot Bot bonus for damage, Golden
-    // Bot for coins); the rest show no gain and drop out.
+    // Every stat of every owned bot, and its Bot+ ability once unlocked,
+    // one level a step. Only the stats a model reads score (Amplify Bot and
+    // Bot Bot bonus for damage, Golden Bot for coins, Echoing Shot for tower
+    // shots); the rest show no gain and drop out.
     if (cat === 'bots') {
         for (const bot of BOTS_CONFIG) {
             const entry = snap.botData?.[bot.name];
@@ -829,6 +830,26 @@ export function buildCandidates(
                     ref: [bot.name, String(i)],
                 });
             });
+            const plusLv = entry.plusLv ?? 0;
+            if (isBotPlusOwned(entry) && plusLv < bot.plusMax) {
+                const after = cloneSnapshot(snap);
+                after.botData[bot.name] = { ...after.botData[bot.name], plusLv: plusLv + 1 };
+                const delta = edpsDeltaPct(basEDPS, getScore(after));
+                const cost = botPlusMedalCost(plusLv, plusLv + 1, bot.plus.costStep);
+                candidates.push({
+                    category: 'bots',
+                    label: `${bot.name}+ — ${bot.plus.label}`,
+                    subLabel: `Lv ${plusLv} → ${plusLv + 1}`,
+                    fromLv: plusLv,
+                    toLv: plusLv + 1,
+                    cost,
+                    costType: 'medals',
+                    costKnown: true,
+                    scorePct: delta,
+                    scorePerCost: perCost(delta, cost),
+                    ref: [bot.name, 'plus'],
+                });
+            }
         }
     }
 
@@ -997,6 +1018,10 @@ export function applyUpgrade(
             const [name, stat] = c.ref ?? [];
             const entry = name !== undefined ? snap.botData[name] : undefined;
             if (!entry || stat === undefined || name === 'trade') break;
+            if (stat === 'plus') {
+                snap.botData[name] = { ...entry, plusLv: c.toLv };
+                break;
+            }
             const medals = [...(entry.medals ?? [])];
             medals[Number(stat)] = c.toLv;
             snap.botData[name] = { ...entry, medals };

@@ -238,7 +238,7 @@ export default function App() {
                 ...(imp.modules?.unnamed.length ? [
                     `  (${imp.modules.unnamed.length} more unique modules aren’t identified yet — those were skipped)`,
                 ] : []),
-                ...(imp.bots ? ['• Bots: medal levels and which bots run, per preset'] : []),
+                ...(imp.bots ? ['• Bots: medal and Bot+ levels and which bots run, per preset'] : []),
                 ...(imp.guardian?.unlocked ? [
                     `• Guardian: chips, presets and skins${imp.guardian.inGuild === false
                         ? ' (the file says you weren’t in a guild — the Guardian only fights in one; the game also says this if your guild hadn’t loaded yet)'
@@ -246,7 +246,7 @@ export default function App() {
                 ] : []),
                 '',
                 ...(imp.bots ? [
-                    'Not imported yet: Bot+ levels and relics.',
+                    'Not imported yet: relics.',
                     'We’re still confirming those, so what you entered there was left as it is.',
                 ] : [
                     'Not imported yet: bots and relics.',
