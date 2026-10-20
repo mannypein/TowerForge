@@ -12,6 +12,7 @@ each deploy shipped; the site said v1.0.0 until then. Times are US Eastern.
 
 | Version | Deployed | What changed |
 |---|---|---|
+| 1.19.0 | 2026-10-20 09:35 | **Guardian**: chips, presets and skins (imported), Scout and Attack in damage and run length, Bounty/Summon/Fetch in coins, a Bits panel. Ready for the game's 29.1.3 export (bots per preset, labs being researched, current league). Bot+ for v29 (new levels, imported). Every tab has its own address (towerforge.net/creators…). Shared stats: Bots and Modules in the tabs' look, every section fits a phone. Fix: damage scores without Chain Lightning. |
 | 1.18.0 | 2026-10-19 14:19 | **Get from emulator**: TowerForge Link, a small Windows helper that reads the game's data export off BlueStacks (and other emulators) — no hunting for the file. Notes from an end-of-push recording (docs). |
 | 1.17.0 | 2026-10-18 22:53 | Tournament battle conditions grow with the wave (heat), each league's fixed conditions; skip counts for less in tournaments. |
 | 1.16.0 | 2026-10-18 22:18 | Tournament page: best module loadout for tournament waves, this week's battle conditions. |
