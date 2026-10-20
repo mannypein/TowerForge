@@ -18,8 +18,10 @@
 //  in bursts once the wall breaks (five within ~10 game seconds), so saves
 //  there buy seconds; the waves come from earlier, single leaks.
 //  Death Defy chance: workshop 0.4% a level (75 levels, 30%) + module
-//  substats. Tiers whose battle conditions include Death Defy Down lower it
-//  in the run by an amount not modeled here (the observed procs show it).
+//  substats. Death Defy Down takes points off it and Energy Shields Down
+//  makes the shield recharge slower (fewer shield saves a run) — read
+//  against the conditions the player's runs had (savedHits). Tiers with
+//  Death Defy Down show it in their observed procs.
 //  Pure functions — no store imports.
 // ============================================================
 
@@ -27,6 +29,7 @@ import { WS_STATS } from '../constants/gameData';
 import type { BattleReport } from './battleReport';
 import { runSavers } from './battleReport';
 import type { OptimizerSnapshot } from './optimizer';
+import type { TourneyConditions } from './battleConditions';
 
 const DD_IDX = WS_STATS.defense.findIndex(([n]) => n === 'Death Defy');
 
@@ -44,6 +47,7 @@ export interface SaverAverages {
     runs: number;
     deathDefy: number | null;   // procs per run
     others: number;             // Energy Shield + Second Wind + Demon Mode + Nuke per run
+    energyShield: number;       // the Energy Shield part of `others`
 }
 
 // Per-run averages over the given runs; null when no run records Death Defy.
@@ -57,5 +61,19 @@ export function saverAverages(runs: BattleReport[]): SaverAverages | null {
     };
     const others = (['energyShield', 'secondWind', 'demonMode', 'nuke'] as const)
         .reduce((sum, k) => sum + (avg(s => s[k]) ?? 0), 0);
-    return { runs: has.length, deathDefy: avg(s => s.deathDefy), others };
+    return { runs: has.length, deathDefy: avg(s => s.deathDefy), others, energyShield: avg(s => s.energyShield) ?? 0 };
+}
+
+// Death Defy chance under Death Defy Down (points off, the code's reading).
+export const conditionedDeathDefy = (p: number, c: TourneyConditions | undefined) =>
+    Math.max(0, p - (c?.deathDefyDownPct ?? 0) / 100);
+
+// Killing hits a run survives under conditions `c`, when the player's runs
+// (`savers`) had conditions `had`: Energy Shield saves scale with how often
+// it recharges.
+export function savedHits(p: number, savers: SaverAverages | null, c?: TourneyConditions, had?: TourneyConditions): number {
+    const shield = savers?.energyShield ?? 0;
+    const rate = (x?: TourneyConditions) => 1 / (1 + (x?.shieldsDownPct ?? 0) / 100);
+    const others = (savers?.others ?? 0) - shield + shield * (rate(c) / rate(had));
+    return hitsSurvived(conditionedDeathDefy(p, c), others);
 }

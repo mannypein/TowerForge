@@ -428,24 +428,63 @@ reports count kills per type, so the mix can be **calibrated per player**.
     Skip Reduction - Multiply no lab of its own, so only BC Reduction counts
     there.
   - **Enemy Speed** (Tower Knowledge Hub tip): it makes enemies reach their
-    top speed sooner — around W800–900 instead of ~W1200 in a tournament —
-    rather than adding x% at once. How tournament enemy speed grows with
-    waves isn't documented, so it isn't counted.
-  - The battle history doesn't record which conditions a run had.
+    top speed sooner — around W800–900 instead of ~W1200 in a tournament.
+    Read with the in-game text ("x% faster") and a speed cap, that's the same
+    thing: x% faster until the cap. The site counts it as x% faster (time in
+    range ÷ (1 + x)); the cap isn't known, so past ~W800 it counts too much.
+  - The battle history doesn't record which conditions a run had (nor does
+    29.1.3's export: `TournamentRecords` is empty on TTG's test file). The
+    player ticks each run's on the Tournament page (store `tourneyLog`).
+  - Per-run fields that measure what conditions act on (owner's tournament
+    run, W135, Legend): `DestroyedByOrbs` 653 of 1242 enemies (53%),
+    `DestroyedByDeathRay` 202 (16%), `ProjectilesCount` 104,329 (84 shots an
+    enemy), and `TotalBasic` / `TotalFast` / `TotalTank` / … per type.
 - **Tournament simulator (2026-10-18, Optimizer → Tournament,
-  `engine/battleConditions.ts`):** pick the league; tick this week's random
-  conditions and the ones recent tournaments had. Each condition's strength
+  `engine/battleConditions.ts`, `engine/tournamentModel.ts`):** pick the
+  league and the build used for tournaments (a site preset and module
+  loadout); tick this week's random conditions. Each condition's strength
   comes from the heat table at the wave the run ends (settled: the
   conditions move the end, which moves their strength), less the player's
-  labs. Waves = the change in the push score from the recent set to this
-  week's, through the tournament deaths (`runWavesChange`, luck-averaged).
-  Counted: UW Durations (seconds off CF/GT/PS/BH through their duration
-  bonus) and Boss's Ultimate (boss health, weighted by how often bosses end
-  the runs). The league's fixed Skip Reduction and Skip Decay are in every
-  tournament, so they don't move this week's end — but they shrink what a
-  skip upgrade adds, which the Optimizer, What If and the module search
-  count whenever a tournament run is the Battle Report
-  (`GoalModels.conditions`, from the profile's league).
+  labs (a resistance's labs weaken what it takes away: left = 100 − (100 −
+  x)(1 − cut), from the SDK's modifier fraction). The model is calibrated on
+  the newest tournament run under the conditions ticked for it; waves = the
+  change in the push score from those to this week's, through the
+  tournament deaths (`runWavesChange`, luck-averaged).
+- **What each condition does (2026-10-20, all the code's model on top of
+  the sources above):**
+  - UW Durations: seconds off CF/GT/PS/BH through their duration bonus.
+  - Boss's Ultimate: boss health, weighted by how often bosses end runs.
+  - Enemy Speed: enemy speed × (1 + x) → time in range (see above).
+  - Armored Enemies: an enemy ignores its first x hits, so x ÷ (hits it
+    takes) of the flat damage on it is lost (at least 5% still lands). Hits
+    it takes = the run's shots × bounces × (1 + CL chance × chains) ÷
+    enemies, × the run-ending enemies' health against the average enemy's
+    (bosses ×20, tanks ×5 …, weighted by how often each ends runs), × how
+    much faster the tower hits now. More hits a second make it matter less.
+  - More Enemies, Orb / Death Ray Resistance, Tank's and Basic's Ultimate:
+    a "crowd" — how many enemies' worth single-target fire (tower shots,
+    Chain Lightning, Smart Missiles) has to cover: + x% (More Enemies);
+    + the run's orb (Death Ray) kill share × (1 − what's left) — the enemies
+    they used to destroy keep the rest of their health; Tank's Ultimate gives
+    tanks boss immunities (+ tanks' share × what orbs and Death Ray still
+    destroy; their stop in range isn't counted); Basic's Ultimate turns basics
+    into a fast, tank, ranged, boss or protector at x% each (wiki list) —
+    their extra health over the average enemy's. Targeted fire ÷ crowd; area
+    damage isn't shared.
+  - Death Defy Down: points off the Death Defy chance (the code's reading —
+    the sheet's 30% at W1000 is the workshop's most). Energy Shields Down:
+    recharge × (1 + x), so shield saves ÷ (1 + x). Both shown as the killing
+    hits a run survives (`runSavers.savedHits`); waves don't include saves.
+  - No effect on a Glass Cannon run (said on the page): Enemy Attack Speed,
+    Thorns, Ranged's Ultimate (a hit ends the run or uses a save), Fast's
+    Ultimate (the model times every enemy at Fast speed), Protector's
+    Ultimate (Black Hole isn't in flat damage); Plasma Cannon and Knockback
+    aren't modeled.
+  - The league's fixed Skip Reduction and Skip Decay are in every
+    tournament, so they don't move this week's end — but they shrink what a
+    skip upgrade adds, which the Optimizer, What If and the module search
+    count whenever a tournament run is the Battle Report
+    (`GoalModels.conditions`, from the profile's league).
 
 ## 4. Enemy Level Skip (deterministic)
 

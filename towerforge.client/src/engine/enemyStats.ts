@@ -165,7 +165,7 @@ const SPEED_RATIO: Record<EnemyType, number> = {
 };
 
 // ── Type rules (relative to the wave's basic enemy) ────────────
-const HEALTH_MULT: Record<EnemyType, number> = {
+export const HEALTH_MULT: Record<EnemyType, number> = {
     Basic: 1, Fast: 1, Tank: 5, Ranged: 1, Boss: 20, Protector: 0.6,
     Vampire: 2, Scatter: 2, Ray: 1, Saboteur: 20, Commander: 20, Overcharge: 20,
 };

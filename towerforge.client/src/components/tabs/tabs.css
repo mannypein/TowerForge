@@ -3105,6 +3105,112 @@
     padding: 1px 5px;
 }
 
+/* Tournament: the build used for tournaments, and each run's conditions. */
+.tn-build {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    align-items: flex-end;
+}
+
+    .tn-build .en-note {
+        flex-basis: 100%;
+        margin-top: 0;
+    }
+
+.tn-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--text-dim);
+    min-width: 0;
+}
+
+.tn-log {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.tn-log-row {
+    padding: 8px 10px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+}
+
+    .tn-log-row.last {
+        border-color: var(--accent);
+    }
+
+.tn-log-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 10px;
+}
+
+    .tn-log-head .en-sub {
+        flex: 1;
+        min-width: 0;
+    }
+
+.tn-log-wave {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    color: var(--text-bright);
+}
+
+.tn-log-edit {
+    font-size: 11px;
+    padding: 2px 8px;
+}
+
+.tn-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 6px;
+}
+
+.tn-chip {
+    font-size: 11px;
+    color: var(--gold);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 1px 8px;
+    white-space: nowrap;
+}
+
+.tn-log-edit-box {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+}
+
+    .tn-log-edit-box .tn-field {
+        flex-direction: row;
+        align-items: center;
+        gap: 8px;
+    }
+
+.tn-log-checks {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr));
+    gap: 4px 12px;
+    font-size: 12px;
+    color: var(--text);
+}
+
+    .tn-log-checks .tn-check {
+        white-space: normal;
+    }
+
 /* "Get from emulator": TowerForge Link setup dialog. */
 .lnk-overlay {
     position: fixed;

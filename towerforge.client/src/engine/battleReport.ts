@@ -176,7 +176,8 @@ export function runDrops(run: BattleReport): [string, number][] {
     ];
 }
 
-const runKey = (b: BattleReport) =>
+// A run's identity across imports (also keys the tournament log).
+export const runKey = (b: BattleReport) =>
     [b.tier, b.wave, Math.round(b.gameTimeSec), Math.round(b.realTimeSec), b.tournament ? 1 : 0].join('|');
 
 export function mergeBattles(stored: BattleReport[], incoming: BattleReport[]): BattleReport[] {

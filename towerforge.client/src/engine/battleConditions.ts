@@ -8,9 +8,18 @@
 //     Swamp and Black Hole, through the same bonus their duration
 //     substats add to
 //   • Boss's Ultimate +x%            → boss health, where bosses end runs
+//   • Enemy Speed +x%                → enemy speed, so less time in range
+//   • Armored Enemies x hits         → that share of the hits an enemy
+//     takes on its way in does nothing (armorKeep)
+//   • More Enemies, Orb / Death Ray Resistance, Tank's and Basic's
+//     Ultimate → more enemies (or more health) for single-target fire to
+//     cover (crowdFactor), from the run's own kills and enemy mix
+//   • Death Defy Down, Energy Shields Down → run savers (runSavers.ts)
 //   • Skip Reduction - Multiply ×x   → Enemy Health Level Skip chance
 //   • Skip Decay 1% every N waves    → the skip chance, averaged over the run
-//  The last two are fixed for the league and in every tournament.
+//  The last two are fixed for the league and in every tournament. The
+//  rest that a Glass Cannon run doesn't feel (or the model doesn't have)
+//  say why in tournamentData.ts.
 //  Battle-condition labs weaken them: BC Reduction 2% a level for all,
 //  each condition's own lab 1% a level, added (TheTowerSDK
 //  getTotalBcModifierFraction).
@@ -20,12 +29,22 @@
 import type { LabData, ModBonuses, UWAbbr } from '../types/gameTypes';
 import { HEAT_CONDITIONS, HEAT_WAVES } from '../constants/tournamentData';
 import type { HeatCondition, HeatKey, HeatRamp, LeagueHeat } from '../constants/tournamentData';
+import type { BattleReport } from './battleReport';
 
 export interface TourneyConditions {
     uwDurationSec?: number;     // seconds off CF, GT, PS and BH
     bossHealthPct?: number;     // bosses spawn with this % more health
     skipMultiply?: number;      // skip chance × this
     skipDecayFactor?: number;   // skip chance × this, Skip Decay averaged over the run
+    enemySpeedPct?: number;     // Enemy Speed: enemies move this % faster
+    armoredHits?: number;       // Armored Enemies: each enemy blocks its first N hits
+    moreEnemiesPct?: number;    // More Enemies: this % more spawn
+    orbLeftPct?: number;        // Orb Resistance: orbs take this % of health instead of destroying
+    deathRayLeftPct?: number;   // Death Ray Resistance: the same for Death Ray
+    tankUltimate?: boolean;     // Tank's Ultimate: tanks act like bosses (orb and Death Ray immune)
+    basicUltimatePct?: number;  // Basic's Ultimate: basics spawn as each other type at this %
+    deathDefyDownPct?: number;  // Death Defy Down: points off the Death Defy chance
+    shieldsDownPct?: number;    // Energy Shields Down: recharge this % longer
 }
 
 const DURATION_UWS: UWAbbr[] = ['CF', 'GT', 'PS', 'BH'];
@@ -71,27 +90,117 @@ export function leagueConditions(heat: LeagueHeat, wave: number, labs: LabData):
     return out;
 }
 
-// The counted random conditions in `active`, at their strength at `wave`.
+// A condition's strength at a wave after the labs. A resistance's value is
+// what's left of the damage, so the labs weaken what it takes away.
+export function heatAfterLabs(c: HeatCondition, ramp: HeatRamp, wave: number, labs: LabData): number {
+    const raw = heatValue(c, ramp, wave);
+    const cut = bcLabCut(labs, c.lab);
+    return c.resistance ? 100 - (100 - raw) * (1 - cut) : raw * (1 - cut);
+}
+
+// The random conditions in `active` the model reads, at their strength at `wave`.
 export function heatConditions(
     heat: LeagueHeat, active: Partial<Record<HeatKey, boolean>>, wave: number, labs: LabData,
 ): TourneyConditions {
     const out: TourneyConditions = {};
     if (!heat.ramp) return out;
-    const at = (key: HeatKey) => {
-        const c = HEAT_CONDITIONS.find(x => x.key === key)!;
-        return heatValue(c, heat.ramp!, wave) * (1 - bcLabCut(labs, c.lab));
-    };
+    const at = (key: HeatKey) => heatAfterLabs(HEAT_CONDITIONS.find(x => x.key === key)!, heat.ramp!, wave, labs);
     if (active.uwDurations) out.uwDurationSec = at('uwDurations');
     if (active.bossUltimate) out.bossHealthPct = at('bossUltimate');
+    if (active.enemySpeed) out.enemySpeedPct = at('enemySpeed');
+    if (active.armored) out.armoredHits = at('armored');
+    if (active.moreEnemies) out.moreEnemiesPct = at('moreEnemies');
+    if (active.orb) out.orbLeftPct = at('orb');
+    if (active.deathRay) out.deathRayLeftPct = at('deathRay');
+    if (active.tankUltimate) out.tankUltimate = true;
+    if (active.basicUltimate) out.basicUltimatePct = at('basicUltimate');
+    if (active.deathDefyDown) out.deathDefyDownPct = at('deathDefyDown');
+    if (active.energyShieldsDown) out.shieldsDownPct = at('energyShieldsDown');
     return out;
 }
 
-// Module and perk bonuses with the conditions in them.
+// Module and perk bonuses with the conditions in them: shorter UW
+// durations, and Enemy Speed on the enemy speed the time in range uses.
 export function withConditions(mb: ModBonuses, c: TourneyConditions | undefined): ModBonuses {
-    if (!c?.uwDurationSec) return mb;
-    const uwBonus = { ...mb.uwBonus };
-    for (const a of DURATION_UWS) uwBonus[a] = { ...uwBonus[a], dur: (uwBonus[a]?.dur ?? 0) - c.uwDurationSec };
-    return { ...mb, uwBonus };
+    if (!c?.uwDurationSec && !c?.enemySpeedPct) return mb;
+    let out = mb;
+    if (c.uwDurationSec) {
+        const uwBonus = { ...mb.uwBonus };
+        for (const a of DURATION_UWS) uwBonus[a] = { ...uwBonus[a], dur: (uwBonus[a]?.dur ?? 0) - c.uwDurationSec };
+        out = { ...out, uwBonus };
+    }
+    if (c.enemySpeedPct) {
+        out = { ...out, perks: { ...out.perks, enemySpdMult: (out.perks.enemySpdMult ?? 1) * (1 + c.enemySpeedPct / 100) } };
+    }
+    return out;
+}
+
+// ── What a run's enemies were made of ─────────────────────────
+// From a battle report: the share of enemies orbs and Death Ray destroyed,
+// the share of basics and tanks, and the average enemy's health in basic
+// enemies (types' health multipliers, docs/run-simulation.md §2). Without
+// the counts, TheTowerSDK's measured T21 mix (basic 19.9%, fast 28.3%,
+// tank 26.7%, ranged 25.2%) stands in.
+export interface RunMix {
+    orbKills: number;
+    deathRayKills: number;
+    basic: number;
+    tank: number;
+    avgHealth: number;
+}
+
+const TYPE_HEALTH: [string, number][] = [
+    ['TotalBasic', 1], ['TotalFast', 1], ['TotalTank', 5], ['TotalRanged', 1], ['TotalBoss', 20],
+    ['TotalProtector', 0.6], ['TotalVampires', 2], ['TotalRays', 1], ['TotalScatters', 2],
+    ['TotalSaboteurs', 20], ['TotalCommanders', 20], ['TotalOvercharges', 20],
+];
+const SDK_MIX: RunMix = {
+    orbKills: 0, deathRayKills: 0, basic: 0.199, tank: 0.267,
+    avgHealth: 0.199 + 0.283 + 0.267 * 5 + 0.252,
+};
+
+export function runMix(report: BattleReport | null): RunMix {
+    const raw = (report?.raw ?? {}) as Record<string, unknown>;
+    const n = (k: string) => (typeof raw[k] === 'number' ? raw[k] as number : 0);
+    const counts = TYPE_HEALTH.map(([k, h]) => [n(k), h] as const);
+    const all = counts.reduce((s, [c]) => s + c, 0);
+    const enemies = report?.totalEnemies || all;
+    const share = (k: string) => (enemies > 0 ? Math.min(1, n(k) / enemies) : 0);
+    const base = all > 0
+        ? { basic: n('TotalBasic') / all, tank: n('TotalTank') / all, avgHealth: counts.reduce((s, [c, h]) => s + c * h, 0) / all }
+        : { basic: SDK_MIX.basic, tank: SDK_MIX.tank, avgHealth: SDK_MIX.avgHealth };
+    return { ...base, orbKills: share('DestroyedByOrbs'), deathRayKills: share('DestroyedByDeathRay') };
+}
+
+// Basic's Ultimate turns a basic into a fast, tank, ranged, boss or
+// protector at x% each (wiki): extra health per basic, in basic enemies.
+const BASIC_ULT_EXTRA = (1 - 1) + (5 - 1) + (1 - 1) + (20 - 1) + (0.6 - 1);
+
+// How many enemies' worth single-target fire (tower shots, Chain Lightning,
+// Smart Missiles) has to cover, against a run without these conditions (1):
+// More Enemies adds its %; Orb and Death Ray Resistance leave the enemies
+// they used to destroy with the rest of their health; Tank's Ultimate makes
+// tanks immune to both (boss immunities); Basic's Ultimate adds health. The
+// code's model — the enemies that end a run get less of the tower's fire
+// when there's more on the field to shoot.
+export function crowdFactor(c: TourneyConditions | undefined, mix: RunMix): number {
+    if (!c) return 1;
+    const orbLeft = c.orbLeftPct !== undefined ? c.orbLeftPct / 100 : 1;
+    const drLeft = c.deathRayLeftPct !== undefined ? c.deathRayLeftPct / 100 : 1;
+    let load = (c.moreEnemiesPct ?? 0) / 100;
+    if (c.orbLeftPct !== undefined) load += mix.orbKills * (1 - orbLeft);
+    if (c.deathRayLeftPct !== undefined) load += mix.deathRayKills * (1 - drLeft);
+    if (c.tankUltimate) load += mix.tank * (mix.orbKills * orbLeft + mix.deathRayKills * drLeft);
+    if (c.basicUltimatePct) load += (mix.basic * (c.basicUltimatePct / 100) * BASIC_ULT_EXTRA) / Math.max(1, mix.avgHealth);
+    return 1 + Math.max(0, load);
+}
+
+// Armored Enemies: each enemy ignores its first `blocked` hits, so for an
+// enemy that takes `hits` on its way in, this share of the flat damage
+// still lands (at least 5%).
+export function armorKeep(blocked: number | undefined, hits: number): number {
+    if (!blocked || blocked <= 0) return 1;
+    return Math.max(0.05, 1 - blocked / Math.max(1, hits));
 }
 
 // A snapshot scored under its conditions.

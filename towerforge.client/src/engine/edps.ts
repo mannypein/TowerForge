@@ -35,6 +35,13 @@
 //    of the score (eDPS), × the flat sources (run length). The code's
 //    assumption: its targets are about as hurt as in the run.
 //  • Orbs, thorns, Death Ray and everything else stay fixed.
+//  • Tournament battle conditions (battleConditions.ts), against the ones
+//    the run had: Enemy Speed shortens the time in range (above); More
+//    Enemies, Orb / Death Ray Resistance and Tank's / Basic's Ultimate share
+//    single-target fire (tower shots, Chain Lightning, Smart Missiles) with
+//    more enemies; Armored Enemies blocks each enemy's first hits, out of
+//    the hits an enemy took in the run (shots × bounces + Chain Lightning,
+//    per enemy) — more hits a second make it matter less.
 //  • Smite (CL+) and Consume (BH+) add a share of each enemy's health.
 //    The run's total damage is about the total enemy health, so +x% of
 //    every enemy's health is about +x% of total damage.
@@ -62,6 +69,10 @@ import {
 } from './uwdps';
 import { calcDamageMeter, calcCoreUWDamageMult, echoingShotBullets } from './towerDamage';
 import { attackRate, damageMeterFactor } from './guardian';
+import { armorKeep, crowdFactor, runMix } from './battleConditions';
+import type { RunMix } from './battleConditions';
+import { HEALTH_MULT } from './enemyStats';
+import type { EnemyType } from './enemyStats';
 import type { BattleReport } from './battleReport';
 import { extraDamage } from './battleReport';
 import { BOTS_CONFIG } from '../constants/botData';
@@ -105,17 +116,58 @@ export interface EdpsParts {
     attack: number;    // Guardian Attack: share of lost health dealt per second
     ttt: number;       // seconds an enemy spends in range (time to tower)
     shotRate: number;  // enemy hits per second (Chain Lightning's chances to proc)
+    hitsPerShot: number;   // hits per projectile (Bounce Shot)
 }
 
 export interface EdpsCalibration {
     anchor: EdpsParts;
     // Share of the run's total damage, after taking Smite and Consume out of
     // Chain Lightning and Black Hole. `fixed` = orbs, thorns and the rest.
-    shares: Omit<EdpsParts, 'smite' | 'clChance' | 'clQty' | 'consume' | 'ttt' | 'shotRate' | 'attack'>
+    shares: Omit<EdpsParts, 'smite' | 'clChance' | 'clQty' | 'consume' | 'ttt' | 'shotRate' | 'attack' | 'hitsPerShot'>
         & { guardian: number; fixed: number };
     clReach: number;      // share of enemies Chain Lightning hits (Smite)
     smiteProcs: number;   // Smite procs per enemy reached, at the anchor (≤ 100)
     bhKills: number;      // share of kills made inside a Black Hole (Consume)
+    // Battle conditions: the run's kills and enemy mix, the hits an enemy
+    // took on its way in, and its crowd and Armored Enemies hits.
+    mix: RunMix;
+    hitsPerEnemy: number;
+    crowd: number;
+    armoredHits: number;
+}
+
+// What battle conditions do to flat damage, against the run's: the share
+// of single-target fire each enemy still gets (`targeted`) and of hits that
+// get past armor (`flat`). 1 and 1 when nothing changed.
+export interface ConditionRatios {
+    targeted: number;
+    flat: number;
+}
+const SAME: ConditionRatios = { targeted: 1, flat: 1 };
+
+// Hits an enemy takes on its way in, in model units (shots a second × time
+// in range × Chain Lightning's extra hits).
+const hitWeight = (p: EdpsParts) => p.shotRate * p.ttt * (1 + p.clChance * p.clQty);
+
+// The enemies that end runs take more hits than the average one, in
+// proportion to their health (bosses ×20, tanks ×5 …): their health
+// against the run's average enemy, weighted by how often each ends runs.
+export function killerHits(killers: Partial<Record<EnemyType, number>> | undefined, mix: RunMix): number {
+    const entries = Object.entries(killers ?? {}) as [EnemyType, number][];
+    const total = entries.reduce((s, [, share]) => s + share, 0);
+    if (total <= 0 || mix.avgHealth <= 0) return 1;
+    return entries.reduce((s, [type, share]) => s + share * (HEALTH_MULT[type] ?? 1), 0) / total / mix.avgHealth;
+}
+
+export function conditionRatios(snap: OptimizerSnapshot, calib: EdpsCalibration, x: EdpsParts): ConditionRatios {
+    const c = snap.conditions;
+    if (!c && calib.crowd === 1 && !calib.armoredHits) return SAME;
+    const crowd = crowdFactor(c, calib.mix);
+    const a = calib.anchor;
+    const toKill = killerHits(snap.killers, calib.mix);
+    const hits = calib.hitsPerEnemy * toKill * (hitWeight(a) > 0 ? hitWeight(x) / hitWeight(a) : 1) * (calib.crowd / crowd);
+    const keep0 = armorKeep(calib.armoredHits, calib.hitsPerEnemy * toKill);
+    return { targeted: calib.crowd / crowd, flat: armorKeep(c?.armoredHits, hits) / keep0 };
 }
 
 const SMITE_CAP = 100;
@@ -171,6 +223,7 @@ export function edpsParts(snap: OptimizerSnapshot, ttt?: number): EdpsParts {
         attack: attackRate(snap.guardian, presetIdx),
         ttt: refTTT,
         shotRate: ctx.hitRate,
+        hitsPerShot: ctx.projectiles.bounce,
     };
 }
 
@@ -190,6 +243,15 @@ export function buildEdpsCalibration(snap: OptimizerSnapshot, report: BattleRepo
     // Without Chain Lightning there's nothing to smite (and ∞ × 0 would be NaN).
     const smiteProcs0 = anchor.clChance > 0 ? Math.min(SMITE_CAP, hitsPerEnemy * anchor.clChance) : 0;
 
+    // Hits an enemy took on its way in (Armored Enemies): shots × bounces,
+    // plus Chain Lightning's, per enemy; the model's own count without them.
+    const enemies = report?.totalEnemies ?? 0;
+    const perEnemy = shots > 0 && enemies > 0
+        ? (shots * anchor.hitsPerShot * (1 + anchor.clChance * anchor.clQty)) / enemies
+        : hitWeight(anchor);
+    const mix = runMix(report);
+    const crowd = crowdFactor(snap.conditions, mix);
+
     const smite0 = Math.min(1, anchor.smite * smiteProcs0) * clReach;
     const consume0 = anchor.consume * bhKills;
     const shares = {
@@ -207,7 +269,10 @@ export function buildEdpsCalibration(snap: OptimizerSnapshot, report: BattleRepo
     const counted = shares.cl + shares.sm + shares.dw + shares.ilm + shares.ps + shares.bh + shares.tower + shares.flame
         + shares.guardian + smite0 + consume0;
     shares.fixed = Math.max(0, 1 - counted);
-    return { anchor, shares, clReach, smiteProcs: smiteProcs0, bhKills };
+    return {
+        anchor, shares, clReach, smiteProcs: smiteProcs0, bhKills,
+        mix, hitsPerEnemy: perEnemy, crowd, armoredHits: snap.conditions?.armoredHits ?? 0,
+    };
 }
 
 // Relative eDPS: 1 at the calibration anchor.
@@ -218,14 +283,15 @@ export function edpsScore(snap: OptimizerSnapshot, calib: EdpsCalibration, ttt?:
     const r = (now: number, then: number) => (then > 0 ? now / then : 1);
     const bhRatio = r(x.bh, a.bh);
     const t = timeRatio(x, a);
-    const rest = s.cl * r(x.cl, a.cl) * t
-        + s.sm * r(x.sm, a.sm)
+    const k = conditionRatios(snap, calib, x);
+    const rest = (s.cl * r(x.cl, a.cl) * t * k.targeted
+        + s.sm * r(x.sm, a.sm) * k.targeted
         + s.dw * r(x.dw, a.dw)
         + s.ilm * r(x.ilm, a.ilm)
         + s.ps * r(x.ps, a.ps)
+        + s.tower * r(x.tower, a.tower) * t * k.targeted
+        + s.flame * r(x.flame, a.flame)) * k.flat
         + s.bh * bhRatio
-        + s.tower * r(x.tower, a.tower) * t
-        + s.flame * r(x.flame, a.flame)
         + s.fixed
         + Math.min(1, x.smite * smiteProcs(x, a, calib.smiteProcs)) * calib.clReach
         + x.consume * clamp01(calib.bhKills * bhRatio);
@@ -254,17 +320,20 @@ export function edpsSurvivalScore(snap: OptimizerSnapshot, calib: EdpsCalibratio
     const s = calib.shares;
     const flat = s.cl + s.sm + s.dw + s.ilm + s.ps + s.tower + s.flame;
     if (flat <= 0) return 1;
-    const f = flatDamageRatio(x, a, s);
+    const f = flatDamageRatio(x, a, s, conditionRatios(snap, calib, x));
     return (flat * f + s.guardian * attackRatio(x, a, f)) / (flat + s.guardian);
 }
 
 // The flat sources' damage now ÷ at the anchor (Guardian Attack's targets'
 // lost health; What If splits waves by it too).
-export function flatDamageRatio(x: EdpsParts, a: EdpsParts, s: EdpsCalibration['shares']): number {
+export function flatDamageRatio(
+    x: EdpsParts, a: EdpsParts, s: EdpsCalibration['shares'], k: ConditionRatios = SAME,
+): number {
     const flat = s.cl + s.sm + s.dw + s.ilm + s.ps + s.tower + s.flame;
     if (flat <= 0) return 1;
     const r = (now: number, then: number) => (then > 0 ? now / then : 1);
     const t = timeRatio(x, a);
-    return (s.cl * r(x.cl, a.cl) * t + s.sm * r(x.sm, a.sm) + s.dw * r(x.dw, a.dw) + s.ilm * r(x.ilm, a.ilm)
-        + s.ps * r(x.ps, a.ps) + s.tower * r(x.tower, a.tower) * t + s.flame * r(x.flame, a.flame)) / flat;
+    return ((s.cl * r(x.cl, a.cl) * t + s.sm * r(x.sm, a.sm) + s.tower * r(x.tower, a.tower) * t) * k.targeted
+        + s.dw * r(x.dw, a.dw) + s.ilm * r(x.ilm, a.ilm) + s.ps * r(x.ps, a.ps) + s.flame * r(x.flame, a.flame))
+        * k.flat / flat;
 }

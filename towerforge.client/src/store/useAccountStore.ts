@@ -22,7 +22,7 @@ import { clearShareClaims, getShareClaims } from '../engine/shareApi';
 const SYNCED_SLICES = [
     'profile', 'perkData', 'tierWaves', 'wsData', 'enhData', 'labData',
     'cardData', 'uwData', 'relicData', 'botData', 'botLoadouts', 'moduleState', 'battleReportText',
-    'currencies', 'importedBattles', 'battleReportChoice',
+    'currencies', 'importedBattles', 'battleReportChoice', 'guardianData', 'tourneyLog',
 ] as const;
 
 const LINKED_USER_KEY = 'tc_account_user';   // account this device's stats belong to

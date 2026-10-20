@@ -371,7 +371,17 @@ export interface AppState {
     cloudSaveData: CloudSaveData | null;  // cloud save if pulled, null otherwise
     guardianData: GuardianData;
     labsRunning: LabRunning[];    // labs being researched at the last import (29.1.3+ exports)
+    tourneyLog: TourneyLog;       // each tournament run's battle conditions, as the player ticked them
 }
+
+// A tournament run's league and battle conditions (HeatKey names from
+// constants/tournamentData), as the player ticked them — the game's
+// export doesn't record them. Keyed by the run (battleReport runKey).
+export interface TourneyLogEntry {
+    league: League;
+    conditions: string[];
+}
+export type TourneyLog = Record<string, TourneyLogEntry>;
 
 // A lab being researched when the game exported (LabActiveBool / LabResearchInt,
 // ResearchCompleteDate; the speed-up as of the export).

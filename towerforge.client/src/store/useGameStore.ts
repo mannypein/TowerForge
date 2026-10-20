@@ -33,7 +33,7 @@ import type {
     SlotLevels,
     AssistEntry,
     TabName,
-    CloudSaveData, GuardianData, LabRunning,
+    CloudSaveData, GuardianData, LabRunning, TourneyLog, TourneyLogEntry,
 } from '../types/gameTypes';
 import { mergeBattles } from '../engine/battleReport';
 import type { BattleReport } from '../engine/battleReport';
@@ -74,6 +74,7 @@ const KEYS = {
     cloudSaveData: 'tc_cloud_save',
     guardian: 'tc_guardian',
     labsRunning: 'tc_labs_running',
+    tourneyLog: 'tc_tourney_log',
 } as const;
 
 // ── Default State ─────────────────────────────────────────────
@@ -267,6 +268,7 @@ interface GameStore extends AppState {
 
     // ── Guardian ─────────────────────────────────────────────────
     setGuardianData: (patch: Partial<GuardianData>) => void;
+    setTourneyLogEntry: (runKey: string, entry: TourneyLogEntry | null) => void;
 
     // ── Modules ──────────────────────────────────────────────────
     setModuleState: (patch: Partial<ModuleState>) => void;
@@ -334,6 +336,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     cloudSaveData: null,
     guardianData: defaultGuardianData(),
     labsRunning: [],
+    tourneyLog: {},
 
     // ── UI Actions ────────────────────────────────────────────────
     setActiveTab: (tab) => set({ activeTab: tab }),
@@ -363,12 +366,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
         const cloudSaveData = loadKey<CloudSaveData | null>(KEYS.cloudSaveData, null);
         const guardianData = { ...defaultGuardianData(), ...loadKey<Partial<GuardianData>>(KEYS.guardian, {}) };
         const labsRunning = loadKey<LabRunning[]>(KEYS.labsRunning, []);
+        const tourneyLog = loadKey<TourneyLog>(KEYS.tourneyLog, {});
 
         set({
             profile, tierWaves, wsData, enhData,
             labData, cardData, uwData, relicData,
             perkData, botData, botLoadouts, moduleState, battleReportText, currencies, importedBattles, battleReportChoice, cloudSaveData,
-            guardianData, labsRunning,
+            guardianData, labsRunning, tourneyLog,
         });
     },
 
@@ -737,6 +741,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
     },
 
     // ── Modules ───────────────────────────────────────────────────
+    setTourneyLogEntry: (runKey, entry) => {
+        const tourneyLog = { ...get().tourneyLog };
+        if (entry) tourneyLog[runKey] = entry;
+        else delete tourneyLog[runKey];
+        set({ tourneyLog });
+        saveKey(KEYS.tourneyLog, tourneyLog);
+    },
+
     setGuardianData: (patch) => {
         const guardianData = { ...get().guardianData, ...patch };
         set({ guardianData });
@@ -808,6 +820,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             cloudSaveData: null,
             guardianData: defaultGuardianData(),
             labsRunning: [],
+            tourneyLog: {},
         });
     },
 
@@ -833,6 +846,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             importedBattles: s.importedBattles,
             battleReportChoice: s.battleReportChoice,
             guardianData: s.guardianData,
+            tourneyLog: s.tourneyLog,
         };
         return JSON.stringify(payload, null, 2);
     },
@@ -860,6 +874,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
                 importedBattles: data.importedBattles ?? [],
                 battleReportChoice: data.battleReportChoice ?? -1,
                 guardianData: { ...defaultGuardianData(), ...(data.guardianData ?? {}) },
+                tourneyLog: data.tourneyLog ?? {},
             });
             // Persist everything
             Object.entries(KEYS).forEach(([, storageKey]) => {
@@ -881,6 +896,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
                     tc_battle_choice: data.battleReportChoice,
                     tc_modules: moduleState,
                     tc_guardian: data.guardianData,
+                    tc_tourney_log: data.tourneyLog,
                 };
                 if (keyMap[storageKey] != null) saveKey(storageKey, keyMap[storageKey]);
             });

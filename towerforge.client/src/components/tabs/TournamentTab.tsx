@@ -1,29 +1,36 @@
 // ============================================================
 //  TowerForge Companion — Tournament Tab
-//  How your tournament runs end; a run simulated under this week's battle
-//  conditions, each as strong as the game makes it at the wave the run ends
-//  (heat, engine/battleConditions.ts); and which of your modules to run for
-//  the most tournament waves (engine/loadoutOptimizer.ts) — all measured
-//  against your own tournament deaths on the tournament curve.
+//  How your tournament runs end and what each had (you tick a run's
+//  battle conditions once; the game's export doesn't record them); a run
+//  simulated under this week's conditions, each as strong as the game
+//  makes it at the wave the run ends (heat, engine/battleConditions.ts),
+//  with what every condition does to it; and which of your modules to run
+//  for the most tournament waves (engine/loadoutOptimizer.ts) — all with
+//  the build you use for tournaments, measured against your own
+//  tournament deaths on the tournament curve (engine/tournamentModel.ts).
 // ============================================================
 
 import { useMemo, useState } from 'react';
 import { useGameStore } from '../../store/useGameStore';
-import type { BuildType, League, LoadoutSlots, ModuleType } from '../../types/gameTypes';
-import { applyGoal, runModels, snapshotFromState } from '../../engine/accountModels';
+import type { BuildType, League, LoadoutSlots, ModuleType, TourneyLogEntry } from '../../types/gameTypes';
 import type { AccountState } from '../../engine/accountModels';
 import { bestLoadout, loadoutScore } from '../../engine/loadoutOptimizer';
 import type { LoadoutResult } from '../../engine/loadoutOptimizer';
-import { goalScore, skipChanceOf } from '../../engine/optimizer';
-import type { OptimizerSnapshot } from '../../engine/optimizer';
-import { killedBy, killerMix, runWavesChange, wavesSpread } from '../../engine/runLength';
-import { runSavers } from '../../engine/battleReport';
-import { bcLabCut, heatConditions, heatValue, leagueConditions } from '../../engine/battleConditions';
-import type { TourneyConditions } from '../../engine/battleConditions';
+import { killedBy, killerMix, wavesSpread } from '../../engine/runLength';
+import { runKey, runSavers } from '../../engine/battleReport';
+import type { BattleReport } from '../../engine/battleReport';
+import { bcLabCut, heatAfterLabs, heatValue, leagueConditions } from '../../engine/battleConditions';
+import { buildTournamentModel, heatOf, newestTournament } from '../../engine/tournamentModel';
+import { deathDefyChance, saverAverages, savedHits } from '../../engine/runSavers';
 import { activeLoadout } from '../../engine/statHelpers';
+import { presetLabel } from '../../constants/gameData';
 import { RARITIES } from '../../constants/moduleRarities';
-import { LEAGUE_HEAT, LEGEND_OVERHEAT, RANDOM_CONDITIONS, SAVER_CONDITIONS } from '../../constants/tournamentData';
-import type { HeatCondition, HeatKey, LeagueHeat } from '../../constants/tournamentData';
+import {
+    HEAT_CONDITIONS, LEAGUE_HEAT, LEGEND_OVERHEAT, RANDOM_CONDITIONS, SAVER_CONDITIONS,
+} from '../../constants/tournamentData';
+import type { HeatCondition, HeatKey } from '../../constants/tournamentData';
+import { keysOf, loadTourneySim, saveTourneySim, ticksOf } from '../common/tourneySim';
+import type { Ticks, TourneySim } from '../common/tourneySim';
 
 const TYPES: ModuleType[] = ['cannon', 'armor', 'generator', 'core'];
 const cap = (w: string) => w.charAt(0).toUpperCase() + w.slice(1);
@@ -36,116 +43,82 @@ const gainText = (pct: number) => (pct >= 100
     ? `×${(1 + pct / 100).toLocaleString(undefined, { maximumFractionDigits: pct >= 1000 ? 0 : 2 })}`
     : `+${pct.toFixed(pct >= 10 ? 1 : 2)}%`);
 const round1 = (v: number) => Math.round(v * 10) / 10;
-
-// The league and conditions picked on this page — a per-viewer
-// convenience, so it lives in this browser only.
-type Ticks = Partial<Record<HeatKey, boolean>>;
-interface SimState {
-    league: League;
-    week: Ticks;      // in this week's tournament
-    recent: Ticks;    // in the tournaments your deaths come from
-}
-const SIM_KEY = 'tc_tourney_sim';
-const EMPTY_SIM: SimState = { league: '', week: {}, recent: {} };
-function loadSim(): SimState {
-    try {
-        const raw = localStorage.getItem(SIM_KEY);
-        const s = raw ? JSON.parse(raw) : null;
-        return s ? { league: s.league ?? '', week: s.week ?? {}, recent: s.recent ?? {} } : EMPTY_SIM;
-    } catch {
-        return EMPTY_SIM;
-    }
-}
-function saveSim(s: SimState) {
-    try { localStorage.setItem(SIM_KEY, JSON.stringify(s)); } catch { /* private window: not remembered */ }
-}
-
-const COUNTED = RANDOM_CONDITIONS.filter(c => c.counted);
-
-interface Scored { score: number; skip: number }
+const conditionByKey = (k: string) => HEAT_CONDITIONS.find(c => c.key === k);
+const EFFECT_TAG: Record<HeatCondition['effect'], string | null> = { waves: null, savers: 'run savers', none: 'no effect on Glass Cannon' };
 
 export default function TournamentTab() {
     const state = useGameStore();
     const setModuleState = useGameStore(s => s.setModuleState);
+    const setTourneyLogEntry = useGameStore(s => s.setTourneyLogEntry);
     const build = (state.profile.build || 'Glass Cannon') as BuildType;
     const isGC = build === 'Glass Cannon';
 
-    // The newest tournament run calibrates: its damage mix, run rates and the
-    // tournament deaths behind it.
-    const tourneyIdx = useMemo(() => {
-        const idx = state.importedBattles.map((b, i) => ({ b, i })).filter(({ b }) => b.tournament)
-            .sort((a, b) => (b.b.time ?? b.i) - (a.b.time ?? a.i))[0]?.i;
-        return idx ?? -1;
-    }, [state.importedBattles]);
-
-    const account: AccountState | null = useMemo(() => (tourneyIdx < 0 ? null : {
-        activePreset: state.activePreset, profile: state.profile, perkData: state.perkData, wsData: state.wsData,
-        enhData: state.enhData, labData: state.labData, cardData: state.cardData, uwData: state.uwData,
-        relicData: state.relicData, botData: state.botData, moduleState: state.moduleState,
-        battleReportText: '', importedBattles: state.importedBattles, battleReportChoice: tourneyIdx,
-        guardianData: state.guardianData,
-    }), [tourneyIdx, state.activePreset, state.profile, state.perkData, state.wsData, state.enhData, state.labData,
-        state.cardData, state.uwData, state.relicData, state.botData, state.moduleState, state.importedBattles,
-        state.guardianData]);
-
-    const models = useMemo(() => (account ? runModels(account) : null), [account]);
-    const run = models?.run ?? null;
-
-    const [sim, setSimState] = useState<SimState>(loadSim);
+    const [sim, setSimState] = useState<TourneySim>(loadTourneySim);
     const [result, setResult] = useState<{ res: LoadoutResult; own: Record<string, number>; waves: number | null; weekWaves: number | null } | null>(null);
     const [busy, setBusy] = useState(false);
     const [saved, setSaved] = useState(false);
-    const setSim = (patch: Partial<SimState>) => {
+    const [editing, setEditing] = useState<string | null>(null);
+    const setSim = (patch: Partial<TourneySim>) => {
         const next = { ...sim, ...patch };
         setSimState(next);
-        saveSim(next);
+        saveTourneySim(next);
         setResult(null);
     };
     const league = sim.league || state.profile.currentLeague || state.profile.league || '';
-    const heat: LeagueHeat | undefined = LEAGUE_HEAT.find(l => l.league === league);
+    const heat = heatOf(league);
 
-    // The account scored under the conditions of the runs its deaths come
-    // from (the calibration), and a way to read any other set against it.
-    const model = useMemo(() => {
-        if (!account || !models) return null;
-        const snap = snapshotFromState(account);
-        const report = account.importedBattles[tourneyIdx];
-        if (!isGC || !run) {
-            applyGoal(snap, 'survival', build, report, models);
-            return {
-                weekSnap: snap, wavesOf: null, week: 0, weekWave: 0, each: [] as { key: HeatKey; waves: number }[],
-                weekAt: (): TourneyConditions => snap.conditions ?? {},
-            };
-        }
-        const labs = account.labData;
-        // The league's fixed conditions are in every tournament, at the wave
-        // runs usually end; the random ones at the wave the run ends.
-        const fixed = heat ? leagueConditions(heat, run.typicalWave, labs) : {};
-        const at = (set: Ticks, wave: number): TourneyConditions =>
-            (heat ? { ...fixed, ...heatConditions(heat, set, wave, labs) } : {});
-        snap.conditions = at(sim.recent, run.typicalWave);
-        applyGoal(snap, 'waves', build, report, models);
-        const ref: Scored = { score: goalScore(snap), skip: skipChanceOf(snap) };
-        const scoreOf = (s: OptimizerSnapshot): Scored => ({ score: goalScore(s), skip: skipChanceOf(s) });
-        const wavesOf = (s: Scored) => runWavesChange(
-            run, Math.log(s.score / ref.score) - models.worth * (s.skip - ref.skip), s.skip - ref.skip);
-        // Conditions are read where the run ends, which they move: settle it.
-        const settle = (set: Ticks) => {
-            let w = 0;
-            for (let i = 0; i < 3; i++) w = wavesOf(scoreOf({ ...snap, conditions: at(set, run.typicalWave + w) }));
-            return w;
-        };
-        const week = settle(sim.week);
+    // The newest tournament run calibrates; its ticked conditions are the
+    // ones your deaths came with.
+    const calibIdx = useMemo(() => newestTournament(state), [state]);
+    const calibRun = calibIdx >= 0 ? state.importedBattles[calibIdx] : null;
+    const lastKey = calibRun ? runKey(calibRun) : '';
+    const lastEntry = lastKey ? state.tourneyLog[lastKey] : undefined;
+    const last: Ticks = useMemo(() => (lastEntry ? ticksOf(lastEntry.conditions) : sim.recent),
+        [lastEntry, sim.recent]);
+    const lastLeague = (lastEntry?.league || league) as League;
+
+    const account: AccountState = useMemo(() => ({
+        activePreset: state.activePreset, profile: state.profile, perkData: state.perkData, wsData: state.wsData,
+        enhData: state.enhData, labData: state.labData, cardData: state.cardData, uwData: state.uwData,
+        relicData: state.relicData, botData: state.botData, moduleState: state.moduleState,
+        battleReportText: '', importedBattles: state.importedBattles, battleReportChoice: calibIdx,
+        guardianData: state.guardianData,
+    }), [calibIdx, state.activePreset, state.profile, state.perkData, state.wsData, state.enhData, state.labData,
+        state.cardData, state.uwData, state.relicData, state.botData, state.moduleState, state.importedBattles,
+        state.guardianData]);
+
+    const model = useMemo(() => buildTournamentModel(account, {
+        league, week: sim.week, last, lastLeague, preset: sim.preset, loadout: sim.loadout,
+    }, build), [account, league, sim.week, last, lastLeague, sim.preset, sim.loadout, build]);
+    const run = model?.run ?? null;
+
+    // This week against the last tournament, and each condition on its own.
+    const view = useMemo(() => {
+        if (!model?.settle || !run) return null;
+        const zero = model.settle(last, heatOf(lastLeague));
+        const week = model.settle(sim.week) - zero;
         const weekWave = run.typicalWave + week;
-        const each = COUNTED.filter(c => sim.week[c.key] || sim.recent[c.key])
-            .map(c => ({ key: c.key, waves: settle({ ...sim.recent, [c.key]: sim.week[c.key] }) }));
-        return {
-            weekSnap: { ...snap, conditions: at(sim.week, weekWave) }, wavesOf, week, weekWave, each,
-            weekAt: (wave: number) => at(sim.week, wave),
-        };
-    }, [account, models, run, tourneyIdx, isGC, build, sim, heat]);
+        const keys = [...RANDOM_CONDITIONS, ...SAVER_CONDITIONS]
+            .filter(c => c.effect === 'waves' && (sim.week[c.key] || last[c.key]) && !(sim.week[c.key] && last[c.key]));
+        const lastHere = model.settle(last);   // in this week's league
+        const each = keys.map(c => ({ key: c.key, waves: model.settle!({ ...last, [c.key]: !!sim.week[c.key] }) - lastHere }));
+        return { week, weekWave, each };
+    }, [model, run, last, lastLeague, sim.week]);
 
-    if (!account || !models || !model) {
+    // Run savers this week against the last tournament's.
+    const savers = useMemo(() => {
+        if (!model || !run || !view) return null;
+        const avg = saverAverages(run.used.map(d => d.run));
+        const p = deathDefyChance(model.snap);
+        const week = model.at(sim.week, view.weekWave);
+        return {
+            last: savedHits(p, avg, model.baseline, model.baseline),
+            week: savedHits(p, avg, week, model.baseline),
+            dd: [p - (model.baseline.deathDefyDownPct ?? 0) / 100, p - (week.deathDefyDownPct ?? 0) / 100],
+        };
+    }, [model, run, view, sim.week]);
+
+    if (!model) {
         return (
             <div className="relics-note">
                 <strong>Tournament</strong> needs tournament runs in your battle history — play one, then use
@@ -157,28 +130,50 @@ export default function TournamentTab() {
     const tourneyRuns = state.importedBattles.filter(b => b.tournament)
         .sort((a, b) => (b.time ?? 0) - (a.time ?? 0)).slice(0, 10);
     const spread = run ? wavesSpread(run, 0, 0, 0).ended : [];
-    const anyWeek = RANDOM_CONDITIONS.some(c => sim.week[c.key]);
+    const anyWeek = keysOf(sim.week).length > 0;
     const endW = run?.typicalWave ?? 0;
     const labs = state.labData;
-
-    // A condition's strength at a wave, after your labs (resistances shown as the game lists them).
-    const strength = (c: HeatCondition, wave: number) => {
-        if (!heat?.ramp) return null;
-        const raw = heatValue(c, heat.ramp, wave);
-        const cut = c.resistance ? 0 : bcLabCut(labs, c.lab);
-        return { raw, after: round1(raw * (1 - cut)), cut };
-    };
     const fixed = heat && run ? leagueConditions(heat, endW, labs) : null;
+    const conditionList = [...RANDOM_CONDITIONS, ...(heat?.saverDown ? SAVER_CONDITIONS : [])];
+    const presets = Array.from({ length: state.profile.presets || 2 }, (_, i) => i);
+    const buildPreset = model.account.activePreset;
+    const buildLoadout = activeLoadout(model.account.moduleState);
+
+    // A condition's strength at a wave, after your labs.
+    const strength = (c: HeatCondition, wave: number, h = heat) => {
+        if (!h?.ramp) return null;
+        return { raw: heatValue(c, h.ramp, wave), after: round1(heatAfterLabs(c, h.ramp, wave, labs)), cut: bcLabCut(labs, c.lab) };
+    };
+
+    // A run's log entry, written as you tick (the run keeps its league).
+    function setRunConditions(b: BattleReport, key: HeatKey, on: boolean) {
+        const k = runKey(b);
+        const entry = state.tourneyLog[k];
+        const now = new Set(entry?.conditions ?? (k === lastKey ? keysOf(last) : []));
+        if (on) now.add(key); else now.delete(key);
+        // The saver condition is one of the two each week.
+        if (on && key === 'deathDefyDown') now.delete('energyShieldsDown');
+        if (on && key === 'energyShieldsDown') now.delete('deathDefyDown');
+        setTourneyLogEntry(k, { league: (entry?.league || league) as League, conditions: [...now] });
+        setResult(null);
+    }
+    function setRunLeague(b: BattleReport, l: League) {
+        const k = runKey(b);
+        const entry: TourneyLogEntry = state.tourneyLog[k] ?? { league: l, conditions: k === lastKey ? keysOf(last) : [] };
+        setTourneyLogEntry(k, { ...entry, league: l });
+    }
 
     function findBest() {
+        if (!model) return;
         setBusy(true);
         setSaved(false);
         setTimeout(() => {
             try {
-                const snap = model!.weekSnap;
+                const wave = view?.weekWave ?? endW;
+                const snap = { ...model.snap, conditions: model.wavesOf ? model.at(sim.week, wave) : model.snap.conditions };
                 const res = bestLoadout(snap);
                 const start = activeLoadout(snap.moduleState)?.slots;
-                const wavesOf = model!.wavesOf;
+                const wavesOf = model.wavesOf;
                 const at = (slots: LoadoutSlots) => loadoutScore(snap, slots);
                 const now = start ? at(start) : null;
                 const own: Record<string, number> = {};
@@ -192,7 +187,7 @@ export default function TournamentTab() {
                     // A loadout that goes much further meets stronger conditions there.
                     let w = wavesOf(at(res.slots));
                     for (let i = 0; i < 3; i++) {
-                        w = wavesOf(loadoutScore({ ...snap, conditions: model!.weekAt(endW + w) }, res.slots));
+                        w = wavesOf(loadoutScore({ ...snap, conditions: model.at(sim.week, endW + w) }, res.slots));
                     }
                     weekWaves = w;
                     waves = weekWaves - wavesOf(now);
@@ -217,14 +212,44 @@ export default function TournamentTab() {
         return `${m.name} (${RARITIES.find(r => r.k === m.rarity)?.label ?? m.rarity})`;
     };
     const endWave = (change: number) => `W${Math.round(endW + change).toLocaleString()}`;
-    const ticked = (c: HeatCondition) => !!(sim.week[c.key] || sim.recent[c.key]);
+
+    // How your tournaments went with each condition: average end with it and without.
+    const logged = tourneyRuns.map(b => ({ b, entry: state.tourneyLog[runKey(b)] })).filter(x => x.entry);
+    const byCondition = HEAT_CONDITIONS.map(c => {
+        const withIt = logged.filter(x => x.entry!.conditions.includes(c.key)).map(x => x.b.wave);
+        const without = logged.filter(x => !x.entry!.conditions.includes(c.key)).map(x => x.b.wave);
+        const avg = (v: number[]) => (v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length) : null);
+        return { c, with: avg(withIt), withN: withIt.length, without: avg(without), withoutN: without.length };
+    }).filter(r => r.withN > 0);
 
     return (
         <div>
             <div className="relics-note">
                 <strong>Tournaments.</strong> Tournament enemies get tougher much faster than on a campaign tier, so
-                everything here is measured against your own tournament deaths, on the tournament enemy curve. To try
-                any other change, pick a tournament run as the Optimizer&apos;s Battle Report and use What If.
+                everything here is measured against your own tournament deaths, on the tournament enemy curve, with the
+                build you use for tournaments. What If (Tournament) tries any other change against the same runs.
+            </div>
+
+            <div className="section" style={{ marginBottom: '12px' }}>
+                <div className="section-head"><h3>Your tournament build</h3></div>
+                <div className="section-body tn-build">
+                    <label className="tn-field">
+                        Preset (workshop, cards, bots, Guardian)
+                        <select value={buildPreset} onChange={e => setSim({ preset: Number(e.target.value) })}>
+                            {presets.map(i => <option key={i} value={i}>{presetLabel(state.profile.presetNames, i)}</option>)}
+                        </select>
+                    </label>
+                    <label className="tn-field">
+                        Modules
+                        <select value={buildLoadout?.id ?? ''} onChange={e => setSim({ loadout: e.target.value })}>
+                            {state.moduleState.loadouts.map(l => <option key={l.id} value={l.id}>{l.name || 'Preset'}</option>)}
+                        </select>
+                    </label>
+                    <p className="en-note">
+                        The build your tournament runs were played with — the model is calibrated on it. Only used here
+                        and in What If; your equipped preset and modules don&apos;t change.
+                    </p>
+                </div>
             </div>
 
             <div className="section" style={{ marginBottom: '12px' }}>
@@ -241,32 +266,84 @@ export default function TournamentTab() {
                             Your tournament runs don&apos;t have the level-skip counts waves need — import again to add them.
                         </p>
                     )}
-                    <div className="en-table-wrap" style={{ marginTop: '10px' }}>
-                        <table className="en-table rc-table">
-                            <thead><tr><th>Run</th><th>Ended by</th></tr></thead>
-                            <tbody>
-                                {tourneyRuns.map((b, i) => {
-                                    const k = killedBy(b);
-                                    const s = runSavers(b);
-                                    const saves = ([['Death Defy', s.deathDefy], ['Energy Shield', s.energyShield], ['Second Wind', s.secondWind]] as [string, number | null][])
-                                        .filter(([, v]) => (v ?? 0) > 0).map(([n, v]) => `${n} ${v}`).join(' · ');
-                                    return (
-                                        <tr key={i}>
-                                            <td>W{b.wave.toLocaleString()}<span className="en-sub">{b.date}</span></td>
-                                            <td>
-                                                {k === undefined ? <span className="en-dim">—</span> : k ?? 'You (quit)'}
-                                                {saves && <span className="en-sub">Saved by {saves}</span>}
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
+                    <p className="en-note">
+                        Tick each run&apos;s battle conditions once (the game shows them before you start; its data
+                        file doesn&apos;t keep them) — they&apos;re saved with your stats. The newest run&apos;s are
+                        the ones the model starts from.
+                    </p>
+                    <div className="tn-log">
+                        {tourneyRuns.map(b => {
+                            const k = runKey(b);
+                            const entry = state.tourneyLog[k] ?? (k === lastKey && keysOf(last).length ? { league, conditions: keysOf(last) } : undefined);
+                            const killer = killedBy(b);
+                            const s = runSavers(b);
+                            const saves = ([['Death Defy', s.deathDefy], ['Energy Shield', s.energyShield], ['Second Wind', s.secondWind]] as [string, number | null][])
+                                .filter(([, v]) => (v ?? 0) > 0).map(([n, v]) => `${n} ${v}`).join(' · ');
+                            const open = editing === k;
+                            const runHeat = heatOf(entry?.league || league);
+                            return (
+                                <div key={k} className={`tn-log-row ${k === lastKey ? 'last' : ''}`}>
+                                    <div className="tn-log-head">
+                                        <span className="tn-log-wave">W{b.wave.toLocaleString()}</span>
+                                        <span className="en-sub">
+                                            {b.date}{entry?.league ? ` · ${entry.league}` : ''}
+                                            {' · '}{killer === undefined ? 'ended by —' : killer ? `ended by ${killer}` : 'you quit'}
+                                            {saves && ` · saved by ${saves}`}
+                                        </span>
+                                        <button className="btn btn-dim tn-log-edit" onClick={() => setEditing(open ? null : k)}>
+                                            {open ? 'Done' : entry ? 'Edit' : 'Tick conditions'}
+                                        </button>
+                                    </div>
+                                    <div className="tn-chips">
+                                        {entry && entry.conditions.length > 0 ? entry.conditions.map(key => {
+                                            const c = conditionByKey(key);
+                                            if (!c) return null;
+                                            const v = strength(c, b.wave, runHeat);
+                                            return <span key={key} className="tn-chip">{c.name}{v ? ` ${c.fmt(v.after)}` : ''}</span>;
+                                        }) : <span className="en-sub">{entry ? 'No random conditions' : 'Conditions not ticked yet'}</span>}
+                                    </div>
+                                    {open && (
+                                        <div className="tn-log-edit-box">
+                                            <label className="tn-field">
+                                                League
+                                                <select value={entry?.league || league}
+                                                    onChange={e => setRunLeague(b, e.target.value as League)}>
+                                                    {LEAGUE_HEAT.map(l => <option key={l.league} value={l.league}>{l.league}</option>)}
+                                                </select>
+                                            </label>
+                                            <div className="tn-log-checks">
+                                                {[...RANDOM_CONDITIONS, ...SAVER_CONDITIONS].map(c => (
+                                                    <label key={c.key} className="tn-check">
+                                                        <input type="checkbox" checked={!!entry?.conditions.includes(c.key)}
+                                                            onChange={e => setRunConditions(b, c.key, e.target.checked)} />
+                                                        {c.name}
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
+                    {byCondition.length > 0 && (
+                        <div className="wi-chain">
+                            <div className="wi-chain-head">How your ticked tournaments went</div>
+                            {byCondition.map(r => (
+                                <div key={r.c.key} className="wi-chain-row">
+                                    <span className="wi-v">{r.c.name}</span>
+                                    <span className="wi-share">
+                                        with it W{r.with?.toLocaleString()} ({r.withN} run{r.withN === 1 ? '' : 's'})
+                                        {r.without !== null && ` · without W${r.without.toLocaleString()} (${r.withoutN})`}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </div>
 
-            {isGC && run && model.wavesOf && (
+            {isGC && run && view && model.wavesOf && (
                 <div className="section" style={{ marginBottom: '12px' }}>
                     <div className="section-head"><h3>This week&apos;s battle conditions</h3></div>
                     <div className="section-body">
@@ -279,6 +356,7 @@ export default function TournamentTab() {
                             {heat && (
                                 <span className="en-sub">
                                     Tier {heat.tierPlus}+ enemies · {heat.randomConditions} random condition{heat.randomConditions === 1 ? '' : 's'} a week
+                                    {heat.saverDown && ', plus Death Defy Down or Energy Shields Down'}
                                 </span>
                             )}
                         </div>
@@ -302,14 +380,6 @@ export default function TournamentTab() {
                                             <span className="wi-share">1% every {heat.skipDecayEvery} waves (×{fixed.skipDecayFactor.toFixed(2)} on average to W{endW})</span>
                                         </div>
                                     )}
-                                    {heat.saverDown && (
-                                        <div className="wi-chain-row">
-                                            <span className="wi-v">Death Defy Down or Energy Shields Down</span>
-                                            <span className="wi-share">
-                                                {SAVER_CONDITIONS.map(c => c.fmt(strength(c, endW)?.after ?? 0)).join(' / ')} at W{endW}
-                                            </span>
-                                        </div>
-                                    )}
                                     {heat.league === 'Legend' && LEGEND_OVERHEAT.map(o => (
                                         <div key={o.text} className="wi-chain-row">
                                             <span className="wi-v">{o.text}</span><span className="wi-share">from W{o.from.toLocaleString()}</span>
@@ -319,21 +389,24 @@ export default function TournamentTab() {
                                 <p className="en-note">
                                     Your deaths already have these, so they don&apos;t move this week&apos;s end — but they make
                                     each point of Enemy Health Level Skip worth less in a tournament, which the Optimizer, What If
-                                    and the module search below count when a tournament run is the Battle Report.
+                                    and the module search below count.
                                 </p>
 
                                 {heat.randomConditions > 0 && (
                                     <>
                                         <div className="wi-chain-head" style={{ marginTop: '12px' }}>Random conditions</div>
                                         <p className="en-note" style={{ marginTop: 0 }}>
-                                            Tick the ones this week&apos;s tournament has — the game shows them before you start.
-                                            They get stronger as the run goes on (full strength at W1000); the strength shown is at
-                                            the wave your runs end. Tick &quot;Recent runs&quot; for any your last tournaments had too —
-                                            those are already in your deaths.
+                                            Tick this week&apos;s — the game shows them before you start. They get stronger as the
+                                            run goes on (full strength at W1000); the strength shown is at the wave your runs end,
+                                            after your battle-condition labs. &quot;Last tournament&quot; is your newest tournament
+                                            run{calibRun && ` (W${calibRun.wave.toLocaleString()}, ${calibRun.date})`} — the
+                                            conditions your deaths came with.
                                         </p>
                                         <div className="tn-bc">
-                                            {RANDOM_CONDITIONS.map(c => {
+                                            {conditionList.map(c => {
                                                 const s = strength(c, endW);
+                                                const tag = EFFECT_TAG[c.effect];
+                                                const ticked = !!(sim.week[c.key] || last[c.key]);
                                                 return (
                                                     <div key={c.key} className="tn-bc-row">
                                                         <div className="tn-bc-name">
@@ -342,20 +415,27 @@ export default function TournamentTab() {
                                                                 {c.text} · at W{endW}: <span className="tn-heat">{s ? c.fmt(s.after) : '—'}</span>
                                                                 {s && s.cut > 0 && ` (${c.fmt(s.raw)} before your labs)`}
                                                             </span>
-                                                            {!c.counted && ticked(c) && <span className="en-sub tn-why">Not counted: {c.why}</span>}
+                                                            {ticked && (c.how || c.why) && <span className="en-sub tn-why">{c.how ?? c.why}</span>}
                                                         </div>
                                                         <div className="tn-bc-inputs">
                                                             <label className="tn-check">
                                                                 <input type="checkbox" checked={!!sim.week[c.key]}
-                                                                    onChange={e => setSim({ week: { ...sim.week, [c.key]: e.target.checked } })} />
+                                                                    onChange={e => {
+                                                                        const week = { ...sim.week, [c.key]: e.target.checked };
+                                                                        if (e.target.checked && c.key === 'deathDefyDown') week.energyShieldsDown = false;
+                                                                        if (e.target.checked && c.key === 'energyShieldsDown') week.deathDefyDown = false;
+                                                                        setSim({ week });
+                                                                    }} />
                                                                 This week
                                                             </label>
-                                                            <label className="tn-check">
-                                                                <input type="checkbox" checked={!!sim.recent[c.key]}
-                                                                    onChange={e => setSim({ recent: { ...sim.recent, [c.key]: e.target.checked } })} />
-                                                                Recent runs
-                                                            </label>
-                                                            {!c.counted && <span className="tn-tag">not counted</span>}
+                                                            {calibRun && (
+                                                                <label className="tn-check">
+                                                                    <input type="checkbox" checked={!!last[c.key]}
+                                                                        onChange={e => setRunConditions(calibRun, c.key, e.target.checked)} />
+                                                                    Last tournament
+                                                                </label>
+                                                            )}
+                                                            {tag && <span className="tn-tag">{tag}</span>}
                                                         </div>
                                                     </div>
                                                 );
@@ -364,35 +444,41 @@ export default function TournamentTab() {
 
                                         <div className="rc-result" style={{ marginTop: '12px' }}>
                                             <div><span>Your tournaments end</span><strong>W{endW.toLocaleString()}</strong></div>
-                                            <div><span>This week</span><strong>{endWave(model.week)}</strong></div>
-                                            <div><span>Change</span><strong>{wavesText(model.week)}</strong></div>
+                                            <div><span>This week</span><strong>{endWave(view.week)}</strong></div>
+                                            <div><span>Change</span><strong>{wavesText(view.week)}</strong></div>
                                         </div>
-                                        {model.each.length > 0 && (
+                                        {(view.each.length > 0 || (savers && savers.week !== savers.last)) && (
                                             <div className="wi-chain">
-                                                {model.each.map(e => {
-                                                    const c = COUNTED.find(x => x.key === e.key)!;
-                                                    const both = sim.week[e.key] && sim.recent[e.key];
-                                                    const s = strength(c, model.weekWave);
+                                                {view.each.map(e => {
+                                                    const c = conditionByKey(e.key)!;
+                                                    const s = strength(c, view.weekWave);
                                                     return (
                                                         <div key={e.key} className="wi-chain-row">
                                                             <span className="wi-v">
-                                                                {c.name}{sim.week[e.key] ? (s ? ` (${c.fmt(s.after)} at W${Math.round(model.weekWave)})` : '') : ' (gone this week)'}
+                                                                {c.name}{sim.week[e.key] ? (s ? ` (${c.fmt(s.after)} at W${Math.round(view.weekWave)})` : '') : ' (gone this week)'}
                                                             </span>
                                                             <span className="wi-share">
-                                                                {both ? 'already in your runs'
-                                                                    : e.key === 'bossUltimate' && !killerMix(run).Boss ? 'bosses haven’t ended your recent runs'
-                                                                        : wavesText(e.waves)}
+                                                                {e.key === 'bossUltimate' && !killerMix(run).Boss ? 'bosses haven’t ended your recent runs'
+                                                                    : wavesText(e.waves)}
                                                             </span>
                                                         </div>
                                                     );
                                                 })}
+                                                {savers && Math.abs(savers.week - savers.last) > 1e-9 && (
+                                                    <div className="wi-chain-row">
+                                                        <span className="wi-v">
+                                                            Killing hits a run survives (Death Defy {(Math.max(0, savers.dd[0]) * 100).toFixed(1)}% → {(Math.max(0, savers.dd[1]) * 100).toFixed(1)}%)
+                                                        </span>
+                                                        <span className="wi-share">{savers.last.toFixed(2)} → {savers.week.toFixed(2)}</span>
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
                                         <p className="en-note">
-                                            Counted: Ultimate Weapon Durations (how long Chrono Field and Poison Swamp last, at the
-                                            seconds it takes off where the run ends) and Boss&apos;s Ultimate (boss health, as often as
-                                            bosses end your runs). Your battle-condition labs weaken both. The others are shown with
-                                            their strength but don&apos;t change the waves yet — tick one to see why.
+                                            Each condition moves the run by what it does at the wave the run ends, against your last
+                                            tournament&apos;s — tick one to see how it&apos;s counted. Conditions in both don&apos;t
+                                            move it (your deaths already have them). Run savers aren&apos;t in waves yet, so Death Defy
+                                            Down and Energy Shields Down show the killing hits a run survives.
                                         </p>
                                     </>
                                 )}
@@ -410,7 +496,8 @@ export default function TournamentTab() {
                     <p className="en-note" style={{ marginTop: 0 }}>
                         Tries every module you own in each main and assist slot — main effect at the slot&apos;s level,
                         substats at its efficiency, the unique effects the model reads — and keeps the swaps that add
-                        the most, round after round, so modules that work together are found together.
+                        the most, round after round, so modules that work together are found together. Starts from your
+                        tournament build&apos;s modules ({buildLoadout?.name || 'Preset'}).
                         {isGC && heat && ' Scored under your league’s conditions'}
                         {isGC && heat && (anyWeek ? ' and this week’s, so a module that answers one (Chrono Field duration against shorter UWs, say) counts for it.' : '.')}
                     </p>
@@ -420,7 +507,7 @@ export default function TournamentTab() {
 
                     {result && (
                         result.res.changes.length === 0 ? (
-                            <p className="en-note">Your current loadout is already the best of your modules for this.</p>
+                            <p className="en-note">Your tournament modules are already the best of your modules for this.</p>
                         ) : (
                             <>
                                 <div className="rc-result" style={{ marginTop: '12px' }}>
@@ -460,7 +547,7 @@ export default function TournamentTab() {
                                 </button>
                                 <p className="en-note">
                                     Swaps work on each other, so the waves on their own don&apos;t add up to the total.
-                                    {!anyWeek && ' Without this week’s conditions, this is the best loadout for the conditions your recent tournaments had.'}
+                                    {!anyWeek && ' Without this week’s conditions, this is the best loadout for the conditions your last tournament had.'}
                                 </p>
                             </>
                         )

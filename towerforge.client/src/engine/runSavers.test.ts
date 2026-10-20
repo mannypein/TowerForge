@@ -59,7 +59,7 @@ describe('Death Defy', () => {
             runOf({ DeathDefy: 2, HitsAbsorbedByEnergyShield: 1, SecondWindCount: 1 }),
             runOf({ DeathDefy: 0, HitsAbsorbedByEnergyShield: 1, SecondWindCount: 1 }),
         ];
-        expect(saverAverages(runs)).toEqual({ runs: 2, deathDefy: 1, others: 2 });
+        expect(saverAverages(runs)).toEqual({ runs: 2, deathDefy: 1, others: 2, energyShield: 1 });
         expect(saverAverages([runOf({})])).toBeNull();
     });
 });
