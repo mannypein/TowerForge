@@ -20,7 +20,7 @@ import { killedBy, killerMix, wavesSpread } from '../../engine/runLength';
 import { runKey, runSavers } from '../../engine/battleReport';
 import type { BattleReport } from '../../engine/battleReport';
 import { bcLabCut, heatAfterLabs, heatValue, leagueConditions } from '../../engine/battleConditions';
-import { buildTournamentModel, heatOf, newestTournament } from '../../engine/tournamentModel';
+import { buildTournamentModel, heatOf, newestTournament, settleGain } from '../../engine/tournamentModel';
 import { deathDefyChance, saverAverages, savedHits } from '../../engine/runSavers';
 import { activeLoadout } from '../../engine/statHelpers';
 import { presetLabel } from '../../constants/gameData';
@@ -185,11 +185,7 @@ export default function TournamentTab() {
                         own[`${c.type}-${c.position}`] = wavesOf(at(one)) - wavesOf(now);
                     }
                     // A loadout that goes much further meets stronger conditions there.
-                    let w = wavesOf(at(res.slots));
-                    for (let i = 0; i < 3; i++) {
-                        w = wavesOf(loadoutScore({ ...snap, conditions: model.at(sim.week, endW + w) }, res.slots));
-                    }
-                    weekWaves = w;
+                    weekWaves = settleGain(w => wavesOf(loadoutScore({ ...snap, conditions: model.at(sim.week, endW + w) }, res.slots)));
                     waves = weekWaves - wavesOf(now);
                 }
                 setResult({ res, own, waves, weekWaves });

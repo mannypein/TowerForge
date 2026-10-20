@@ -4,18 +4,35 @@
 //  enhancement, module slot or bot level — and see what they do to all
 //  damage, waves reached, coins per hour, coins per run and survival,
 //  and what they cost (engine/whatIf.ts). Nothing is saved.
+//  Two modes: campaign runs (the Optimizer's Battle Report), or a
+//  tournament — the build used for tournaments, against the tournament
+//  deaths, under this week's battle conditions (engine/tournamentModel.ts;
+//  settings shared with the Tournament page).
 // ============================================================
 
 import { useMemo, useState } from 'react';
 import { useGameStore } from '../../store/useGameStore';
-import type { BuildType, OptCurrency } from '../../types/gameTypes';
+import type { BuildType, League, OptCurrency } from '../../types/gameTypes';
 import { chosenReport, runModels, snapshotFromState } from '../../engine/accountModels';
 import type { AccountState } from '../../engine/accountModels';
 import { changeCost, upgradeTargets, whatIf } from '../../engine/whatIf';
 import type { ChainLink, Change, Costs } from '../../engine/whatIf';
 import { formatGameNumber } from '../../engine/gameNumbers';
 import { formatLabTime } from '../../engine/upgradeCosts';
-import { MEDAL_SYMBOL } from '../../constants/gameData';
+import { MEDAL_SYMBOL, presetLabel } from '../../constants/gameData';
+import { HEAT_CONDITIONS, LEAGUE_HEAT } from '../../constants/tournamentData';
+import { buildTournamentModel, heatOf, newestTournament } from '../../engine/tournamentModel';
+import { runKey } from '../../engine/battleReport';
+import { activeLoadout } from '../../engine/statHelpers';
+import type { GoalModels } from '../../engine/accountModels';
+import { keysOf, loadTourneySim, saveTourneySim, ticksOf } from '../common/tourneySim';
+import type { TourneySim } from '../common/tourneySim';
+
+type Mode = 'campaign' | 'tournament';
+const MODE_KEY = 'tc_whatif_mode';
+const loadMode = (): Mode => {
+    try { return localStorage.getItem(MODE_KEY) === 'tournament' ? 'tournament' : 'campaign'; } catch { return 'campaign'; }
+};
 
 const pct = (v: number) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(2)}%`;
 
@@ -72,6 +89,8 @@ export default function WhatIfTab() {
     const importedBattles = useGameStore(s => s.importedBattles);
     const battleReportChoice = useGameStore(s => s.battleReportChoice);
     const guardianData = useGameStore(s => s.guardianData);
+    const tourneyLog = useGameStore(s => s.tourneyLog);
+    const setActiveTab = useGameStore(s => s.setActiveTab);
 
     const account: AccountState = useMemo(() => ({
         activePreset, profile, perkData, wsData, enhData, labData, cardData, uwData, relicData, botData,
@@ -80,9 +99,50 @@ export default function WhatIfTab() {
         moduleState, battleReportText, importedBattles, battleReportChoice, guardianData]);
 
     const build = (profile.build || 'Glass Cannon') as BuildType;
-    const base = useMemo(() => snapshotFromState(account), [account]);
+
+    // Campaign runs, or a tournament with the tournament build and this
+    // week's conditions (settings shared with the Tournament page).
+    const [mode, setModeState] = useState<Mode>(loadMode);
+    const [sim, setSimState] = useState<TourneySim>(loadTourneySim);
+    const setMode = (m: Mode) => {
+        setModeState(m);
+        setSimState(loadTourneySim());   // pick up changes made on the Tournament page
+        try { localStorage.setItem(MODE_KEY, m); } catch { /* not remembered */ }
+    };
+    const setSim = (patch: Partial<TourneySim>) => {
+        const next = { ...sim, ...patch };
+        setSimState(next);
+        saveTourneySim(next);
+    };
+    const tIdx = useMemo(() => newestTournament(account), [account]);
+    const tRun = tIdx >= 0 ? importedBattles[tIdx] : null;
+    const tEntry = tRun ? tourneyLog[runKey(tRun)] : undefined;
+    const tLeague = (sim.league || profile.currentLeague || profile.league || '') as League;
+    const tLast = useMemo(() => (tEntry ? ticksOf(tEntry.conditions) : sim.recent), [tEntry, sim.recent]);
+    const tModel = useMemo(() => (mode === 'tournament'
+        ? buildTournamentModel(account, {
+            league: tLeague, week: sim.week, last: tLast, lastLeague: (tEntry?.league || tLeague) as League,
+            preset: sim.preset, loadout: sim.loadout,
+        }, build)
+        : null), [mode, account, tLeague, sim.week, tLast, tEntry, sim.preset, sim.loadout, build]);
+
+    const setup = useMemo(() => {
+        if (mode === 'tournament' && tModel) {
+            let tm: GoalModels = tModel.models;
+            if (tModel.settle && tModel.run) {
+                const week = tModel.settle(sim.week) - tModel.settle(tLast, heatOf(tEntry?.league || tLeague));
+                const startWave = Math.round(tModel.run.typicalWave + week);
+                tm = {
+                    ...tModel.models, calibConditions: tModel.baseline, conditions: tModel.at(sim.week, startWave),
+                    startWave, conditionsAt: (w: number) => tModel.at(sim.week, w),
+                };
+            }
+            return { base: snapshotFromState(tModel.account), models: tm, report: tModel.account.importedBattles[tModel.calibIdx] };
+        }
+        return { base: snapshotFromState(account), models: runModels(account), report: chosenReport(account) };
+    }, [mode, tModel, account, sim.week, tLast, tEntry, tLeague]);
+    const { base, models } = setup;
     const targets = useMemo(() => upgradeTargets(base), [base]);
-    const models = useMemo(() => runModels(account), [account]);
     const groups = useMemo(() => [...new Set(targets.map(t => t.group))], [targets]);
 
     const [group, setGroup] = useState<string>('');
@@ -97,8 +157,8 @@ export default function WhatIfTab() {
     const validLevel = target && level !== '' && Number.isInteger(wanted) && wanted >= 0 && wanted <= target.max;
 
     const result = useMemo(
-        () => (changes.length ? whatIf(base, changes, targets, build, chosenReport(account), models) : null),
-        [base, changes, targets, build, account, models],
+        () => (changes.length ? whatIf(base, changes, targets, build, setup.report, models) : null),
+        [base, changes, targets, build, setup, models],
     );
 
     const own = (c: Change) => result?.perChange.find(x => x.kind === c.kind && x.key === c.key)?.waves;
@@ -111,15 +171,64 @@ export default function WhatIfTab() {
     }
 
     const gc = build === 'Glass Cannon';
+    const tourney = mode === 'tournament';
+    const weekNames = keysOf(sim.week).map(k => HEAT_CONDITIONS.find(c => c.key === k)?.name).filter(Boolean);
 
     return (
         <div>
             <div className="relics-note">
                 <strong>What if I…?</strong> Pick any upgrade and a level, add as many as you like, and see what
                 they do to your damage, how far your runs get, your coins and your survival — and what they
-                cost. Scores are calibrated on your chosen Battle Report (Optimizer page); waves and coins per run
-                come from Run Length and Coins per Run. Nothing here changes your saved account.
+                cost. Campaign: calibrated on your chosen Battle Report (Optimizer page), waves and coins per run
+                from Run Length and Coins per Run. Tournament: your tournament build against your tournament
+                deaths, under this week&apos;s battle conditions. Nothing here changes your saved account.
             </div>
+
+            <div className="preset-tabs wi-mode">
+                <button className={`preset-btn ${!tourney ? 'active' : ''}`} onClick={() => setMode('campaign')}>Campaign runs</button>
+                <button className={`preset-btn ${tourney ? 'active' : ''}`} onClick={() => setMode('tournament')}>Tournament</button>
+            </div>
+
+            {tourney && (tModel ? (
+                <div className="section" style={{ marginBottom: '12px' }}>
+                    <div className="section-head"><h3>Tournament</h3></div>
+                    <div className="section-body tn-build">
+                        <label className="tn-field">
+                            League
+                            <select value={tLeague} onChange={e => setSim({ league: e.target.value as League })}>
+                                <option value="">—</option>
+                                {LEAGUE_HEAT.map(l => <option key={l.league} value={l.league}>{l.league}</option>)}
+                            </select>
+                        </label>
+                        <label className="tn-field">
+                            Preset
+                            <select value={tModel.account.activePreset} onChange={e => setSim({ preset: Number(e.target.value) })}>
+                                {Array.from({ length: profile.presets || 2 }, (_, i) => (
+                                    <option key={i} value={i}>{presetLabel(profile.presetNames, i)}</option>
+                                ))}
+                            </select>
+                        </label>
+                        <label className="tn-field">
+                            Modules
+                            <select value={activeLoadout(tModel.account.moduleState)?.id ?? ''} onChange={e => setSim({ loadout: e.target.value })}>
+                                {moduleState.loadouts.map(l => <option key={l.id} value={l.id}>{l.name || 'Preset'}</option>)}
+                            </select>
+                        </label>
+                        <p className="en-note">
+                            This week: {weekNames.length ? weekNames.join(', ') : 'no random conditions ticked'} — set them
+                            on the <a href="/tournament" onClick={e => { e.preventDefault(); setActiveTab('tournament'); }}>Tournament
+                            page</a>. Calibrated on your last tournament run{tRun && ` (W${tRun.wave.toLocaleString()}, ${tRun.date})`}
+                            {tEntry ? ' under the conditions you ticked for it' : ' (tick its conditions on the Tournament page)'};
+                            each change is read at the wave its run would end, where the conditions are stronger.
+                        </p>
+                    </div>
+                </div>
+            ) : (
+                <div className="relics-note">
+                    Tournament mode needs a tournament run in your battle history — play one, then use
+                    <em> Import Game Data</em>.
+                </div>
+            ))}
 
             <div className="section" style={{ marginBottom: '12px' }}>
                 <div className="section-head"><h3>Change</h3></div>
@@ -222,7 +331,7 @@ export default function WhatIfTab() {
                                         {wavesText(result.spread.min).replace(' waves', '')} to {wavesText(result.spread.max)}
                                     </span>
                                 </>)}
-                                <span className="wi-k">Waves reached</span>
+                                <span className="wi-k">{tourney ? 'Tournament waves this week' : 'Waves reached'}</span>
                                 <span className="wi-v">
                                     {result.waves.from.toLocaleString()} → {result.waves.to.toLocaleString()}
                                     {' '}({result.waves.to >= result.waves.from ? '+' : ''}{(result.waves.to - result.waves.from).toLocaleString()})

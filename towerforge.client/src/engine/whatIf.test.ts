@@ -140,6 +140,26 @@ describe('what happens', () => {
         expect(r.costs.stones).toBeGreaterThan(0);
     });
 
+    it('in a tournament: starts where this week ends, and a run that goes further meets stronger conditions', () => {
+        const snap = account();
+        const change = [{ kind: 'uw' as const, key: 'CL|0', level: 20 }];
+        const plain = whatIf(snap, change, upgradeTargets(snap), 'Glass Cannon', runs[4], models);
+        // Armored Enemies that grow 1 hit every 10 waves past where runs end now.
+        const at = (w: number) => ({ armoredHits: Math.max(0, (w - run.typicalWave) / 10) });
+        const t = whatIf(snap, change, upgradeTargets(snap), 'Glass Cannon', runs[4], {
+            ...models, calibConditions: {}, conditions: at(run.typicalWave), startWave: run.typicalWave - 50, conditionsAt: at,
+        });
+        expect(t.waves!.from).toBe(run.typicalWave - 50);
+        const gain = (r: typeof t) => r.waves!.to - r.waves!.from;
+        expect(gain(t)).toBeGreaterThan(0);
+        expect(gain(t)).toBeLessThan(gain(plain));
+        // No conditions: the same as campaign mode.
+        const same = whatIf(snap, change, upgradeTargets(snap), 'Glass Cannon', runs[4], {
+            ...models, calibConditions: {}, conditions: {}, conditionsAt: () => ({}),
+        });
+        expect(gain(same)).toBe(gain(plain));
+    });
+
     it('follows the longer run into coins per run and per hour', () => {
         const snap = account();
         const r = whatIf(snap, [{ kind: 'uw', key: 'CL|0', level: 12 }], upgradeTargets(snap), 'Glass Cannon', runs[4], models);

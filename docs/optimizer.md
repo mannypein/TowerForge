@@ -96,6 +96,17 @@ the same wave, survival (not GC) — plus the cost in every currency.
   with its share of the run's damage; Smite procs (with CL+); level skip and
   the killers' health labs; each coin bonus's average factor
   (`farming.coinFactors`: 1 + coverage × (bonus − 1)).
+- **Tournament mode (2026-10-20):** the build used for tournaments (site
+  preset and module loadout, shared with the Tournament page) against the
+  tournament deaths, calibrated on the newest tournament run under the
+  conditions ticked for it (`GoalModels.calibConditions`) and scored under
+  this week's (`conditions`, from where this week's run ends —
+  `startWave`). A change that goes further meets stronger conditions
+  (`conditionsAt`); where it ends is settled by halving
+  (`tournamentModel.settleGain`: the gain only falls as the conditions
+  climb, so repeating the read can swing back and forth). The chain reads
+  time in range, tower and parts under those conditions and shows the hits
+  armor lets through. No coins per run for tournaments.
 
 ## Best module loadout — Tournament page (2026-10-18)
 
@@ -105,7 +116,8 @@ Cannon) or survival (other builds).
 
 - **Calibrated on tournaments:** the newest tournament run is the Battle
   Report (its damage mix and run rates), and waves come from the tournament
-  deaths on the tournament health curve (`runModels` with that run chosen).
+  deaths on the tournament health curve (`runModels` with that run chosen),
+  with the build used for tournaments (`engine/tournamentModel.ts`).
 - **Search:** every owned module of a type is tried in the main slot and,
   once the slot is unlocked, the assist slot; one slot changes at a time and
   the best swap stays; up to 4 rounds, until nothing improves (coordinate
@@ -125,10 +137,11 @@ Cannon) or survival (other builds).
 - **This week's conditions:** with conditions ticked on the page, the
   search scores under them at the heat of the wave the run ends
   (`OptimizerSnapshot.conditions`, applied in `getScore`; the calibration is
-  built under the recent runs' conditions in `applyGoal`), so a module that
-  answers one — Chrono Field duration against shorter UWs — is worth more
-  that week. A loadout that goes much further is re-read at the stronger
-  heat there. See [run-simulation.md](run-simulation.md) §3.
+  built under the last tournament's ticked conditions in `applyGoal`), so a
+  module that answers one — Chrono Field duration against shorter UWs — is
+  worth more that week. A loadout that goes much further is re-read at the
+  stronger heat there (settled by halving). See
+  [run-simulation.md](run-simulation.md) §3.
 - **Tournament Battle Report anywhere:** the league's fixed conditions
   (Skip Reduction - Multiply, Skip Decay; profile league) scale every skip point in the
   Optimizer (waves score, Enemy Health Level Skip panel), What If and the

@@ -54,6 +54,24 @@ export interface TournamentModel {
 }
 
 export interface Scored { score: number; skip: number }
+
+// Where a run settles when the waves it gains (`gainAt(w)`, read with the
+// conditions at `w` waves past where it starts) depend on how far it goes.
+// Conditions only get stronger with the wave, so the further it's read,
+// the less it gains: the answer is where gainAt(w) = w, between 0 and
+// gainAt(0). Found by halving that range (plain repeats can swing back and
+// forth when the conditions climb steeply).
+export function settleGain(gainAt: (w: number) => number, steps = 7): number {
+    const g0 = gainAt(0);
+    if (Math.abs(g0) < 0.05) return g0;
+    let lo = Math.min(0, g0);
+    let hi = Math.max(0, g0);
+    for (let i = 0; i < steps; i++) {
+        const mid = (lo + hi) / 2;
+        if (gainAt(mid) > mid) lo = mid; else hi = mid;
+    }
+    return (lo + hi) / 2;
+}
 export const scoreOf = (s: OptimizerSnapshot): Scored => ({ score: goalScore(s), skip: skipChanceOf(s) });
 
 export const heatOf = (league: League | undefined) => LEAGUE_HEAT.find(l => l.league === league);
@@ -114,10 +132,7 @@ export function buildTournamentModel(state: AccountState, setup: TournamentSetup
     const logRatio = (s: Scored) => (s.score > 0 && ref.score > 0 ? Math.log(s.score / ref.score) : 0);
     const wavesOf = (s: Scored) =>
         runWavesChange(run, logRatio(s) - models.worth * (s.skip - ref.skip), s.skip - ref.skip);
-    const settle = (set: Ticks, heatFor?: LeagueHeat) => {
-        let w = 0;
-        for (let i = 0; i < 3; i++) w = wavesOf(scoreOf({ ...snap, conditions: at(set, run.typicalWave + w, heatFor) }));
-        return w;
-    };
+    const settle = (set: Ticks, heatFor?: LeagueHeat) =>
+        settleGain(w => wavesOf(scoreOf({ ...snap, conditions: at(set, run.typicalWave + w, heatFor) })));
     return { calibIdx, account, models, run, heat, snap, baseline, at, wavesOf, settle };
 }

@@ -76,6 +76,13 @@ export interface GoalModels {
     // Tournament runs: the league's fixed battle conditions (Skip Reduction,
     // Skip Decay), which every tournament has — so a skip upgrade adds less.
     conditions?: TourneyConditions;
+    // What If's tournament mode: the conditions the calibration run had
+    // (scores are calibrated under them), the wave the run ends under
+    // `conditions`, and the conditions at any wave — they get stronger as a
+    // run goes on, so a run that goes further meets stronger ones.
+    calibConditions?: TourneyConditions;
+    startWave?: number;
+    conditionsAt?: (wave: number) => TourneyConditions;
     worth: number;                     // skipWorth (0 without Run Length)
     coinsAt?: (wave: number) => number; // coins for a run to a wave (Coins per Run)
     projectAt?: (wave: number) => RunProjection;   // coins and real time for a run to a wave
@@ -114,7 +121,7 @@ export function applyGoal(
 ): void {
     const pushWaves = pushGoalOf(build) === 'waves';
     // Calibrated under the battle conditions the run had.
-    const cal = conditioned({ ...snap, conditions: snap.conditions ?? models.conditions });
+    const cal = conditioned({ ...snap, conditions: models.calibConditions ?? snap.conditions ?? models.conditions });
     const wantsWaves = goal === 'waves' || (goal === 'blend' && pushWaves);
     const wantsEhp = goal === 'survival' || (goal === 'blend' && !pushWaves);
     snap.farm = goal === 'coins' || goal === 'blend' ? buildFarmCalibration(cal, report) : undefined;

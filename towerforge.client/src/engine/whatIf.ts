@@ -9,6 +9,11 @@
 //  Battle Report), then read on the changed copy, so "now" is always 1.
 //  Waves and coins per run go through Run Length and Coins per Run.
 //
+//  Tournament mode (GoalModels.calibConditions / conditionsAt): calibrated
+//  under the battle conditions the last tournament had, scored under this
+//  week's, each read at the wave the run ends — settled, since a change
+//  that goes further meets stronger conditions (engine/tournamentModel.ts).
+//
 //  Nothing acts alone, so the result also lists every link that moved on
 //  the way (`chain`): range, slows and Chrono Loop → time each enemy spends
 //  in range → each damage source per enemy (with its share of your damage)
@@ -31,11 +36,12 @@ import { healthSkipChance, healthSkipSources } from './levelSkip';
 import { activeChips, bountyExtra, damageMeterFactor, fetchRate, summonExtra, withChipLevel } from './guardian';
 import { calcDamageMeter, echoingShotBullets } from './towerDamage';
 import { CHIPS, statBits } from '../constants/guardianData';
-import { conditionedSkip } from './battleConditions';
+import { conditioned, conditionedSkip } from './battleConditions';
+import { settleGain } from './tournamentModel';
 import { killerMix, pathRunGains, wavesSpread } from './runLength';
 import { calcTTTDisplayStats } from './ttt';
 import { buildDamageContext } from './uwdps';
-import { attackRatio, buildEdpsCalibration, edpsParts, edpsSurvivalScore, flatDamageRatio } from './edps';
+import { attackRatio, buildEdpsCalibration, conditionRatios, edpsParts, edpsSurvivalScore, flatDamageRatio } from './edps';
 import { buildFarmCalibration, coinFactors, FARM_EFFECTS, FARM_EFFECT_LABELS } from './farming';
 import { healthLabCut } from './enemyStats';
 import { deathDefyChance, hitsSurvived, saverAverages } from './runSavers';
@@ -296,7 +302,7 @@ function goalPct(
     const b = JSON.parse(JSON.stringify(before)) as OptimizerSnapshot;
     applyGoal(b, goal, build, report, models);
     const a = { ...after, farm: b.farm, ehp: b.ehp, edps: b.edps, metric: b.metric, edpsMode: b.edpsMode,
-        blend: b.blend, skipWorth: b.skipWorth, killers: b.killers, conditions: b.conditions };
+        blend: b.blend, skipWorth: b.skipWorth, killers: b.killers, conditions: after.conditions ?? b.conditions };
     return ratioPct(goalScore(a), goalScore(b));
 }
 
@@ -316,7 +322,9 @@ function buildChain(
             : l.before !== 0 ? Math.abs(l.after / l.before - 1) > 1e-5 : l.after !== 0;
         if (moved) links.push(l);
     };
-    const tt = (s: OptimizerSnapshot) => calcTTTDisplayStats(s.presetIdx, s.wsData, s.labData, s.cardData, s.uwData, s.modBonuses);
+    // Read under the battle conditions they're scored under (tournaments).
+    const cond = (s: OptimizerSnapshot) => conditioned({ ...s, conditions: s.conditions ?? models.conditions });
+    const tt = (s: OptimizerSnapshot) => calcTTTDisplayStats(s.presetIdx, s.wsData, s.labData, s.cardData, s.uwData, cond(s).modBonuses);
     const [t0, t1] = [tt(base), tt(after)];
     add({ group: 'Enemies in range', label: 'Tower range', before: t0.range, after: t1.range, kind: 'meters' });
     add({ group: 'Enemies in range', label: 'Chrono Field uptime', before: t0.cfUptime * 100, after: t1.cfUptime * 100, kind: 'percent' });
@@ -325,7 +333,7 @@ function buildChain(
     add({ group: 'Enemies in range', label: 'Time each enemy is in range', before: t0.ttt, after: t1.ttt, kind: 'seconds' });
 
     const ctx = (s: OptimizerSnapshot) => buildDamageContext(s.presetIdx, s.wsData, s.labData, s.cardData, s.relicData,
-        s.enhData, s.modBonuses, s.moduleState, s.botData);
+        s.enhData, cond(s).modBonuses, s.moduleState, s.botData);
     const [c0, c1] = [ctx(base), ctx(after)];
     add({ group: 'Tower', label: 'Tower damage', before: 1, after: c1.towerDamage / c0.towerDamage, kind: 'times' });
     add({ group: 'Tower', label: 'Attacks per second', before: c0.attackSpeed, after: c1.attackSpeed, kind: 'perSecond' });
@@ -341,20 +349,27 @@ function buildChain(
     add({ group: 'Tower', label: 'Bullets each tower bullet counts as (Echoing Shot)', before: echoingShotBullets(base.botData), after: echoingShotBullets(after.botData), kind: 'times' });
 
     // Damage to each enemy on its way in, by source, with its share of your damage.
-    const calib = buildEdpsCalibration(base, report);
+    const calib = buildEdpsCalibration(conditioned({ ...base, conditions: models.calibConditions ?? cond(base).conditions }), report);
     if (calib) {
-        const [p0, p1] = [edpsParts(base), edpsParts(after)];
+        const [p0, p1] = [edpsParts(cond(base)), edpsParts(cond(after))];
         const time = p0.ttt > 0 ? p1.ttt / p0.ttt : 1;
         const rel = (a: number, b: number, t = 1) => (b > 0 ? (a / b) * t : 1);
+        // Battle conditions: fire shared with more enemies, hits lost to armor.
+        const killers = models.run ? killerMix(models.run) : undefined;
+        const [k0, k1] = [conditionRatios({ ...cond(base), killers }, calib, p0), conditionRatios({ ...cond(after), killers }, calib, p1)];
+        const k = { targeted: k1.targeted / k0.targeted, flat: k1.flat / k0.flat };
+        if ((cond(base).conditions?.armoredHits ?? 0) > 0) {
+            add({ group: 'Damage to each enemy', label: 'Hits that get past Armored Enemies', before: 1, after: k.flat, kind: 'times' });
+        }
         const src: [string, number, number][] = [
-            ['Chain Lightning', rel(p1.cl, p0.cl, time), calib.shares.cl],
-            ['Smart Missiles', rel(p1.sm, p0.sm), calib.shares.sm],
-            ['Death Wave', rel(p1.dw, p0.dw), calib.shares.dw],
-            ['Inner Land Mines', rel(p1.ilm, p0.ilm), calib.shares.ilm],
-            ['Poison Swamp', rel(p1.ps, p0.ps), calib.shares.ps],
-            ['Tower shots', rel(p1.tower, p0.tower, time), calib.shares.tower],
-            ['Flame Bot', rel(p1.flame, p0.flame), calib.shares.flame],
-            ['Guardian Attack', attackRatio(p1, p0, flatDamageRatio(p1, p0, calib.shares)), calib.shares.guardian],
+            ['Chain Lightning', rel(p1.cl, p0.cl, time) * k.targeted * k.flat, calib.shares.cl],
+            ['Smart Missiles', rel(p1.sm, p0.sm) * k.targeted * k.flat, calib.shares.sm],
+            ['Death Wave', rel(p1.dw, p0.dw) * k.flat, calib.shares.dw],
+            ['Inner Land Mines', rel(p1.ilm, p0.ilm) * k.flat, calib.shares.ilm],
+            ['Poison Swamp', rel(p1.ps, p0.ps) * k.flat, calib.shares.ps],
+            ['Tower shots', rel(p1.tower, p0.tower, time) * k.targeted * k.flat, calib.shares.tower],
+            ['Flame Bot', rel(p1.flame, p0.flame) * k.flat, calib.shares.flame],
+            ['Guardian Attack', attackRatio(p1, p0, flatDamageRatio(p1, p0, calib.shares, k)), calib.shares.guardian],
             ['Black Hole reach', rel(p1.bh, p0.bh), calib.shares.bh],
         ];
         // Flat sources (and Attack, which follows them) split the flat-damage
@@ -420,7 +435,7 @@ function buildChain(
 // Reduction and Skip Decay.
 const skipOf = (s: OptimizerSnapshot, models: GoalModels) => conditionedSkip(healthSkipChance(healthSkipSources(
     s.wsData[s.presetIdx], s.labData, s.enhData, s.relicData, s.modBonuses.subs ?? {},
-)), models.conditions);
+)), s.conditions ?? models.conditions);
 
 export function whatIf(
     base: OptimizerSnapshot, changes: Change[], targets: UpgradeTarget[], build: BuildType,
@@ -443,9 +458,34 @@ export function whatIf(
 
     const gc = build === 'Glass Cannon';
     const damagePct = goalPct(base, after, 'damage', build, report, models);
-    const pushPct = goalPct(base, after, 'waves', build, report, models);
     const coinsHourPct = goalPct(base, after, 'coins', build, report, models);
-    const skipPoints = skipOf(after, models) - skipOf(base, models);
+    // Push and skip; in a tournament, under the conditions where the changed
+    // run ends (a few rounds: they move the end, which moves them).
+    const settle = (s: OptimizerSnapshot) => {
+        let push = goalPct(base, s, 'waves', build, report, models);
+        let skip = skipOf(s, models) - skipOf(base, models);
+        let conditions = s.conditions;
+        if (gc && models.run && models.conditionsAt) {
+            const run = models.run;
+            const from = models.startWave ?? run.typicalWave;
+            const read = (w: number) => {
+                const at = { ...s, conditions: models.conditionsAt!(from + w) };
+                return { at, push: goalPct(base, at, 'waves', build, report, models), skip: skipOf(at, models) - skipOf(base, models) };
+            };
+            const gain = (w: number) => {
+                const r = read(w);
+                return pathRunGains(run, [r.push], undefined, [Math.max(0, r.skip)], models.worth)[0].waves;
+            };
+            const end = read(settleGain(gain));
+            ({ push, skip } = end);
+            conditions = end.at.conditions;
+        }
+        return { push, skip, conditions };
+    };
+    const settled = settle(after);
+    const { push: pushPct, skip: skipPoints } = settled;
+    // The changed run is read where it ends from here on (chain, split).
+    after.conditions = settled.conditions;
 
     let waves: WhatIfResult['waves'] = null;
     let coinsRun: WhatIfResult['coinsRun'] = null;
@@ -458,14 +498,15 @@ export function whatIf(
         const wavesFor = (gain: number, skip: number) =>
             pathRunGains(run, [gain], undefined, [Math.max(0, skip)], models.worth)[0].waves;
         const gained = wavesFor(pushPct, skipPoints);
-        const from = run.typicalWave;
+        const from = models.startWave ?? run.typicalWave;
         const to = from + Math.round(gained);
         waves = { from, to };
         for (const c of changes) {
             const one = JSON.parse(JSON.stringify(base)) as OptimizerSnapshot;
             applyChange(one, c);
             one.modBonuses = readActiveModuleBonuses(one.moduleState, one.perkData, one.labData, one.cardData, one.modBonuses.run);
-            perChange.push({ kind: c.kind, key: c.key, waves: wavesFor(goalPct(base, one, 'waves', build, report, models), skipOf(one, models) - skipOf(base, models)) });
+            const own = settle(one);
+            perChange.push({ kind: c.kind, key: c.key, waves: wavesFor(own.push, own.skip) });
         }
         const s = wavesSpread(run, pushPct, skipPoints, models.worth);
         spread = {
@@ -473,12 +514,15 @@ export function whatIf(
             endedMin: Math.min(...s.ended), endedMax: Math.max(...s.ended), runs: s.ended.length,
             tournament: run.tournament,
         };
-        const calib = buildEdpsCalibration(base, report);
+        const cond = (s: OptimizerSnapshot) => ({
+            ...conditioned({ ...s, conditions: s.conditions ?? models.conditions }), killers: killerMix(run),
+        });
+        const calib = buildEdpsCalibration(conditioned({ ...base, conditions: models.calibConditions ?? cond(base).conditions }), report);
         if (calib) {
             const killers = Object.entries(killerMix(run)) as [EnemyType, number][];
             split = {
                 waves: gained,
-                damage: edpsSurvivalScore(after, calib) / edpsSurvivalScore(base, calib),
+                damage: edpsSurvivalScore(cond(after), calib) / edpsSurvivalScore(cond(base), calib),
                 skipLog: models.worth * skipPoints,
                 killerLog: killers.reduce((sum, [type, share]) =>
                     sum + share * Math.log(healthLabCut(base.labData, type) / healthLabCut(after.labData, type)), 0),

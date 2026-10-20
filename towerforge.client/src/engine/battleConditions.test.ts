@@ -16,7 +16,7 @@ import {
 import { calcTTT } from './ttt';
 import { conditionRatios, edpsParts, killerHits } from './edps';
 import { saverAverages, savedHits } from './runSavers';
-import { buildTournamentModel } from './tournamentModel';
+import { buildTournamentModel, settleGain } from './tournamentModel';
 import { goalScore, skipChanceOf } from './optimizer';
 import type { OptimizerSnapshot } from './optimizer';
 import { applyGoal, runModels, snapshotFromState } from './accountModels';
@@ -264,6 +264,13 @@ describe('tournament runs in the Optimizer and What If', () => {
         const other = buildTournamentModel(acc, { league: 'Legend', week: {}, last: {}, preset: 1 }, 'Glass Cannon')!;
         expect(other.account.activePreset).toBe(1);
         expect(acc.activePreset).toBe(st.activePreset);
+    });
+
+    it('settles where a run ends even when conditions climb steeply', () => {
+        // Gains 100 waves read where it starts, 2 fewer for every wave further: ends at 33⅓.
+        expect(settleGain(w => 100 - 2 * w)).toBeCloseTo(100 / 3, 0);
+        expect(settleGain(w => -60 - w)).toBeCloseTo(-30, 0);
+        expect(settleGain(() => 0)).toBe(0);
     });
 
     const m = buildRunLengthModel(battles, { tournament: true })!;
