@@ -111,7 +111,11 @@ Notion renders client-side, so both were read in a browser: on a fandom tab,
   Rotation 0.10 → 0.75 rad / 2s (14 levels); research (Priesten / yournicknm /
   Tremnen) puts the "hidden slow" on approach speed at 0.025, 0.05, 0.10, …,
   0.65 by level. Not a Speed Reduction stat, so not capped, but only inside
-  an active field.
+  an active field. Their formula (wiki AdvancedAnalysis, image "CF+speed",
+  checked 2026-10-20): newEnemySpeed = enemySpeed × (1 + CF+ level × −0.05)
+  — it matches the table at levels 1–13; the table's level 0 is 2.5% (the
+  formula would give 0), and the site keeps the measured 2.5%. Test anchor in
+  calculations.test.ts (speed 10 → 3.5 at level 13).
 - **Slow Aura card** slows enemies in tower range and multiplies with Chrono
   Field (combined can pass 90%). Its mastery reduces enemy *attack* speed.
 - Labs: Damage Reduction (unlock, 10%) + Reduction % (10.5% → 25%) while the

@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { calcCannonModuleMult, calcModuleDamageMult, calcProjectileFactors, primaryMainMult } from './towerDamage';
 import { activeLoadout, enhForPreset, masteredCardMult, milestoneReached, uniqueTier } from './statHelpers';
 import { DEFAULT_RUN_RATES, runRatesFrom } from './runRates';
-import { calcCFSpeedReduction, calcCFUptime, calcEnemySpeedFactor, calcSlowAura } from './ttt';
+import { calcCFPlusHiddenSlow, calcCFSpeedReduction, calcCFUptime, calcEnemySpeedFactor, calcSlowAura } from './ttt';
 import { baseEnemyDamage, baseEnemyHealth } from './enemyStats';
 import { WS_MAX_RECOVERY } from '../constants/buildStatCurves';
 import { parseGameExport } from './gameExport';
@@ -103,6 +103,17 @@ describe('Chrono Field', () => {
         // Half uptime: half the time at 0.2 × 0.69 × (1 − 0.2), half at 0.69.
         expect(calcEnemySpeedFactor(0.8, 0.5, 0.31, 0.2)).toBeCloseTo(0.5 * 0.2 * 0.69 * 0.8 + 0.5 * 0.69, 10);
         expect(calcEnemySpeedFactor(0.8, 0, 0.31, 0.65)).toBeCloseTo(0.69, 10);   // Chrono Loop needs the field
+    });
+
+    it('slows by Chrono Loop’s hidden slow: 5% per CF+ level, 2.5% at the unlock', () => {
+        // Wiki (AdvancedAnalysis, "CF+speed" by priesten / yournicknm):
+        // newEnemySpeed = enemySpeed × (1 − 0.05 × CF+ level) for levels 1–13;
+        // their measured table has 2.5% at level 0, where the formula gives 0.
+        expect(calcCFPlusHiddenSlow(cf([1, 1, 1], 0))).toBeCloseTo(0.025, 10);
+        for (let lv = 1; lv <= 13; lv++) expect(calcCFPlusHiddenSlow(cf([1, 1, 1], lv))).toBeCloseTo(0.05 * lv, 10);
+        expect(calcCFPlusHiddenSlow(cf([1, 1, 1]))).toBe(0);                       // CF+ not unlocked
+        // Their example: speed 10 at level 13 → 3.5 (185.7% more time to close in).
+        expect(10 * calcEnemySpeedFactor(0, 1, 0, calcCFPlusHiddenSlow(cf([1, 1, 1], 13)))).toBeCloseTo(3.5, 10);
     });
 
     it('counts Slow Aura only when equipped, without its attack-speed mastery', () => {
