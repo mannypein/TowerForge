@@ -27,7 +27,14 @@
 //    stat − 1 s per Flame Bot Cooldown lab level), so per enemy pass it
 //    scales with ×Damage × tower damage × crits × time in range ÷ cooldown.
 //    Burn stacks and Wild Fire (Bot+) aren't modeled. Flat damage.
-//  • Orbs, thorns, Death Ray, the Guardian and everything else stay fixed.
+//  • Guardian Attack (the run's GuardianDamage — the Attack chip is the
+//    Guardian's only damage): every cooldown it hits Targets of the most
+//    hurt enemies for Percentage of the health they've lost (wiki). So it
+//    scales with Percentage × Targets ÷ Cooldown, and with the health its
+//    targets have lost, which the rest of the damage takes off: × the rest
+//    of the score (eDPS), × the flat sources (run length). The code's
+//    assumption: its targets are about as hurt as in the run.
+//  • Orbs, thorns, Death Ray and everything else stay fixed.
 //  • Smite (CL+) and Consume (BH+) add a share of each enemy's health.
 //    The run's total damage is about the total enemy health, so +x% of
 //    every enemy's health is about +x% of total damage.
@@ -54,7 +61,7 @@ import {
     calcBlackHoleReach, calcConsumeFraction, calcSmitePerProc, calcCLChanceQty,
 } from './uwdps';
 import { calcDamageMeter, calcCoreUWDamageMult, echoingShotBullets } from './towerDamage';
-import { damageMeterFactor } from './guardian';
+import { attackRate, damageMeterFactor } from './guardian';
 import type { BattleReport } from './battleReport';
 import { extraDamage } from './battleReport';
 import { BOTS_CONFIG } from '../constants/botData';
@@ -95,6 +102,7 @@ export interface EdpsParts {
     clQty: number;     // Chain Lightning chains per proc
     consume: number;   // share of enemy health Consume deals per hole
     flame: number;     // Flame Bot burn per enemy pass
+    attack: number;    // Guardian Attack: share of lost health dealt per second
     ttt: number;       // seconds an enemy spends in range (time to tower)
     shotRate: number;  // enemy hits per second (Chain Lightning's chances to proc)
 }
@@ -103,7 +111,8 @@ export interface EdpsCalibration {
     anchor: EdpsParts;
     // Share of the run's total damage, after taking Smite and Consume out of
     // Chain Lightning and Black Hole. `fixed` = orbs, thorns and the rest.
-    shares: Omit<EdpsParts, 'smite' | 'clChance' | 'clQty' | 'consume' | 'ttt' | 'shotRate'> & { fixed: number };
+    shares: Omit<EdpsParts, 'smite' | 'clChance' | 'clQty' | 'consume' | 'ttt' | 'shotRate' | 'attack'>
+        & { guardian: number; fixed: number };
     clReach: number;      // share of enemies Chain Lightning hits (Smite)
     smiteProcs: number;   // Smite procs per enemy reached, at the anchor (≤ 100)
     bhKills: number;      // share of kills made inside a Black Hole (Consume)
@@ -159,6 +168,7 @@ export function edpsParts(snap: OptimizerSnapshot, ttt?: number): EdpsParts {
         ...calcCLChanceQtyParts(uwData, modBonuses),
         consume: calcConsumeFraction(uwData),
         flame,
+        attack: attackRate(snap.guardian, presetIdx),
         ttt: refTTT,
         shotRate: ctx.hitRate,
     };
@@ -177,7 +187,8 @@ export function buildEdpsCalibration(snap: OptimizerSnapshot, report: BattleRepo
     const shots = report?.projectileCount ?? 0;
     const reached = report?.clHits ?? 0;
     const hitsPerEnemy = shots > 0 && reached > 0 ? (shots * anchor.clChance * anchor.clQty) / reached : Infinity;
-    const smiteProcs0 = Math.min(SMITE_CAP, hitsPerEnemy * anchor.clChance);
+    // Without Chain Lightning there's nothing to smite (and ∞ × 0 would be NaN).
+    const smiteProcs0 = anchor.clChance > 0 ? Math.min(SMITE_CAP, hitsPerEnemy * anchor.clChance) : 0;
 
     const smite0 = Math.min(1, anchor.smite * smiteProcs0) * clReach;
     const consume0 = anchor.consume * bhKills;
@@ -190,10 +201,11 @@ export function buildEdpsCalibration(snap: OptimizerSnapshot, report: BattleRepo
         bh: Math.max(0, share(d.blackHole) - consume0),
         tower: share(d.projectiles + d.rendArmor + d.landMines),
         flame: report ? share(extraDamage(report).flameBot) : 0,
+        guardian: report ? share(extraDamage(report).guardian) : 0,
         fixed: 0,
     };
     const counted = shares.cl + shares.sm + shares.dw + shares.ilm + shares.ps + shares.bh + shares.tower + shares.flame
-        + smite0 + consume0;
+        + shares.guardian + smite0 + consume0;
     shares.fixed = Math.max(0, 1 - counted);
     return { anchor, shares, clReach, smiteProcs: smiteProcs0, bhKills };
 }
@@ -206,7 +218,7 @@ export function edpsScore(snap: OptimizerSnapshot, calib: EdpsCalibration, ttt?:
     const r = (now: number, then: number) => (then > 0 ? now / then : 1);
     const bhRatio = r(x.bh, a.bh);
     const t = timeRatio(x, a);
-    return s.cl * r(x.cl, a.cl) * t
+    const rest = s.cl * r(x.cl, a.cl) * t
         + s.sm * r(x.sm, a.sm)
         + s.dw * r(x.dw, a.dw)
         + s.ilm * r(x.ilm, a.ilm)
@@ -217,14 +229,24 @@ export function edpsScore(snap: OptimizerSnapshot, calib: EdpsCalibration, ttt?:
         + s.fixed
         + Math.min(1, x.smite * smiteProcs(x, a, calib.smiteProcs)) * calib.clReach
         + x.consume * clamp01(calib.bhKills * bhRatio);
+    // Attack: its rate × the health the rest of the damage takes off.
+    const lost = 1 - s.guardian > 0 ? rest / (1 - s.guardian) : 1;
+    return rest + s.guardian * r(x.attack, a.attack) * lost;
 }
+
+// Guardian Attack's damage now ÷ at the anchor, given the flat damage's
+// ratio (the health its targets have lost).
+export const attackRatio = (x: EdpsParts, a: EdpsParts, flatRatio: number) =>
+    (a.attack > 0 ? x.attack / a.attack : 1) * flatRatio;
 
 // How far a Glass Cannon run gets depends only on FLAT damage — Chain
 // Lightning, Smart Missiles, Death Wave, Inner Land Mines, Poison Swamp and
 // tower shots. Orbs (on Orb Resistance tiers), Black Hole, Smite and Consume
 // deal a share of an enemy's health, so they don't fall behind as enemies get
 // tougher; and the enemies that end GC runs (elites, fleets, bosses) are
-// immune to orbs and Black Hole anyway (docs/run-simulation.md).
+// immune to orbs and Black Hole anyway (docs/run-simulation.md). Guardian
+// Attack deals a share of the health flat damage took off, so it keeps pace
+// with flat damage and counts with it.
 // Relative flat damage, 1 at the anchor; feeds runLength's waves gained.
 export function edpsSurvivalScore(snap: OptimizerSnapshot, calib: EdpsCalibration, ttt?: number): number {
     const x = edpsParts(snap, ttt);
@@ -232,13 +254,17 @@ export function edpsSurvivalScore(snap: OptimizerSnapshot, calib: EdpsCalibratio
     const s = calib.shares;
     const flat = s.cl + s.sm + s.dw + s.ilm + s.ps + s.tower + s.flame;
     if (flat <= 0) return 1;
+    const f = flatDamageRatio(x, a, s);
+    return (flat * f + s.guardian * attackRatio(x, a, f)) / (flat + s.guardian);
+}
+
+// The flat sources' damage now ÷ at the anchor (Guardian Attack's targets'
+// lost health; What If splits waves by it too).
+export function flatDamageRatio(x: EdpsParts, a: EdpsParts, s: EdpsCalibration['shares']): number {
+    const flat = s.cl + s.sm + s.dw + s.ilm + s.ps + s.tower + s.flame;
+    if (flat <= 0) return 1;
     const r = (now: number, then: number) => (then > 0 ? now / then : 1);
     const t = timeRatio(x, a);
-    return (s.cl * r(x.cl, a.cl) * t
-        + s.sm * r(x.sm, a.sm)
-        + s.dw * r(x.dw, a.dw)
-        + s.ilm * r(x.ilm, a.ilm)
-        + s.ps * r(x.ps, a.ps)
-        + s.tower * r(x.tower, a.tower) * t
-        + s.flame * r(x.flame, a.flame)) / flat;
+    return (s.cl * r(x.cl, a.cl) * t + s.sm * r(x.sm, a.sm) + s.dw * r(x.dw, a.dw) + s.ilm * r(x.ilm, a.ilm)
+        + s.ps * r(x.ps, a.ps) + s.tower * r(x.tower, a.tower) * t + s.flame * r(x.flame, a.flame)) / flat;
 }

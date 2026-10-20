@@ -1,13 +1,15 @@
 // The Guardian: chip tables pinned to the wiki's Bits totals, the import
-// (chips by save index, presets, slots), what each counted chip does, and
-// the Optimizer's Bits panel — on made-up accounts.
+// (chips by save index, presets, slots), what each counted chip does (Attack
+// in the damage scores too), and the Optimizer's Bits panel — on made-up
+// accounts.
 
 import { describe, expect, it } from 'vitest';
 import { useGameStore } from '../store/useGameStore';
 import { CHIPS, chipById, statBits } from '../constants/guardianData';
 import {
-    activeChips, bountyExtra, damageMeterFactor, defaultGuardianData, fetchRate, summonExtra, withChipLevel,
+    activeChips, attackRate, bountyExtra, damageMeterFactor, defaultGuardianData, fetchRate, summonExtra, withChipLevel,
 } from './guardian';
+import { buildEdpsCalibration, edpsParts, edpsScore, edpsSurvivalScore } from './edps';
 import { parseGameExport } from './gameExport';
 import { readActiveModuleBonuses } from './modBonuses';
 import { DEFAULT_RUN_RATES } from './runRates';
@@ -176,6 +178,50 @@ describe('Guardian in the coin model, Optimizer and What If', () => {
         expect(rows.map(r => r.label).sort()).toEqual(['Bounty — Cooldown', 'Bounty — Multiplier', 'Bounty — Targets']);
         expect(rows.every(r => r.costType === 'bits' && r.scorePct > 0)).toBe(true);
         expect(rows.find(r => r.label === 'Bounty — Targets')!.cost).toBe(100);
+    });
+
+    // A run where tower shots did 50% of the damage, orbs 40%, the Guardian 10%.
+    const fight = parseGameExport(makeExport({
+        BattleHistory: [battle({
+            TotalEnemies: 1000, GameTime: 10000, Wave: 500,
+            DamageDealt: 1000, ProjectilesDamage: 500, OrbDamage: 400, GuardianDamage: 100,
+        })],
+    })).battles[0];
+    const attack = chipById('attack').index;
+
+    it('Attack scales the Guardian’s damage by Percentage × Targets ÷ Cooldown', () => {
+        const s = snap(guardian({ attack: [0, 0, 0] }));        // 1%, 120s, 1 target
+        expect(attackRate(s.guardian, 0)).toBeCloseTo(0.01 / 120, 12);
+        const calib = buildEdpsCalibration(s, fight)!;
+        expect(calib.shares.guardian).toBeCloseTo(0.1, 10);
+        expect(calib.shares.fixed).toBeCloseTo(0.4, 10);
+        expect(edpsScore(s, calib)).toBeCloseTo(1, 10);
+        const pct = { ...s, guardian: withChipLevel(s.guardian!, 0, attack, 0, 1) };   // 2%
+        expect(edpsScore(pct, calib)).toBeCloseTo(1.1, 10);
+        const targets = { ...s, guardian: withChipLevel(s.guardian!, 0, attack, 2, 2) }; // 3 targets
+        expect(edpsScore(targets, calib)).toBeCloseTo(1.2, 10);
+        // Run length: Attack counts with the flat sources (tower shots 0.5).
+        expect(edpsSurvivalScore(pct, calib)).toBeCloseTo((0.5 + 0.1 * 2) / 0.6, 10);
+    });
+
+    it('Attack follows the health the rest of the damage takes off', () => {
+        const s = snap(guardian({ attack: [0, 0, 0] }));
+        const calib = buildEdpsCalibration(s, fight)!;
+        const after = { ...s, labData: { 'Damage Lab': 20 } };
+        const [a, x] = [edpsParts(s), edpsParts(after)];
+        const tower = (x.tower / a.tower) * (x.ttt / a.ttt);
+        expect(tower).toBeGreaterThan(1);
+        expect(edpsScore(after, calib)).toBeCloseTo((0.5 * tower + 0.4) / 0.9, 10);
+        expect(edpsSurvivalScore(after, calib)).toBeCloseTo(tower, 10);
+    });
+
+    it('the Bits panel ranks Attack only from a run with Guardian damage', () => {
+        const s: OptimizerSnapshot = { ...snap(guardian({ attack: [0, 0, 0] })), metric: 'edps' };
+        s.edps = buildEdpsCalibration(s, fight)!;
+        const rows = buildCandidates(s, 'guardian');
+        expect(rows.find(r => r.label === 'Attack — Percentage')!.scorePct).toBeCloseTo(10, 6);
+        s.edps = buildEdpsCalibration(s, report)!;              // no GuardianDamage in that run
+        expect(buildCandidates(s, 'guardian').every(r => Math.abs(r.scorePct) < 1e-9)).toBe(true);
     });
 
     it('What If offers equipped chips, priced in Bits', () => {

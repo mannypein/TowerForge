@@ -59,6 +59,15 @@ describe('calibrated eDPS', () => {
         expect(calib.shares.fixed).toBeCloseTo(0.83, 10);   // orbs 800 + 30 the report doesn't attribute
     });
 
+    it('works without Chain Lightning (nothing to smite)', () => {
+        const report = run({ ChainLightningDamage: 0, EnemiesHitByChainLightningThisRound: 0 });
+        const snap = snapshot(report, s => { s.uwData.data = {}; });
+        const calib = buildEdpsCalibration(snap, report)!;
+        expect(calib.smiteProcs).toBe(0);
+        expect(edpsScore(snap, calib)).toBeCloseTo(1, 10);
+        expect(edpsSurvivalScore(snap, calib)).toBeCloseTo(1, 10);
+    });
+
     it('counts a source by its share of the real damage', () => {
         // Chain Lightning Damage 10 → 11 is 85× → 113×; CL did 10% of the damage.
         const report = run();

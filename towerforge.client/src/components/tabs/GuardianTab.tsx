@@ -13,12 +13,12 @@ import type { GuardianData, GuardianPreset } from '../../types/gameTypes';
 import { GUARDIAN_MAX_SLOTS, RELEASED_CHIPS, SKIN_COIN_BONUS, statBits } from '../../constants/guardianData';
 import type { ChipDef } from '../../constants/guardianData';
 import {
-    activeChips, bountyExtra, damageMeterFactor, fetchRate, guardianPreset, summonExtra, withChipLevel,
+    activeChips, attackRate, bountyExtra, damageMeterFactor, fetchRate, guardianPreset, summonExtra, withChipLevel,
 } from '../../engine/guardian';
 import { calcDamageMeter } from '../../engine/towerDamage';
 import { calcTowerRange } from '../../engine/ttt';
 import { runRatesFrom } from '../../engine/runRates';
-import { activeBattleReport, rawField } from '../../engine/battleReport';
+import { activeBattleReport, extraDamage, rawField } from '../../engine/battleReport';
 
 const fmtX = (v: number) => `×${v < 10 ? v.toFixed(2) : v.toFixed(1)}`;
 const pctText = (v: number) => `+${(v * 100).toFixed(v < 0.1 ? 1 : 0)}%`;
@@ -77,8 +77,15 @@ export default function GuardianTab() {
                 return `${pctText(summonExtra(g, activePreset, killsPerSec))} kills, and their coins. Its Cash Bonus is in-run cash, not counted.`;
             case 'fetch':
                 return `${(3600 * fetchRate(g, activePreset)).toFixed(1)} finds per hour of game time; its coins and loot scale with that.`;
-            case 'attack':
-                return 'Not counted: it deals a share of the health an enemy has already lost, so it doesn’t move the damage that decides how far a run gets.';
+            case 'attack': {
+                const total = report?.damage?.total ?? 0;
+                const share = report && total > 0 ? extraDamage(report).guardian / total : 0;
+                const perMin = 60 * 100 * attackRate(g, activePreset);
+                const rate = `${perMin.toFixed(perMin < 10 ? 1 : 0)}% of lost health a minute, over its targets`;
+                return share > 0
+                    ? `Did ${(share * 100).toPrecision(2)}% of the damage in your chosen run. Counted by its rate (${rate}) and by how much health your other damage takes off.`
+                    : `Your chosen battle report has no Guardian damage, so Attack can't be scored — choose a run played with Attack equipped (${rate}).`;
+            }
             case 'ally':
                 return 'Not counted: how its Max Recovery combines with the usual overheal cap isn’t confirmed.';
             default:
@@ -98,8 +105,9 @@ export default function GuardianTab() {
             <div className="relics-note">
                 <strong>The Guardian</strong> (Guild → Guardian) fights next to the tower with its equipped chips; each
                 chip has three stats bought with Bits. Import Game Data fills this in from the game, by your presets.
-                What each chip does here: <em>Scout</em> boosts tower shots through Damage/Meter, <em>Bounty</em> and{' '}
-                <em>Summon</em> add coins, <em>Fetch</em> finds loot — the Optimizer ranks their upgrades per Bit.
+                What each chip does here: <em>Scout</em> boosts tower shots through Damage/Meter, <em>Attack</em> adds
+                its share of your run&apos;s damage, <em>Bounty</em> and <em>Summon</em> add coins, <em>Fetch</em> finds
+                loot — the Optimizer ranks their upgrades per Bit.
             </div>
 
             {g.unlocked && g.inGuild === false && (

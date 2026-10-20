@@ -11,9 +11,12 @@
 //   • Fetch: finds per second = find chance × (1 + double find) ÷
 //     cooldown; its loot (coins, gems, medals, shards, modules) scales
 //     with that.
-//   • Attack deals a share of an enemy's *missing* health, Ally heals
-//     past Max Recovery — neither changes the flat damage or coin models
-//     (see docs/coverage.md).
+//   • Attack: every cooldown, hits Targets enemies (the most hurt) for
+//     Percentage of the health they've lost (half on bosses). Its damage
+//     in a run scales with Percentage × Targets ÷ Cooldown, and with the
+//     health its targets have lost — which the rest of the tower's damage
+//     takes off (edps.ts).
+//   • Ally heals past Max Recovery — not counted (see docs/coverage.md).
 //  The code's assumptions, flagged where used: tower shots land at half
 //  the range on average; every summoned or tagged enemy pays an
 //  average kill; about 80% of kills are non-Common (T18 W6000 spawn mix).
@@ -83,6 +86,14 @@ export function damageMeterFactor(g: GuardianData | undefined, presetIdx: number
     const scout = findChip(g, presetIdx, 'scout');
     const boost = scout ? 1 + uptime(scout.values[2], scout.values[0]) * (scout.values[1] - 1) : 1;
     return 1 + Math.max(0, dpm) * distance * boost;
+}
+
+// Attack's rate: share of lost health dealt per second, over all its
+// targets — Percentage × Targets ÷ Cooldown (0 without Attack).
+export function attackRate(g: GuardianData | undefined, presetIdx: number): number {
+    const a = findChip(g, presetIdx, 'attack');
+    if (!a || a.values[1] <= 0) return 0;
+    return ((a.values[0] / 100) * a.values[2]) / a.values[1];
 }
 
 // Extra kill coins from Bounty: the share of kills it tags × (Multiplier − 1).

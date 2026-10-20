@@ -20,8 +20,9 @@ reports set the baseline, so even unmodeled effects are already in it; only
 | Echoing Shot (Amplify Bot+) | ◐ | Since 2026-10-19: tower shots × the bullets each counts as (3 + level, up to 12), always on like Amplify Bot's Bonus (uptime and range aren't modeled). The wiki's 1/3 boost for UW projectiles isn't modeled |
 | Other Bot+ abilities: Wild Fire, Titan Shock, Bonus Cells, Maximum Power | ✗ | Levels entered or imported (v29 tables, 2026-10-19) but not valued: Wild Fire's Enflamed bonus lasts by Flame Bot damage, Titan Shock needs enemy attack speed, Bonus Cells needs elite cells per run, and how Maximum Power boosts the other abilities (whole value or the part above 1) isn't confirmed |
 | Death Ray card | ◐ | Read from runs and shown; kills what it touches (not bosses or protected enemies), so it isn't flat damage; its upgrades (Double Death Ray lab) aren't valued |
-| Guardian Attack chip, Electrons, Spotlight damage | ◐ | Read from runs and shown, kept fixed. Attack deals a share of an enemy's missing health, so it doesn't move the flat-damage death point |
-| Guardian (2026-10-19) | ◐ | Gear → Guardian; imported from the export (chips, presets, slots, skins). Scout → tower shots through Damage/Meter; Bounty, Summon → kill coins; Fetch → its coins and loot by finds per second; skins +0.6% coins each. Ally (overheal past Max Recovery) not counted — how it combines with the usual cap isn't confirmed |
+| Guardian Attack chip | ◐ | From the run's GuardianDamage (2026-10-20): scales with Percentage × Targets ÷ Cooldown and with the health the rest of the damage takes off (it hits a share of lost health), so it counts for damage and run length. Assumes its targets are about as hurt as in the run; the boss half-damage mix stays as in the run |
+| Electrons, Spotlight damage | ◐ | Read from runs and shown, kept fixed |
+| Guardian (2026-10-19) | ◐ | Gear → Guardian; imported from the export (chips, presets, slots, skins). Scout → tower shots through Damage/Meter; Attack → its share of the run's damage (row above); Bounty, Summon → kill coins; Fetch → its coins and loot by finds per second; skins +0.6% coins each. Ally (overheal past Max Recovery) not counted — how it combines with the usual cap isn't confirmed |
 | Orbs, thorns, land mines | ◐ | Fixed share for damage; orbs and thorns modeled for coins / survival |
 | Demon Mode, Plasma Cannon, Berserker, Super Tower | ◐ | Berserker and Super Tower in the model; Demon Mode and Plasma Cannon aren't |
 | Protectors' damage reduction (55%) | ◐ | Inside the calibration; the Protector labs aren't valued |
@@ -85,4 +86,4 @@ reports set the baseline, so even unmodeled effects are already in it; only
 3. **Cells and drops from upgrades:** with cells per run now read, the
    Cells / Kill and Death Wave cell bonuses can be valued the way coins are —
    next step.
-4. **Vault:** in-game values for the trees you own. Guardian: how Ally's Max Recovery combines with the usual overheal cap, and the Attack chip's share of a pushing run's damage.
+4. **Vault:** in-game values for the trees you own. Guardian: how Ally's Max Recovery combines with the usual overheal cap, and two runs at different Attack levels to check that its damage follows Percentage × Targets ÷ Cooldown.

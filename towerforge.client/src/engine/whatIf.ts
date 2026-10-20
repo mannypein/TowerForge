@@ -35,7 +35,7 @@ import { conditionedSkip } from './battleConditions';
 import { killerMix, pathRunGains, wavesSpread } from './runLength';
 import { calcTTTDisplayStats } from './ttt';
 import { buildDamageContext } from './uwdps';
-import { buildEdpsCalibration, edpsParts, edpsSurvivalScore } from './edps';
+import { attackRatio, buildEdpsCalibration, edpsParts, edpsSurvivalScore, flatDamageRatio } from './edps';
 import { buildFarmCalibration, coinFactors, FARM_EFFECTS, FARM_EFFECT_LABELS } from './farming';
 import { healthLabCut } from './enemyStats';
 import { deathDefyChance, hitsSurvived, saverAverages } from './runSavers';
@@ -354,11 +354,13 @@ function buildChain(
             ['Poison Swamp', rel(p1.ps, p0.ps), calib.shares.ps],
             ['Tower shots', rel(p1.tower, p0.tower, time), calib.shares.tower],
             ['Flame Bot', rel(p1.flame, p0.flame), calib.shares.flame],
+            ['Guardian Attack', attackRatio(p1, p0, flatDamageRatio(p1, p0, calib.shares)), calib.shares.guardian],
             ['Black Hole reach', rel(p1.bh, p0.bh), calib.shares.bh],
         ];
-        // Flat sources split the flat-damage part of the waves by what each added.
+        // Flat sources (and Attack, which follows them) split the flat-damage
+        // part of the waves by what each added.
         const flat = calib.shares.cl + calib.shares.sm + calib.shares.dw + calib.shares.ilm + calib.shares.ps
-            + calib.shares.tower + calib.shares.flame;
+            + calib.shares.tower + calib.shares.flame + calib.shares.guardian;
         const flatWaves = wavesOf(split ? Math.log(split.damage) : 0);
         const added = split ? split.damage - 1 : 0;
         for (const [label, ratio, share] of src) {

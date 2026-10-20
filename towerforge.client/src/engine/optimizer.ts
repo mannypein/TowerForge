@@ -854,9 +854,9 @@ export function buildCandidates(
     }
 
     // ── Guardian chips (bits) ──────────────────────────────────
-    // Every stat of every equipped chip, one level a step. Scout (tower
-    // damage), Bounty, Summon and Fetch (coins) score; Attack and Ally
-    // aren't modeled and drop out (engine/guardian.ts).
+    // Every stat of every equipped chip, one level a step. Scout and Attack
+    // (damage; Attack needs a run with Guardian damage), Bounty, Summon and
+    // Fetch (coins) score; Ally isn't modeled (engine/guardian.ts).
     if (cat === 'guardian' && snap.guardian) {
         for (const a of activeChips(snap.guardian, snap.presetIdx)) {
             a.chip.stats.forEach((stat, k) => {

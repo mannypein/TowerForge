@@ -158,7 +158,18 @@ bought) and what the counted ones do:
   share of its coins and scale with finds; the loot (gems, medals, shards,
   modules) is shown per hour from the run.
 - **Skins** — +0.6% coins each, always on (wiki).
-- **Attack** and **Ally** — not counted (coverage.md says why).
+- **Attack** (2026-10-20) — every cooldown it hits Targets of the most
+  hurt enemies for Percentage of the health they've lost (half on bosses;
+  wiki). The run's `GuardianDamage` (the Attack chip is the Guardian's
+  only damage) is its share of the run's damage, scaled by Percentage ×
+  Targets ÷ Cooldown and by the health its targets have lost, which the
+  rest of the damage takes off: × the rest of the score for damage, × the
+  flat sources for run length (it keeps pace with flat damage, so it
+  counts with it). The code's assumption: its targets are about as hurt as
+  in the run. Without Guardian damage in the chosen run, Attack can't be
+  scored (the Guardian tab says so). In the owner's tournament runs it was
+  0.01–0.04% of the damage, so its levels rank low there.
+- **Ally** — not counted (coverage.md says why).
 
 The Bits panel ranks each equipped chip's next stat level per Bit for the
 goal; slots (200 / 300 Bits) and which chips to equip are left to the
@@ -212,8 +223,9 @@ Battle reports record more damage sources than the 11 the site parsed by name;
 TheTowerSDK's run field list has Flame Bot, Death Ray, Spotlight, Electrons,
 Guardian and Attack chip damage too. They're read from each run's stored
 fields by the words in their names (`battleReport.extraDamage`), shown in the
-Battle Report breakdown, and Flame Bot is calibrated as flat damage (see
-edps.ts). The rest stay in the fixed share. The same name matching reads
+Battle Report breakdown, Flame Bot is calibrated as flat damage and the
+Guardian's damage as the Attack chip's (see edps.ts). The rest stay in the
+fixed share. The same name matching reads
 what saved each run (`runSavers`) and what it dropped (`runDrops`); the exact
 export names aren't confirmed, so the pages show the field names they found.
 
