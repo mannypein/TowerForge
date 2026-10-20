@@ -270,16 +270,18 @@ export interface ChainLink {
 // waves ∝ log of each part (flat damage, level skip, killers' health labs).
 interface WaveSplit {
     waves: number;
-    damage: number;     // flat damage ratio
-    skipLog: number;    // skip points × skipWorth
-    killerLog: number;  // log of the killers' health-lab factor
+    damage: number;       // flat damage ratio, where the changed run ends
+    damageStart: number;  // the same under the conditions where runs end now (tournaments: the rest is
+                          // the stronger battle conditions further into the run)
+    skipLog: number;      // skip points × skipWorth
+    killerLog: number;    // log of the killers' health-lab factor
 }
 
 export interface WhatIfResult {
     damagePct: number;                 // all damage (calibrated eDPS when the report has damage by source)
     pushPct: number;                   // flat damage + skip as damage (what moves a Glass Cannon death wave)
     skipPoints: number;                // Enemy Health Level Skip points added
-    waves: { from: number; to: number } | null;
+    waves: { from: number; to: number; gained: number } | null;   // gained: unrounded (to = from + gained, rounded)
     coinsHourPct: number;              // coin income at the same wave (coin bonuses only)
     coinsRun: { from: number; to: number } | null;
     coinsHour: { from: number; to: number } | null;   // playing each run to its end
@@ -376,8 +378,14 @@ function buildChain(
         // part of the waves by what each added.
         const flat = calib.shares.cl + calib.shares.sm + calib.shares.dw + calib.shares.ilm + calib.shares.ps
             + calib.shares.tower + calib.shares.flame + calib.shares.guardian;
-        const flatWaves = wavesOf(split ? Math.log(split.damage) : 0);
-        const added = split ? split.damage - 1 : 0;
+        // The changes' own effect, read where runs end now; in a tournament the
+        // stronger conditions further into the run are a link of their own.
+        const flatWaves = wavesOf(split ? Math.log(split.damageStart) : 0);
+        const added = split ? split.damageStart - 1 : 0;
+        if (split && Math.abs(Math.log(split.damage / split.damageStart)) > 1e-9) {
+            add({ group: 'Damage to each enemy', label: 'Stronger battle conditions where the run now ends', before: 1,
+                after: split.damage / split.damageStart, kind: 'times', waves: wavesOf(Math.log(split.damage / split.damageStart)) });
+        }
         for (const [label, ratio, share] of src) {
             const own = label === 'Black Hole reach' || flat <= 0 ? 0 : (share * (ratio - 1)) / flat;
             add({
@@ -484,7 +492,9 @@ export function whatIf(
     };
     const settled = settle(after);
     const { push: pushPct, skip: skipPoints } = settled;
-    // The changed run is read where it ends from here on (chain, split).
+    // The changed run is read where it ends from here on (waves, split); the
+    // chain reads the changes themselves where runs end now (atStart).
+    const atStart = { ...after };
     after.conditions = settled.conditions;
 
     let waves: WhatIfResult['waves'] = null;
@@ -499,8 +509,8 @@ export function whatIf(
             pathRunGains(run, [gain], undefined, [Math.max(0, skip)], models.worth)[0].waves;
         const gained = wavesFor(pushPct, skipPoints);
         const from = models.startWave ?? run.typicalWave;
-        const to = from + Math.round(gained);
-        waves = { from, to };
+        const to = Math.round(from + gained);
+        waves = { from, to, gained };
         for (const c of changes) {
             const one = JSON.parse(JSON.stringify(base)) as OptimizerSnapshot;
             applyChange(one, c);
@@ -523,6 +533,7 @@ export function whatIf(
             split = {
                 waves: gained,
                 damage: edpsSurvivalScore(cond(after), calib) / edpsSurvivalScore(cond(base), calib),
+                damageStart: edpsSurvivalScore(cond(atStart), calib) / edpsSurvivalScore(cond(base), calib),
                 skipLog: models.worth * skipPoints,
                 killerLog: killers.reduce((sum, [type, share]) =>
                     sum + share * Math.log(healthLabCut(base.labData, type) / healthLabCut(after.labData, type)), 0),
@@ -540,7 +551,7 @@ export function whatIf(
     return {
         damagePct, pushPct, skipPoints, waves, coinsHourPct, coinsRun, coinsHour,
         survivalPct: gc ? null : goalPct(base, after, 'survival', build, report, models),
-        chain: buildChain(base, after, build, report, models, split),
+        chain: buildChain(base, atStart, build, report, models, split),
         perChange, spread,
         costs,
     };

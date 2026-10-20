@@ -153,6 +153,18 @@ describe('what happens', () => {
         const gain = (r: typeof t) => r.waves!.to - r.waves!.from;
         expect(gain(t)).toBeGreaterThan(0);
         expect(gain(t)).toBeLessThan(gain(plain));
+        // The headline is the unrounded gain — the change's own waves — and the
+        // chain splits it: the changed source, plus the stronger conditions
+        // further in as a link of their own (untouched sources don't move).
+        expect(t.waves!.gained).toBeCloseTo(t.perChange[0].waves, 9);
+        expect(t.waves!.to).toBe(Math.round(t.waves!.from + t.waves!.gained));
+        const stronger = t.chain.find(l => l.label === 'Stronger battle conditions where the run now ends')!;
+        expect(stronger.after).toBeLessThan(1);
+        expect(stronger.waves!).toBeLessThan(0);
+        expect(t.chain.find(l => l.label === 'Poison Swamp')).toBeUndefined();
+        const chainWaves = t.chain.reduce((sum, l) => sum + (l.waves ?? 0), 0);
+        expect(chainWaves).toBeCloseTo(t.waves!.gained, 6);
+        expect(plain.chain.some(l => l.label.startsWith('Stronger battle conditions'))).toBe(false);
         // No conditions: the same as campaign mode.
         const same = whatIf(snap, change, upgradeTargets(snap), 'Glass Cannon', runs[4], {
             ...models, calibConditions: {}, conditions: {}, conditionsAt: () => ({}),

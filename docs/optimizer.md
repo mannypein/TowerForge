@@ -107,6 +107,20 @@ the same wave, survival (not GC) — plus the cost in every currency.
   climb, so repeating the read can swing back and forth). The chain reads
   time in range, tower and parts under those conditions and shows the hits
   armor lets through. No coins per run for tournaments.
+- **What the waves show (2026-10-20):** "Waves gained" is the unrounded
+  gain — the same number as a single change's own waves and the chain's
+  sum (the wave reached is rounded). The chain reads the changes where runs
+  end now; in a tournament, the stronger conditions further into the run
+  are one link of their own ("Stronger battle conditions where the run now
+  ends"), so an untouched source never shows a loss. Campaign mode always
+  uses a campaign run: when the Optimizer's Battle Report is a tournament
+  run, it falls back to the usual campaign run (Tournament mode is for
+  tournaments).
+- **Why one level can buy more waves than the next:** enemy health rises
+  in uneven steps (walls of 30–40% in one wave, then flat stretches), so a
+  +10% damage step buys more waves where the next levels are flat. On the
+  owner's T18 deaths (2026-10-20): +10% → 44 waves, +20% → 71, +40% → 104
+  — smooth after the luck averaging, steeper first.
 
 ## Best module loadout — Tournament page (2026-10-18)
 

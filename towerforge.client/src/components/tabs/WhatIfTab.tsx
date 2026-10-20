@@ -23,6 +23,7 @@ import { MEDAL_SYMBOL, presetLabel } from '../../constants/gameData';
 import { HEAT_CONDITIONS, LEAGUE_HEAT } from '../../constants/tournamentData';
 import { buildTournamentModel, heatOf, newestTournament } from '../../engine/tournamentModel';
 import { runKey } from '../../engine/battleReport';
+import { defaultBattleIndex } from '../../engine/gameExport';
 import { activeLoadout } from '../../engine/statHelpers';
 import type { GoalModels } from '../../engine/accountModels';
 import { keysOf, loadTourneySim, saveTourneySim, ticksOf } from '../common/tourneySim';
@@ -139,8 +140,13 @@ export default function WhatIfTab() {
             }
             return { base: snapshotFromState(tModel.account), models: tm, report: tModel.account.importedBattles[tModel.calibIdx] };
         }
-        return { base: snapshotFromState(account), models: runModels(account), report: chosenReport(account) };
-    }, [mode, tModel, account, sim.week, tLast, tEntry, tLeague]);
+        // Campaign: the Optimizer's Battle Report, or your usual campaign run
+        // when that's a tournament run (Tournament mode is for those).
+        const campaign: AccountState = chosenReport(account)?.tournament
+            ? { ...account, battleReportText: '', battleReportChoice: defaultBattleIndex(importedBattles) }
+            : account;
+        return { base: snapshotFromState(campaign), models: runModels(campaign), report: chosenReport(campaign) };
+    }, [mode, tModel, account, sim.week, tLast, tEntry, tLeague, importedBattles]);
     const { base, models } = setup;
     const targets = useMemo(() => upgradeTargets(base), [base]);
     const groups = useMemo(() => [...new Set(targets.map(t => t.group))], [targets]);
@@ -321,7 +327,7 @@ export default function WhatIfTab() {
                             {result.waves && (<>
                                 <span className="wi-k wi-strong">Waves gained</span>
                                 <span className="wi-v wi-strong">
-                                    {wavesText(result.waves.to - result.waves.from)}
+                                    {wavesText(result.waves.gained)}
                                 </span>
                                 {result.spread && (<>
                                     <span className="wi-k" title="Each of your recent deaths moved on its own: how much the gain changes from run to run">
@@ -333,8 +339,7 @@ export default function WhatIfTab() {
                                 </>)}
                                 <span className="wi-k">{tourney ? 'Tournament waves this week' : 'Waves reached'}</span>
                                 <span className="wi-v">
-                                    {result.waves.from.toLocaleString()} → {result.waves.to.toLocaleString()}
-                                    {' '}({result.waves.to >= result.waves.from ? '+' : ''}{(result.waves.to - result.waves.from).toLocaleString()})
+                                    W{result.waves.from.toLocaleString()} → W{result.waves.to.toLocaleString()}
                                 </span>
                             </>)}
                             {result.coinsRun && (<>
