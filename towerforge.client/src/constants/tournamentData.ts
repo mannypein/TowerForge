@@ -181,10 +181,10 @@ export const HEAT_CONDITIONS: HeatCondition[] = [
         why: 'Shielded enemies ignore Black Hole, shockwave and knockback; Black Hole isn’t in the flat damage that decides a Glass Cannon run, and the other two aren’t in the model.',
     },
     {
-        key: 'fastUltimate', name: 'Fast’s Ultimate', effect: 'none', lab: "Fast's Ultimate",
+        key: 'fastUltimate', name: 'Fast’s Ultimate', effect: 'waves', lab: "Fast's Ultimate",
         text: 'Fasts buff up to x nearby enemies to match their speed',
         steep: [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10], fmt: v => `up to ${v} nearby`,
-        why: 'Slow enemies near a Fast (Overcharge, bosses, tanks) come in at its speed. The model times every enemy at Fast speed already, so it can’t show the difference yet — which makes it too hard on slow enemies the rest of the time.',
+        how: 'Slow enemies that end your runs (Overcharge, bosses, tanks…) come in at Fast speed most of the time (you see it happen; more often the more it buffs), so they spend that much less time in your range and take that much less damage — by how often each ends your runs.',
     },
     {
         key: 'basicUltimate', name: 'Basic’s Ultimate', effect: 'waves', lab: "Basic's Ultimate",

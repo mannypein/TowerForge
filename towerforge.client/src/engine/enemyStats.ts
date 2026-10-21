@@ -159,7 +159,7 @@ export function basicEnemySpeed(wave: number, tier: number): number {
     return Math.min(12, mult);
 }
 
-const SPEED_RATIO: Record<EnemyType, number> = {
+export const SPEED_RATIO: Record<EnemyType, number> = {
     Basic: 1, Fast: 2.1, Tank: 0.6, Ranged: 1.2, Boss: 0.4, Protector: 0.4,
     Vampire: 0.4, Scatter: 0.6, Ray: 0.4, Saboteur: 2.1, Commander: 0.2, Overcharge: 0.2,
 };

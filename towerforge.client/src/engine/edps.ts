@@ -41,7 +41,8 @@
 //    single-target fire (tower shots, Chain Lightning, Smart Missiles) with
 //    more enemies; Armored Enemies blocks each enemy's first hits, out of
 //    the hits an enemy took in the run (shots × bounces + Chain Lightning,
-//    per enemy) — more hits a second make it matter less.
+//    per enemy) — more hits a second make it matter less; Fast's Ultimate
+//    brings slow enemies that end runs in at Fast speed (less time in range).
 //  • Smite (CL+) and Consume (BH+) add a share of each enemy's health.
 //    The run's total damage is about the total enemy health, so +x% of
 //    every enemy's health is about +x% of total damage.
@@ -69,7 +70,7 @@ import {
 } from './uwdps';
 import { calcDamageMeter, calcCoreUWDamageMult, echoingShotBullets } from './towerDamage';
 import { attackRate, damageMeterFactor } from './guardian';
-import { armorKeep, crowdFactor, runMix } from './battleConditions';
+import { armorKeep, crowdFactor, fastUltimateTime, runMix } from './battleConditions';
 import type { RunMix } from './battleConditions';
 import { HEALTH_MULT } from './enemyStats';
 import type { EnemyType } from './enemyStats';
@@ -134,6 +135,7 @@ export interface EdpsCalibration {
     hitsPerEnemy: number;
     crowd: number;
     armoredHits: number;
+    fastUltimate: number;   // Fast's Ultimate the run had (up to N nearby; 0 = none)
 }
 
 // What battle conditions do to flat damage, against the run's: the share
@@ -161,13 +163,15 @@ export function killerHits(killers: Partial<Record<EnemyType, number>> | undefin
 
 export function conditionRatios(snap: OptimizerSnapshot, calib: EdpsCalibration, x: EdpsParts): ConditionRatios {
     const c = snap.conditions;
-    if (!c && calib.crowd === 1 && !calib.armoredHits) return SAME;
+    if (!c && calib.crowd === 1 && !calib.armoredHits && !calib.fastUltimate) return SAME;
     const crowd = crowdFactor(c, calib.mix);
     const a = calib.anchor;
     const toKill = killerHits(snap.killers, calib.mix);
     const hits = calib.hitsPerEnemy * toKill * (hitWeight(a) > 0 ? hitWeight(x) / hitWeight(a) : 1) * (calib.crowd / crowd);
     const keep0 = armorKeep(calib.armoredHits, calib.hitsPerEnemy * toKill);
-    return { targeted: calib.crowd / crowd, flat: armorKeep(c?.armoredHits, hits) / keep0 };
+    // Fast's Ultimate: the enemies that end runs get less time in range.
+    const fast = fastUltimateTime(c?.fastUltimate, snap.killers) / fastUltimateTime(calib.fastUltimate, snap.killers);
+    return { targeted: calib.crowd / crowd, flat: (armorKeep(c?.armoredHits, hits) / keep0) * fast };
 }
 
 const SMITE_CAP = 100;
@@ -272,6 +276,7 @@ export function buildEdpsCalibration(snap: OptimizerSnapshot, report: BattleRepo
     return {
         anchor, shares, clReach, smiteProcs: smiteProcs0, bhKills,
         mix, hitsPerEnemy: perEnemy, crowd, armoredHits: snap.conditions?.armoredHits ?? 0,
+        fastUltimate: snap.conditions?.fastUltimate ?? 0,
     };
 }
 

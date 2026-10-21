@@ -14,6 +14,8 @@
 //   • More Enemies, Orb / Death Ray Resistance, Tank's and Basic's
 //     Ultimate → more enemies (or more health) for single-target fire to
 //     cover (crowdFactor), from the run's own kills and enemy mix
+//   • Fast's Ultimate up to x nearby → slow enemies that end runs come in
+//     at Fast speed most of the time (fastUltimateTime)
 //   • Death Defy Down, Energy Shields Down → run savers (runSavers.ts)
 //   • Skip Reduction - Multiply ×x   → Enemy Health Level Skip chance
 //   • Skip Decay 1% every N waves    → the skip chance, averaged over the run
@@ -30,6 +32,8 @@ import type { LabData, ModBonuses, UWAbbr } from '../types/gameTypes';
 import { HEAT_CONDITIONS, HEAT_WAVES } from '../constants/tournamentData';
 import type { HeatCondition, HeatKey, HeatRamp, LeagueHeat } from '../constants/tournamentData';
 import type { BattleReport } from './battleReport';
+import { SPEED_RATIO } from './enemyStats';
+import type { EnemyType } from './enemyStats';
 
 export interface TourneyConditions {
     uwDurationSec?: number;     // seconds off CF, GT, PS and BH
@@ -43,6 +47,7 @@ export interface TourneyConditions {
     deathRayLeftPct?: number;   // Death Ray Resistance: the same for Death Ray
     tankUltimate?: boolean;     // Tank's Ultimate: tanks act like bosses (orb and Death Ray immune)
     basicUltimatePct?: number;  // Basic's Ultimate: basics spawn as each other type at this %
+    fastUltimate?: number;      // Fast's Ultimate: Fasts buff up to this many nearby enemies to their speed
     deathDefyDownPct?: number;  // Death Defy Down: points off the Death Defy chance
     shieldsDownPct?: number;    // Energy Shields Down: recharge this % longer
 }
@@ -114,6 +119,7 @@ export function heatConditions(
     if (active.deathRay) out.deathRayLeftPct = at('deathRay');
     if (active.tankUltimate) out.tankUltimate = true;
     if (active.basicUltimate) out.basicUltimatePct = at('basicUltimate');
+    if (active.fastUltimate) out.fastUltimate = at('fastUltimate');
     if (active.deathDefyDown) out.deathDefyDownPct = at('deathDefyDown');
     if (active.energyShieldsDown) out.shieldsDownPct = at('energyShieldsDown');
     return out;
@@ -193,6 +199,33 @@ export function crowdFactor(c: TourneyConditions | undefined, mix: RunMix): numb
     if (c.tankUltimate) load += mix.tank * (mix.orbKills * orbLeft + mix.deathRayKills * drLeft);
     if (c.basicUltimatePct) load += (mix.basic * (c.basicUltimatePct / 100) * BASIC_ULT_EXTRA) / Math.max(1, mix.avgHealth);
     return 1 + Math.max(0, load);
+}
+
+// Fast's Ultimate: Fasts buff up to x nearby enemies to their speed. A slow
+// enemy that ends runs (Overcharge, bosses, tanks …) that's buffed comes in
+// at Fast speed, so it spends speed ÷ Fast's speed of its usual time in your
+// range, and everything that damages it over time does that much less.
+// How often it's buffed isn't documented: the owner sees it happen "most of
+// the time" (2026-10-21), so 1 − 0.4^x — 60% at up to 1, 84% at 2, 94% at 3
+// (the code's estimate). Weighted over how often each type ends the runs,
+// as the share of its usual time in range it still gets (1 = no change).
+const FAST_SPEED = SPEED_RATIO.Fast;
+
+export function fastBuffShare(x: number | undefined): number {
+    return x && x > 0 ? 1 - Math.pow(0.4, x) : 0;
+}
+
+export function fastUltimateTime(x: number | undefined, killers: Partial<Record<EnemyType, number>> | undefined): number {
+    const p = fastBuffShare(x);
+    const entries = Object.entries(killers ?? {}) as [EnemyType, number][];
+    const total = entries.reduce((s, [, share]) => s + share, 0);
+    if (p <= 0 || total <= 0) return 1;
+    // Geometric over the killers, like their health labs (a share of log damage each).
+    const log = entries.reduce((s, [type, share]) => {
+        const keep = Math.min(1, (SPEED_RATIO[type] ?? 1) / FAST_SPEED);
+        return s + (share / total) * Math.log(1 - p + p * keep);
+    }, 0);
+    return Math.exp(log);
 }
 
 // Armored Enemies: each enemy ignores its first `blocked` hits, so for an

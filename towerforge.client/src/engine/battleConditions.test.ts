@@ -10,8 +10,8 @@ import { runRatesFrom } from './runRates';
 import { parseGameExport } from './gameExport';
 import { buildEdpsCalibration } from './edps';
 import {
-    armorKeep, bcLabCut, conditionedSkip, conditionHealth, crowdFactor, heatAfterLabs, heatConditions, heatStep, heatValue,
-    leagueConditions, runMix, skipDecayFactor, withConditions,
+    armorKeep, bcLabCut, conditionedSkip, conditionHealth, crowdFactor, fastBuffShare, fastUltimateTime, heatAfterLabs,
+    heatConditions, heatStep, heatValue, leagueConditions, runMix, skipDecayFactor, withConditions,
 } from './battleConditions';
 import { calcTTT } from './ttt';
 import { conditionRatios, edpsParts, killerHits } from './edps';
@@ -104,12 +104,12 @@ describe('battle conditions in the model', () => {
     it('reads every condition the model counts at its strength (Legend, W135)', () => {
         const c = heatConditions(league('Legend'), {
             enemySpeed: true, armored: true, moreEnemies: true, orb: true, deathRay: true,
-            tankUltimate: true, basicUltimate: true, deathDefyDown: true, energyShieldsDown: true,
+            tankUltimate: true, basicUltimate: true, fastUltimate: true, deathDefyDown: true, energyShieldsDown: true,
             thorns: true, knockback: true,   // no effect on a Glass Cannon run: not read
         }, 135, {});
         expect(c).toEqual({
             enemySpeedPct: 90, armoredHits: 15, moreEnemiesPct: 25, orbLeftPct: 20, deathRayLeftPct: 55,
-            tankUltimate: true, basicUltimatePct: 3, deathDefyDownPct: 6, shieldsDownPct: 25,
+            tankUltimate: true, basicUltimatePct: 3, fastUltimate: 3, deathDefyDownPct: 6, shieldsDownPct: 25,
         });
     });
 
@@ -207,6 +207,26 @@ describe('battle conditions in the model', () => {
         expect(killerHits(undefined, calib.mix)).toBe(1);
         const tanks = conditionRatios({ ...s, killers: { Tank: 1 }, conditions: { armoredHits: 5 } }, calib, edpsParts(s));
         expect(tanks.flat).toBeGreaterThan(k.flat);
+    });
+
+    it('Fast’s Ultimate brings slow enemies that end runs in at Fast speed, most of the time', () => {
+        // The owner sees it "most of the time": 1 − 0.4^x of them.
+        expect(fastBuffShare(1)).toBeCloseTo(0.6, 10);
+        expect(fastBuffShare(3)).toBeCloseTo(1 - 0.064, 10);
+        expect(fastBuffShare(undefined)).toBe(0);
+        // Overcharge (×0.2 speed) buffed to Fast (×2.1): 0.2/2.1 of its time in range.
+        expect(fastUltimateTime(1, { Overcharge: 1 })).toBeCloseTo(0.4 + 0.6 * (0.2 / 2.1), 10);
+        expect(fastUltimateTime(3, { Fast: 1, Saboteur: 1 })).toBe(1);          // already that fast
+        // Half Overcharge, half Ranged: geometric, like the killers' health labs.
+        const half = fastUltimateTime(2, { Overcharge: 0.5, Ranged: 0.5 });
+        const p = fastBuffShare(2);
+        expect(half).toBeCloseTo(Math.sqrt((1 - p + p * (0.2 / 2.1)) * (1 - p + p * (1.2 / 2.1))), 10);
+        // In the push score: slow killers lose damage, fast ones don't.
+        const s = snapshot();
+        const slow = { ...s, killers: { Overcharge: 1 } };
+        expect(goalScore({ ...slow, conditions: { fastUltimate: 3 } }) / goalScore(slow)).toBeLessThan(0.5);
+        const fast = { ...s, killers: { Fast: 1 } };
+        expect(goalScore({ ...fast, conditions: { fastUltimate: 3 } })).toBeCloseTo(goalScore(fast), 10);
     });
 
     it('Death Defy Down takes points off the chance; Energy Shields Down slows the shield', () => {

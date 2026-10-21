@@ -436,9 +436,14 @@ reports count kills per type, so the mix can be **calibrated per player**.
     buff up to 1 nearby enemies to match their speed". The sheet has 1 at
     W0–W20, then 2, 2, 3 … 10 by W1000; that fits value = level ÷ 10 rounded
     up with the level 5 higher each heat step (5, 10 … 95) — the code's
-    reading, one card seen. Slow enemies near a Fast come in at its speed;
-    the model times every enemy at Fast speed already, so it isn't counted
-    (which makes the model too hard on slow enemies the rest of the time).
+    reading, one card seen. Slow enemies near a Fast come in at its speed —
+    the owner sees it "most of the time" (2026-10-21). Counted in waves: a
+    buffed enemy that ends runs gets speed ÷ Fast's speed of its usual time
+    in range (Overcharge 0.2/2.1), buffed 1 − 0.4^x of the time (60% at up
+    to 1, 94% at 3 — the code's estimate from that), weighted geometrically
+    over the killer mix (`battleConditions.fastUltimateTime`). On the
+    owner's tournament runs (half Overcharge, half Ranged) it costs about 21
+    waves against a week without it.
   - The battle history doesn't record which conditions a run had (nor does
     29.1.3's export: `TournamentRecords` is empty on TTG's test file). The
     player ticks each run's on the Tournament page (store `tourneyLog`).
@@ -482,11 +487,11 @@ reports count kills per type, so the mix can be **calibrated per player**.
     the sheet's 30% at W1000 is the workshop's most). Energy Shields Down:
     recharge × (1 + x), so shield saves ÷ (1 + x). Both shown as the killing
     hits a run survives (`runSavers.savedHits`); waves don't include saves.
+  - Fast's Ultimate: see above (slow killers come in at Fast speed).
   - No effect on a Glass Cannon run (said on the page): Enemy Attack Speed,
-    Thorns, Ranged's Ultimate (a hit ends the run or uses a save), Fast's
-    Ultimate (the model times every enemy at Fast speed), Protector's
-    Ultimate (Black Hole isn't in flat damage); Plasma Cannon and Knockback
-    aren't modeled.
+    Thorns, Ranged's Ultimate (a hit ends the run or uses a save),
+    Protector's Ultimate (Black Hole isn't in flat damage); Plasma Cannon
+    and Knockback aren't modeled.
   - The league's fixed Skip Reduction and Skip Decay are in every
     tournament, so they don't move this week's end — but they shrink what a
     skip upgrade adds, which the Optimizer, What If and the module search
