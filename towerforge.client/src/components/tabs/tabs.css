@@ -3306,6 +3306,17 @@
     }
 }
 
+/* Auto import (header): on in the accent color, gold when something's in the way. */
+.lnk-auto.on {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.lnk-auto.warn {
+    border-color: var(--gold);
+    color: var(--gold);
+}
+
 /* Guardian tab: settings, slots and chip cards. */
 .grd-settings,
 .grd-slots,

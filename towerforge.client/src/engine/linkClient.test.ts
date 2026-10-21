@@ -29,6 +29,13 @@ describe('TowerForge Link client', () => {
         });
     });
 
+    it('asks only for a newer export, and says when there isn’t one', async () => {
+        const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204, headers: { 'X-Export-Modified': '1792290103' } }));
+        vi.stubGlobal('fetch', fetchMock);
+        expect(await linkExport(1792290103)).toEqual({ ok: false, reason: 'unchanged', modified: 1792290103 });
+        expect(fetchMock.mock.calls[0][0]).toBe(`${LINK_URL}/export?newerThan=1792290103`);
+    });
+
     it('says when the helper isn’t running', async () => {
         vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
         expect(await linkExport()).toEqual({ ok: false, reason: 'unreachable' });

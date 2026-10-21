@@ -52,6 +52,32 @@ Problems come back as a message for the player (HTTP 409 with `error` and
 wording includes where the switch is), no export yet, game not installed,
 phone asking to allow USB debugging.
 
+## Auto import (2026-10-21, Link 0.2)
+
+The game (29.1.3+) can export by itself every time it saves (Settings →
+External Tools Export → Auto). The header's **⟳ Auto import** toggle
+(`components/common/AutoImport.tsx`, off until the player turns it on,
+remembered per browser) keeps the site in step while it's open:
+
+- Every 30 s while the page is visible it asks
+  `GET /export?newerThan=<file time of the last export it read>`. Link 0.2
+  answers **204** (no body, nothing copied, nothing in its window) when the
+  file isn't newer; older Links ignore the parameter and send the file.
+- The game saves often during a run, so a newer export is imported right
+  away only when it has a run the site doesn't have yet; otherwise at most
+  every 10 minutes (currencies, levels), so a signed-in account isn't
+  re-saved after every game save. A skipped export is read again once the
+  10 minutes are up (`engine/autoImport.ts`, tested).
+- Imports quietly: a short note, no pop-up. It waits for the account to
+  load first, so a signed-in account's saved stats don't land on top of it.
+- If Link isn't running when it's turned on, the setup dialog opens; later
+  the button turns gold and its tooltip says why.
+
+Checked 2026-10-21 against a stand-in Link with a made-up export: first
+import on turning it on, a mid-run save skipped, a finished run imported at
+the next ask, and the gold state when Link stopped. Link 0.2 itself checked
+on BlueStacks: 204 for the same time, the file for an older one.
+
 ## Safety
 
 - Listens on 127.0.0.1 only; nothing off the PC can reach it.

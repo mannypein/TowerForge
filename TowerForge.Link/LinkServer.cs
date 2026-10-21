@@ -4,6 +4,9 @@
 //  open in a browser on the same PC, calls
 //    GET http://localhost:47821/status   what the helper found
 //    GET http://localhost:47821/export   the game's export file
+//        ?newerThan=<unix seconds>         only if it's newer: 204 (no body)
+//                                          when it isn't — the site's auto
+//                                          import asks this every 30 s
 //  Safety:
 //   • listens on the loopback address only — nothing outside this PC
 //     can reach it;
@@ -63,7 +66,7 @@ internal sealed class LinkServer(int port, Action<string> log)
         }
     }
 
-    private sealed record Request(string Method, string Path, Dictionary<string, string> Headers);
+    private sealed record Request(string Method, string Path, string Query, Dictionary<string, string> Headers);
 
     private static async Task<Request?> ReadRequestAsync(NetworkStream stream)
     {
@@ -87,7 +90,8 @@ internal sealed class LinkServer(int port, Action<string> log)
                 var colon = line.IndexOf(':');
                 if (colon > 0) headers[line[..colon].Trim()] = line[(colon + 1)..].Trim();
             }
-            return new Request(first[0].ToUpperInvariant(), first[1].Split('?')[0], headers);
+            var target = first[1].Split('?', 2);
+            return new Request(first[0].ToUpperInvariant(), target[0], target.Length > 1 ? target[1] : "", headers);
         }
         return null;
     }
@@ -142,7 +146,7 @@ internal sealed class LinkServer(int port, Action<string> log)
                 await WriteAsync(stream, 200, Status(), cors);
                 return;
             case "/export":
-                await ExportAsync(stream, cors);
+                await ExportAsync(stream, cors, NewerThan(req.Query));
                 return;
             default:
                 await WriteAsync(stream, 404, Error("not_found", "Nothing here."), cors);
@@ -167,22 +171,39 @@ internal sealed class LinkServer(int port, Action<string> log)
         w.WriteEndArray();
     });
 
-    private async Task ExportAsync(NetworkStream stream, Dictionary<string, string> cors)
+    // newerThan=<unix seconds> from the query (null when absent or not a number).
+    private static long? NewerThan(string query)
+    {
+        foreach (var part in query.Split('&'))
+        {
+            var kv = part.Split('=', 2);
+            if (kv.Length == 2 && kv[0] == "newerThan" && long.TryParse(kv[1], out var t) && t > 0) return t;
+        }
+        return null;
+    }
+
+    private async Task ExportAsync(NetworkStream stream, Dictionary<string, string> cors, long? newerThan)
     {
         await _oneAtATime.WaitAsync();
         try
         {
-            log("Getting your export…");
-            var file = await Exporter.ReadAsync();
+            // Auto import asks every 30 s: say nothing unless there's a new file.
+            if (newerThan is null) log("Getting your export…");
+            var file = await Exporter.ReadAsync(newerThan);
             cors["X-Export-Modified"] = file.ModifiedUnix.ToString();
             cors["X-Export-Source"] = file.Source;
+            if (file.Data.Length == 0)
+            {
+                await WriteAsync(stream, 204, null, cors);
+                return;
+            }
             var age = DateTimeOffset.UtcNow - DateTimeOffset.FromUnixTimeSeconds(file.ModifiedUnix);
             log($"Sent your export from {file.Source} ({file.Data.Length / 1024:N0} KB, made {Ago(age)}).");
             await WriteAsync(stream, 200, ("application/json", file.Data), cors);
         }
         catch (ExportProblem p)
         {
-            log(p.Message);
+            if (newerThan is null) log(p.Message);
             await WriteAsync(stream, 409, Error(p.Code, p.Message), cors);
         }
         catch (Exception ex)

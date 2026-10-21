@@ -37,7 +37,9 @@ internal static class Exporter
 
     private sealed record Found(string Serial, long Size, long Modified);
 
-    public static async Task<ExportFile> ReadAsync()
+    // The newest export; with newerThan (unix seconds), an empty one (no
+    // Data) when the file isn't newer than that — nothing is copied.
+    public static async Task<ExportFile> ReadAsync(long? newerThan = null)
     {
         var emulators = Emulators.Find();
         if (emulators.Count == 0)
@@ -94,6 +96,8 @@ internal static class Exporter
         // Two serials can name one emulator (emulator-5554 and 127.0.0.1:5555);
         // the newest export wins either way.
         var best = found.OrderByDescending(f => f.Modified).First();
+        if (newerThan is long seen && best.Modified <= seen)
+            return new ExportFile([], best.Modified, SourceName(best.Serial, emulators), best.Serial);
         var temp = Path.Combine(Path.GetTempPath(), "TowerForgeLink");
         Directory.CreateDirectory(temp);
         var local = Path.Combine(temp, $"{Guid.NewGuid():N}.json");

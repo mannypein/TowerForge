@@ -20,6 +20,7 @@ import CurrencyBar from './components/common/CurrencyBar';
 import ProfileTab from './components/tabs/ProfileTab';
 import LoginModal from './components/LoginModal';
 import LinkModal from './components/LinkModal';
+import AutoImport from './components/common/AutoImport';
 import { exportAge, linkExport } from './engine/linkClient';
 import PerksTab from './components/tabs/PerksTab';
 import TiersTab from './components/tabs/TiersTab';
@@ -265,6 +266,7 @@ export default function App() {
                 importJson(json, r.text, 'link', `Read from ${r.source}${when}. Export again in the game whenever you want fresh data.`);
                 return;
             }
+            if (r.reason === 'unchanged') return;   // only when asked for a newer export
             trackEvent(r.reason === 'unreachable' ? 'Emulator link not running' : `Emulator link: ${r.code}`);
             setLinkModal({ problem: r.reason === 'problem' ? r.message : null });
         } finally {
@@ -430,6 +432,10 @@ export default function App() {
                     >
                         🖥 Get from emulator
                     </button>
+                    <AutoImport
+                        onImport={raw => applyGameImport(parseGameExport(raw), raw)}
+                        onNeedsLink={() => setLinkModal({ problem: null })}
+                    />
                     <label className="btn btn-gold" style={{ cursor: 'pointer' }} title="Import the data export from The Tower (tool_export.json)">
                         ⬆ Import Game Data
                         <input

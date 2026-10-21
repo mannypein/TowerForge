@@ -55,6 +55,7 @@ internal static class Program
         }
         Console.WriteLine();
         Console.WriteLine("Ready. In the game, export your data; then on towerforge.net click \"Get from emulator\".");
+        Console.WriteLine("Or turn on Auto export in the game (Settings > External Tools Export) and Auto import on the site.");
         Console.WriteLine("Leave this window open while you use it. Close it to stop.");
         Console.WriteLine();
 

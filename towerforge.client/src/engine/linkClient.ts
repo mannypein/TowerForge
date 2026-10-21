@@ -13,6 +13,7 @@ export const LINK_DOWNLOAD = '/downloads/TowerForgeLink.exe';
 export type LinkResult =
     | { ok: true; text: string; modified: number | null; source: string }
     | { ok: false; reason: 'unreachable' }                         // helper not running (or blocked)
+    | { ok: false; reason: 'unchanged'; modified: number | null }  // not newer than `newerThan` (Link 0.2+)
     | { ok: false; reason: 'problem'; code: string; message: string };
 
 // Chrome and Edge ask once before a site may reach apps on this PC
@@ -26,15 +27,21 @@ function linkFetch(path: string, timeoutMs: number): Promise<Response> {
 }
 
 // The export, or why not. Reading it can take a few seconds (adb).
-export async function linkExport(): Promise<LinkResult> {
+// newerThan (the file time of an export already read, unix seconds): Link
+// 0.2+ answers 204 without the file when there's nothing newer; older
+// versions ignore it and send the file anyway.
+export async function linkExport(newerThan?: number): Promise<LinkResult> {
     let res: Response;
     try {
-        res = await linkFetch('/export', 90_000);
+        res = await linkFetch(newerThan ? `/export?newerThan=${Math.floor(newerThan)}` : '/export', 90_000);
     } catch {
         return { ok: false, reason: 'unreachable' };
     }
+    const modified = Number(res.headers.get('X-Export-Modified'));
+    if (res.status === 204) {
+        return { ok: false, reason: 'unchanged', modified: Number.isFinite(modified) && modified > 0 ? modified : null };
+    }
     if (res.ok) {
-        const modified = Number(res.headers.get('X-Export-Modified'));
         return {
             ok: true,
             text: await res.text(),

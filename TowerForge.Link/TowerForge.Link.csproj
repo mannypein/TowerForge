@@ -14,7 +14,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>TowerForgeLink</AssemblyName>
     <RootNamespace>TowerForge.Link</RootNamespace>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <Product>TowerForge Link</Product>
     <InvariantGlobalization>true</InvariantGlobalization>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
