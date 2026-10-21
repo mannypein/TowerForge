@@ -47,17 +47,20 @@ const RunCoinsTab = lazy(() => import('./components/tabs/RunCoinsTab'));
 const RunLengthTab = lazy(() => import('./components/tabs/RunLengthTab'));
 const WhatIfTab = lazy(() => import('./components/tabs/WhatIfTab'));
 const TournamentTab = lazy(() => import('./components/tabs/TournamentTab'));
+const AiTab = lazy(() => import('./components/tabs/AiTab'));
 
 // ── Tab Definitions ───────────────────────────────────────────
 // The tabs, grouped into sections so the menu fits a phone: the top row
 // picks a section, the row under it picks the tab inside it (no second row
 // for a section with one tab). A section with a long name has a short one
-// for phones.
+// for phones. A preview section shows only for the accounts the server
+// lists for it (features.json), and always in development.
 interface TabGroup {
     id: string;
     label: string;
     short?: string;
     tabs: { id: TabName; label: string }[];
+    preview?: string;
 }
 const TAB_GROUPS: TabGroup[] = [
     {
@@ -100,6 +103,7 @@ const TAB_GROUPS: TabGroup[] = [
             { id: 'runlength', label: 'Run Length' },
         ],
     },
+    { id: 'ai', label: 'Ask AI', tabs: [{ id: 'ai', label: 'Ask AI' }], preview: 'ai' },
     { id: 'creators', label: 'Creator Codes', short: 'Creators', tabs: [{ id: 'creators', label: 'Creator Codes' }] },
 ];
 
@@ -138,6 +142,10 @@ export default function App() {
     const storeCloudSave = useGameStore(s => s.storeCloudSave);
 
     const accountUsername = useAccountStore(s => s.username);
+    const accountStatus = useAccountStore(s => s.status);
+    const features = useAccountStore(s => s.features);
+    const canSee = (g: TabGroup) => !g.preview || import.meta.env.DEV || features.includes(g.preview);
+    const hiddenTab = !canSee(groupOf(activeTab));
 
     // Load saved state on mount, then check the account (which may sync
     // stats down from the server). The shared-stats viewer skips the account.
@@ -160,6 +168,14 @@ export default function App() {
         }
         document.title = titleOf(activeTab);
     }, [activeTab, shareCode]);
+
+    // A preview tab this account can't see (once the account is known)
+    // opens the home page instead, without leaving the address in history.
+    useEffect(() => {
+        if (shareCode || !hiddenTab || accountStatus === 'loading') return;
+        window.history.replaceState(null, '', TAB_PATHS.profile);
+        setActiveTab('profile');
+    }, [hiddenTab, accountStatus, shareCode, setActiveTab]);
 
     // Back and forward open the tab the address names.
     useEffect(() => {
@@ -380,6 +396,7 @@ export default function App() {
             case 'creators': return <CreatorCodesTab />;
             case 'share': return <ShareTab />;
             case 'account': return <AccountTab />;
+            case 'ai': return hiddenTab ? null : <AiTab />;
             default: return null;
         }
     }
@@ -455,7 +472,7 @@ export default function App() {
 
             {/* ── Sections, then the tabs of the open section ── */}
             <nav className="tab-bar" aria-label="Sections">
-                {TAB_GROUPS.map(group => {
+                {TAB_GROUPS.filter(canSee).map(group => {
                     const tab = lastInGroup[group.id] ?? group.tabs[0].id;
                     return (
                         <a

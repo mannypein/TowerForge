@@ -1,0 +1,343 @@
+// ============================================================
+//  TowerForge Companion — Ask AI: the assistant
+//  A small open model (aiModels.ts) running in the player's own browser
+//  with WebLLM on the graphics card (WebGPU): nothing is sent anywhere,
+//  and it costs the site nothing. Downloaded once into the browser's
+//  storage, loaded onto the graphics card when the page starts it.
+//
+//  Small models can't do the game's math and don't know the game well,
+//  so each question takes two steps:
+//   1. Route — the model picks which data answers it (JSON, held to a
+//      schema): the Optimizer's next picks, What If for named upgrades,
+//      current levels, the tournament estimate, or the game notes.
+//   2. Answer — the site works that data out (aiTools.ts, the same
+//      engine the pages use) and the model answers from it and the
+//      account summary, written out as it goes.
+//  Kept outside the page, so the model and the chat survive switching tabs.
+// ============================================================
+
+import { create } from 'zustand';
+import type { WebWorkerMLCEngine } from '@mlc-ai/web-llm';
+import { AI_MODELS, CONTEXT_TOKENS, modelByKey } from './aiModels';
+import type { AiModel } from './aiModels';
+import { accountSummary, bestUpgrades, levelsOf, tournamentOutlook, whatIfChanges } from './aiTools';
+import type { AiAccount, AiChangeAsk, AiCurrency, AiTourneySettings, ToolResult } from './aiTools';
+import { notesText, searchNotes } from './aiKnowledge';
+
+export interface AiMessage {
+    role: 'user' | 'assistant';
+    text: string;
+    looked?: ToolResult[];     // the data the answer was written from
+    route?: string;            // what step 1 asked for (shown with the data)
+    status?: string;           // while it works ("Reading your account…")
+    done?: boolean;
+}
+
+// What a question is asked with (read fresh from the stores each time).
+export interface AiContext {
+    account: AiAccount;
+    tourney: AiTourneySettings;
+    goal?: string;             // the Optimizer page's goal
+}
+
+type Status = 'idle' | 'loading' | 'ready' | 'error';
+
+interface AiStore {
+    modelKey: string;
+    status: Status;
+    progress: { pct: number; text: string } | null;
+    error: string | null;
+    loadedId: string | null;   // the WebLLM model id on the graphics card
+    cached: Record<string, boolean>;
+    messages: AiMessage[];
+    busy: boolean;
+    think: boolean;            // let Qwen3 think before answering (slower, often better)
+
+    chooseModel: (key: string) => void;
+    setThink: (on: boolean) => void;
+    checkCache: () => Promise<void>;
+    start: () => Promise<void>;
+    stopModel: () => Promise<void>;
+    removeModel: (key: string) => Promise<void>;
+    ask: (question: string, ctx: AiContext) => Promise<void>;
+    interrupt: () => void;
+    clearChat: () => void;
+}
+
+const MODEL_KEY = 'tc_ai_model';
+const readModel = () => { try { return localStorage.getItem(MODEL_KEY); } catch { return null; } };
+
+let engine: WebWorkerMLCEngine | null = null;
+let worker: Worker | null = null;
+
+// ── Graphics card ─────────────────────────────────────────────
+interface GpuAdapter { features: { has(f: string): boolean } }
+interface Gpu { requestAdapter(o?: { powerPreference?: string }): Promise<GpuAdapter | null> }
+const gpuOf = () => (navigator as Navigator & { gpu?: Gpu }).gpu;
+
+export const hasWebGpu = () => !!gpuOf();
+
+// The model build this graphics card can run (16-bit floats or not).
+async function modelIdFor(m: AiModel): Promise<string> {
+    const adapter = await gpuOf()?.requestAdapter({ powerPreference: 'high-performance' });
+    if (!adapter) throw new Error('No graphics card answered (WebGPU found no adapter).');
+    return adapter.features.has('shader-f16') ? m.f16 : m.f32;
+}
+
+// ── Step 1: route ─────────────────────────────────────────────
+interface Route {
+    tool: 'upgrades' | 'what_if' | 'levels' | 'tournament' | 'guide' | 'none';
+    currency: AiCurrency;
+    goal: 'default' | 'waves' | 'damage' | 'coins' | 'survival';
+    changes: AiChangeAsk[];
+    search: string;
+}
+
+const ROUTE_SCHEMA = JSON.stringify({
+    type: 'object',
+    properties: {
+        tool: { type: 'string', enum: ['upgrades', 'what_if', 'levels', 'tournament', 'guide', 'none'] },
+        currency: { type: 'string', enum: ['any', 'stones', 'coins', 'research', 'shards', 'medals', 'gems', 'bits'] },
+        goal: { type: 'string', enum: ['default', 'waves', 'damage', 'coins', 'survival'] },
+        changes: {
+            type: 'array', maxItems: 4,
+            items: {
+                type: 'object',
+                properties: { upgrade: { type: 'string' }, level: { type: 'string' } },
+                required: ['upgrade', 'level'],
+            },
+        },
+        search: { type: 'string' },
+    },
+    required: ['tool', 'currency', 'goal', 'changes', 'search'],
+});
+
+const ROUTE_PROMPT = `You pick the data that answers a player's question about their account in the mobile game The Tower (idle tower defense). Reply with JSON only.
+tool:
+- "upgrades": what to upgrade or spend on next. currency: stones (Power Stones: UWs, UW+, card mastery), coins (workshop, enhancements), research (labs), shards (module slots), medals (bots), gems (card slots), bits (Guardian chips), or any. goal: waves, damage, coins, survival, or default.
+- "what_if": what specific upgrades would do (waves, damage, coins, cost). changes: each upgrade in the player's words and the level: "max", "+N" (N more levels) or a level number.
+- "levels": the player's current level of specific upgrades. search: the upgrade names.
+- "tournament": tournaments, this week's battle conditions, how far tournament runs get.
+- "guide": how a game mechanic works or how TowerForge calculates something. search: a few keywords.
+- "none": greetings, or questions the account overview answers (tier, waves, what they own).
+Unused fields: currency "any", goal "default", changes [], search "".
+Examples:
+"what should I spend my stones on" → {"tool":"upgrades","currency":"stones","goal":"default","changes":[],"search":""}
+"how many waves would maxing CL and CF+ get me" → {"tool":"what_if","currency":"any","goal":"default","changes":[{"upgrade":"CL","level":"max"},{"upgrade":"CF+","level":"max"}],"search":""}
+"is 10 more levels of the damage lab worth it" → {"tool":"what_if","currency":"any","goal":"default","changes":[{"upgrade":"damage lab","level":"+10"}],"search":""}
+"how does Fast's Ultimate work" → {"tool":"guide","currency":"any","goal":"default","changes":[],"search":"Fast's Ultimate"}`;
+
+// When the model's JSON can't be read: the same choice from keywords.
+function guessRoute(q: string): Route {
+    const l = q.toLowerCase();
+    const base: Route = { tool: 'none', currency: 'any', goal: 'default', changes: [], search: '' };
+    if (/tourn|tourney|bracket|battle condition/.test(l)) return { ...base, tool: 'tournament' };
+    if (/what if|would .*(max|level)|\bmax(ing)?\b/.test(l)) return { ...base, tool: 'what_if', changes: [{ upgrade: q, level: 'max' }] };
+    if (/upgrade|spend|next|should i|priorit/.test(l)) {
+        const currency = (['stones', 'coins', 'research', 'shards', 'medals', 'gems', 'bits'] as const)
+            .find(c => l.includes(c.replace(/s$/, ''))) ?? 'any';
+        return { ...base, tool: 'upgrades', currency };
+    }
+    if (/how (does|do|is)|what (is|does)|why/.test(l)) return { ...base, tool: 'guide', search: q };
+    return base;
+}
+
+// Qwen3 starts every reply with its (here empty) <think></think>.
+function readRoute(raw: string, q: string): Route & { guessed?: boolean } {
+    try {
+        const body = raw.replace(/<think>[\s\S]*?<\/think>/g, '');
+        const r = JSON.parse(body.slice(body.indexOf('{'), body.lastIndexOf('}') + 1)) as Partial<Route>;
+        if (!r.tool) return { ...guessRoute(q), guessed: true };
+        return {
+            tool: r.tool, currency: r.currency ?? 'any', goal: r.goal ?? 'default',
+            changes: Array.isArray(r.changes) ? r.changes.filter(c => c?.upgrade) : [], search: r.search ?? '',
+        };
+    } catch {
+        return { ...guessRoute(q), guessed: true };
+    }
+}
+
+const routeText = (r: Route & { guessed?: boolean }) => [
+    r.tool,
+    r.tool === 'upgrades' && `${r.currency}${r.goal !== 'default' ? `, goal ${r.goal}` : ''}`,
+    r.tool === 'what_if' && r.changes.map(c => `${c.upgrade} → ${c.level}`).join('; '),
+    (r.tool === 'levels' || r.tool === 'guide') && r.search && `"${r.search}"`,
+    r.guessed && '(from keywords: the model’s choice couldn’t be read)',
+].filter(Boolean).join(' · ');
+
+// ── Step 2: the data ──────────────────────────────────────────
+function lookUp(route: Route, question: string, ctx: AiContext): ToolResult[] {
+    const { account } = ctx;
+    switch (route.tool) {
+        case 'upgrades':
+            return [bestUpgrades(account, route.currency, route.goal === 'default' ? ctx.goal : route.goal)];
+        case 'what_if': {
+            const asks = route.changes.length ? route.changes : [{ upgrade: question, level: 'max' }];
+            // Each on its own when there are several (to compare), then together.
+            const each = asks.length > 1 ? asks.map(a => whatIfChanges(account, [a])) : [];
+            const together = whatIfChanges(account, asks);
+            return asks.length > 1
+                ? [...each.map((r, i) => ({ ...r, title: `What If — ${asks[i].upgrade}` })), { ...together, title: 'What If — all together' }]
+                : [together];
+        }
+        case 'levels':
+            return [levelsOf(account, route.search || question)];
+        case 'tournament':
+            return [tournamentOutlook(account, ctx.tourney)];
+        case 'guide': {
+            const found = searchNotes(`${route.search} ${question}`);
+            return [{ title: `Game notes — ${found.map(p => p.heading).slice(0, 2).join(', ') || 'nothing found'}`, text: found.length ? notesText(found) : 'No notes matched.' }];
+        }
+        default:
+            return [];
+    }
+}
+
+const ANSWER_PROMPT = `You are TowerForge's assistant for the mobile idle tower defense game The Tower (by Tech Tree Games). You answer the player's questions about their own account from the data below, which TowerForge worked out from their game data.
+Rules:
+- Only use numbers that are in the data, copied exactly. When the data has a "Headline:" line, start from it. Never make up levels, costs, waves or percentages. If the data doesn't answer the question, say so and name the TowerForge page that does (Optimizer, What If, Tournament, Run Length, Coins per Run, Enemy Stats).
+- Use the game's own words: Power Stones, Ultimate Weapons (UWs), UW+, labs, workshop, enhancements, cards, modules, bots, Bot+, Guardian, tiers, waves.
+- Be brief and direct: answer first in a sentence or two, then a few short bullet points if they help.
+- If the data says an upgrade couldn't be found, or doesn't have the answer, say so plainly and don't guess.
+- Game notes are TowerForge's own notes: explain them in plain words and leave out code names and file names.`;
+
+// Rough token count (about 3.5 characters a token for this text).
+const tokens = (s: string) => Math.ceil(s.length / 3.5);
+const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}…` : s);
+const visible = (s: string) => s.replace(/<think>[\s\S]*?<\/think>\s*/g, '').replace(/<think>[\s\S]*$/, '').trimStart();
+
+export const useAiStore = create<AiStore>((set, get) => {
+    const patchLast = (patch: Partial<AiMessage>) => set(s => ({
+        messages: s.messages.map((m, i) => (i === s.messages.length - 1 ? { ...m, ...patch } : m)),
+    }));
+
+    return {
+        modelKey: modelByKey(readModel()).key,
+        status: 'idle',
+        progress: null,
+        error: null,
+        loadedId: null,
+        cached: {},
+        messages: [],
+        busy: false,
+        think: false,
+
+        chooseModel: (key) => {
+            try { localStorage.setItem(MODEL_KEY, key); } catch { /* not remembered */ }
+            set({ modelKey: modelByKey(key).key });
+        },
+        setThink: (on) => set({ think: on }),
+
+        // Which models are already downloaded (both builds count).
+        checkCache: async () => {
+            const { hasModelInCache } = await import('@mlc-ai/web-llm');
+            const cached: Record<string, boolean> = {};
+            for (const m of AI_MODELS) {
+                try { cached[m.key] = (await hasModelInCache(m.f16)) || (await hasModelInCache(m.f32)); } catch { cached[m.key] = false; }
+            }
+            set({ cached });
+        },
+
+        start: async () => {
+            if (get().status === 'loading') return;
+            const model = modelByKey(get().modelKey);
+            set({ status: 'loading', error: null, progress: { pct: 0, text: 'Starting…' } });
+            try {
+                const id = await modelIdFor(model);
+                if (engine && get().loadedId !== id) await get().stopModel();
+                if (!engine) {
+                    const { CreateWebWorkerMLCEngine } = await import('@mlc-ai/web-llm');
+                    worker = new Worker(new URL('./aiWorker.ts', import.meta.url), { type: 'module' });
+                    engine = await CreateWebWorkerMLCEngine(worker, id, {
+                        initProgressCallback: r => set({ progress: { pct: r.progress, text: r.text } }),
+                    }, { context_window_size: CONTEXT_TOKENS });
+                }
+                set({ status: 'ready', loadedId: id, progress: null });
+                void get().checkCache();
+            } catch (e) {
+                worker?.terminate();
+                engine = null;
+                worker = null;
+                set({ status: 'error', loadedId: null, progress: null, error: e instanceof Error ? e.message : String(e) });
+            }
+        },
+
+        // Frees the graphics card (the download stays).
+        stopModel: async () => {
+            try { await engine?.unload(); } catch { /* worker already gone */ }
+            worker?.terminate();
+            engine = null;
+            worker = null;
+            set({ status: 'idle', loadedId: null, busy: false });
+        },
+
+        // Deletes a model's download from this browser.
+        removeModel: async (key) => {
+            const m = modelByKey(key);
+            const loaded = get().loadedId;
+            if (loaded === m.f16 || loaded === m.f32) await get().stopModel();
+            const { deleteModelAllInfoInCache } = await import('@mlc-ai/web-llm');
+            for (const id of [m.f16, m.f32]) {
+                try { await deleteModelAllInfoInCache(id); } catch { /* wasn't there */ }
+            }
+            await get().checkCache();
+        },
+
+        ask: async (question, ctx) => {
+            const q = question.trim();
+            if (!q || !engine || get().busy) return;
+            // Earlier questions only: a small model copies its own earlier
+            // answers' numbers into new ones, so it never sees them.
+            const earlier = get().messages.filter(m => m.role === 'user').slice(-2).map(m => clip(m.text, 300));
+            set(s => ({
+                busy: true,
+                messages: [...s.messages, { role: 'user', text: q, done: true },
+                    { role: 'assistant', text: '', status: 'Working out what to look at…' }],
+            }));
+            try {
+                // Follow-ups ("and CF+ instead?") read with the question before.
+                const asked = earlier.length ? `Earlier question, for context: ${earlier[earlier.length - 1]}\nQuestion: ${q}` : q;
+                const routed = await engine.chat.completions.create({
+                    messages: [{ role: 'system', content: ROUTE_PROMPT }, { role: 'user', content: asked }],
+                    temperature: 0, max_tokens: 200,
+                    response_format: { type: 'json_object', schema: ROUTE_SCHEMA },
+                    extra_body: { enable_thinking: false },
+                });
+                const route = readRoute(routed.choices[0]?.message?.content ?? '', q);
+
+                patchLast({ status: 'Reading your account…' });
+                await new Promise(r => setTimeout(r, 30));   // let the page show it
+                const looked = lookUp(route, q, ctx);
+                const summary = accountSummary(ctx.account);
+                let data = looked.map(r => `[${r.title}]\n${r.text}`).join('\n\n');
+                // Keep everything inside the context with room for the answer.
+                const answerTokens = get().think ? 2048 : 900;
+                const context = earlier.length ? `\n\n[Earlier questions in this chat]\n${earlier.join('\n')}` : '';
+                const room = CONTEXT_TOKENS - answerTokens - tokens(ANSWER_PROMPT) - tokens(summary) - tokens(context) - 300;
+                if (tokens(data) > room) data = clip(data, Math.floor(room * 3.5));
+
+                const system = `${ANSWER_PROMPT}\n\n[The player's account]\n${summary}${data ? `\n\n${data}` : ''}${context}`;
+                patchLast({ looked, route: routeText(route), status: get().think ? 'Thinking…' : 'Writing…' });
+                const stream = await engine.chat.completions.create({
+                    messages: [{ role: 'system', content: system }, { role: 'user', content: q }],
+                    stream: true, temperature: 0.2, top_p: 0.8, max_tokens: answerTokens,
+                    extra_body: { enable_thinking: get().think },
+                });
+                let raw = '';
+                for await (const chunk of stream) {
+                    raw += chunk.choices[0]?.delta?.content ?? '';
+                    const shown = visible(raw);
+                    patchLast({ text: shown, status: shown ? undefined : 'Thinking…' });
+                }
+                patchLast({ text: visible(raw) || '(No answer — try asking another way.)', status: undefined, done: true });
+            } catch (e) {
+                patchLast({ text: `Something went wrong: ${e instanceof Error ? e.message : String(e)}`, status: undefined, done: true });
+            } finally {
+                set({ busy: false });
+            }
+        },
+
+        interrupt: () => { void engine?.interruptGenerate(); },
+        clearChat: () => { if (!get().busy) set({ messages: [] }); },
+    };
+});

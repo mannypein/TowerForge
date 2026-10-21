@@ -17,6 +17,9 @@ Directory.CreateDirectory(dataDir);
 builder.Services.AddSingleton(new AppDb(dataDir));
 builder.Services.AddSingleton<ShareStore>();
 builder.Services.AddSingleton<UserStore>();
+// Parts of the site only some accounts see while they're tried out.
+builder.Services.AddSingleton(sp => new PreviewFeatures(
+    Path.Combine(dataDir, "features.json"), sp.GetRequiredService<ILogger<PreviewFeatures>>()));
 
 // Persist keys so sign-in cookies survive restarts and deploys.
 builder.Services.AddDataProtection()

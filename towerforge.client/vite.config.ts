@@ -1,6 +1,6 @@
 import { fileURLToPath, URL } from 'node:url';
 
-import { defineConfig } from 'vite';
+import { defineConfig, searchForWorkspaceRoot } from 'vite';
 import plugin from '@vitejs/plugin-react';
 import fs from 'fs';
 import path from 'path';
@@ -75,6 +75,10 @@ export default defineConfig({
             }
         },
         port: parseInt(env.DEV_SERVER_PORT || '58132'),
+        // Ask AI bundles the game notes from the repo's docs/ folder.
+        fs: {
+            allow: [searchForWorkspaceRoot(process.cwd()), '../docs'],
+        },
         https: {
             key: fs.readFileSync(keyFilePath),
             cert: fs.readFileSync(certFilePath),

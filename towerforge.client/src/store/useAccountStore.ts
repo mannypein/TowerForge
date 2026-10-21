@@ -35,6 +35,7 @@ type SyncState = 'idle' | 'saving' | 'saved' | 'error';
 interface AccountStore {
     status: Status;
     username: string | null;
+    features: string[];             // preview parts of the site this account can see (e.g. "ai")
     syncState: SyncState;
     lastSyncedAt: number | null;
     notice: string | null;          // e.g. "session expired" shown on the Account tab
@@ -99,7 +100,7 @@ async function push(keepalive = false): Promise<void> {
             // signing back in to the same account uploads them.
             stopSync();
             useAccountStore.setState({
-                status: 'signedOut', username: null, syncState: 'idle',
+                status: 'signedOut', username: null, features: [], syncState: 'idle',
                 notice: 'Your session expired. Sign in again to keep saving to your account.',
             });
             return;
@@ -139,9 +140,9 @@ function stopSync(): void {
     document.removeEventListener('visibilitychange', flushOnHide);
 }
 
-function signedIn(username: string): void {
+function signedIn(username: string, features?: string[]): void {
     writeKey(LINKED_USER_KEY, username);
-    useAccountStore.setState({ status: 'signedIn', username, notice: null });
+    useAccountStore.setState({ status: 'signedIn', username, notice: null, ...(features ? { features } : {}) });
     startSync();
 }
 
@@ -149,6 +150,7 @@ function signedIn(username: string): void {
 export const useAccountStore = create<AccountStore>((set) => ({
     status: 'loading',
     username: null,
+    features: [],
     syncState: 'idle',
     lastSyncedAt: null,
     notice: null,
@@ -157,9 +159,9 @@ export const useAccountStore = create<AccountStore>((set) => ({
     // Runs once on app load, after the local stats are loaded.
     init: async () => {
         const linked = readKey(LINKED_USER_KEY);
-        let username: string | null;
+        let me: accountApi.Me | null;
         try {
-            username = await accountApi.getMe();
+            me = await accountApi.getMe();
         } catch {
             // Offline: keep tracking edits for the linked account so they upload later.
             if (linked) signedIn(linked);
@@ -167,7 +169,7 @@ export const useAccountStore = create<AccountStore>((set) => ({
             return;
         }
 
-        if (!username) {
+        if (!me) {
             set({
                 status: 'signedOut',
                 notice: linked ? 'Your session expired. Sign in again to keep saving to your account.' : null,
@@ -176,7 +178,7 @@ export const useAccountStore = create<AccountStore>((set) => ({
         }
 
         try {
-            if (sameUser(linked, username) && isDirty()) {
+            if (sameUser(linked, me.username) && isDirty()) {
                 await push();                       // unsynced edits from this device win
             } else {
                 const { save } = await accountApi.getSave();
@@ -186,7 +188,7 @@ export const useAccountStore = create<AccountStore>((set) => ({
         } catch {
             set({ syncState: 'error' });
         }
-        signedIn(username);
+        signedIn(me.username, me.features ?? []);
         await push();
     },
 
@@ -197,21 +199,21 @@ export const useAccountStore = create<AccountStore>((set) => ({
         clearShareClaims();
         writeKey(DIRTY_KEY, null);
         set({ syncState: 'saved', lastSyncedAt: Date.now() });
-        signedIn(res.username);
+        signedIn(res.username, res.features ?? []);
     },
 
     // Signing in loads the account's stats onto this device.
     login: async (username, password) => {
         const res = await accountApi.login(username, password);
         if (sameUser(readKey(LINKED_USER_KEY), res.username) && isDirty()) {
-            signedIn(res.username);
+            signedIn(res.username, res.features ?? []);
             await push();                           // finish uploading edits from an expired session
             return;
         }
         if (res.save) applyRemoteSave(res.save);
         else writeKey(DIRTY_KEY, '1');
         set({ syncState: 'saved', lastSyncedAt: Date.now() });
-        signedIn(res.username);
+        signedIn(res.username, res.features ?? []);
         await push();
     },
 
@@ -229,7 +231,7 @@ export const useAccountStore = create<AccountStore>((set) => ({
         try { useGameStore.getState().resetAll(); } finally { applyingRemote = false; }
         writeKey(LINKED_USER_KEY, null);
         writeKey(DIRTY_KEY, null);
-        set({ status: 'signedOut', username: null, syncState: 'idle', lastSyncedAt: null, notice: null });
+        set({ status: 'signedOut', username: null, features: [], syncState: 'idle', lastSyncedAt: null, notice: null });
     },
 
     sharesChanged: () => set(s => ({ sharesVersion: s.sharesVersion + 1 })),

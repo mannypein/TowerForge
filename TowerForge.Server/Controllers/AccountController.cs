@@ -29,11 +29,13 @@ public class AccountController : ControllerBase
 
     private readonly UserStore _users;
     private readonly ShareStore _shares;
+    private readonly PreviewFeatures _previews;
 
-    public AccountController(UserStore users, ShareStore shares)
+    public AccountController(UserStore users, ShareStore shares, PreviewFeatures previews)
     {
         _users = users;
         _shares = shares;
+        _previews = previews;
     }
 
     public record ShareClaim(string Code, string Token);
@@ -64,7 +66,7 @@ public class AccountController : ControllerBase
             await _shares.ClaimAsync(user.Id, req.Claims.Select(c => (c.Code, c.Token)));
 
         await SignInAsync(user);
-        return Ok(new { username = user.Username });
+        return Ok(new { username = user.Username, features = _previews.For(user.Username) });
     }
 
     // POST /api/account/login — returns the account's saved stats so the
@@ -82,6 +84,7 @@ public class AccountController : ControllerBase
         return Ok(new
         {
             username = user.Username,
+            features = _previews.For(user.Username),
             save = ParseSave(save),
             updatedAt = save?.UpdatedAt,
         });
@@ -95,7 +98,8 @@ public class AccountController : ControllerBase
         return NoContent();
     }
 
-    // GET /api/account/me — 200 { username } when signed in, else 401.
+    // GET /api/account/me — 200 { username, features } when signed in, else
+    // 401. features: the preview parts of the site this account can see.
     [Authorize]
     [HttpGet("me")]
     public async Task<IActionResult> Me()
@@ -106,7 +110,7 @@ public class AccountController : ControllerBase
             await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
             return Unauthorized();
         }
-        return Ok(new { username = user.Username });
+        return Ok(new { username = user.Username, features = _previews.For(user.Username) });
     }
 
     // GET /api/account/save — the account's synced stats.

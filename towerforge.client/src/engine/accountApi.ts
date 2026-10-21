@@ -19,11 +19,17 @@ export interface AccountShare {
     expiresAt: string;
 }
 
-// Returns the signed-in username, or null when not signed in.
-export async function getMe(): Promise<string | null> {
+// The signed-in account: its username and the preview parts of the site
+// it can see (server's features.json).
+export interface Me {
+    username: string;
+    features?: string[];
+}
+
+// Returns the signed-in account, or null when not signed in.
+export async function getMe(): Promise<Me | null> {
     try {
-        const me = await apiRequest<{ username: string }>(`${BASE}/me`);
-        return me.username;
+        return await apiRequest<Me>(`${BASE}/me`);
     } catch (err) {
         if (err instanceof ApiError && err.status === 401) return null;
         throw err;
@@ -31,14 +37,14 @@ export async function getMe(): Promise<string | null> {
 }
 
 export function register(username: string, password: string, save: AccountSave, claims: ShareClaim[]) {
-    return apiRequest<{ username: string }>(`${BASE}/register`, {
+    return apiRequest<Me>(`${BASE}/register`, {
         method: 'POST',
         body: JSON.stringify({ username, password, save, claims }),
     }, 'Could not create the account.');
 }
 
 export function login(username: string, password: string) {
-    return apiRequest<{ username: string; save: AccountSave | null; updatedAt: string | null }>(`${BASE}/login`, {
+    return apiRequest<Me & { save: AccountSave | null; updatedAt: string | null }>(`${BASE}/login`, {
         method: 'POST',
         body: JSON.stringify({ username, password }),
     }, 'Could not sign in.');

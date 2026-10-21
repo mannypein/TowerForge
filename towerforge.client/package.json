@@ -14,6 +14,7 @@
     "upgrade-costs": "node scripts/upgrade-costs.mjs"
   },
   "dependencies": {
+    "@mlc-ai/web-llm": "0.2.85",
     "html-to-image": "^1.11.13",
     "pdfjs-dist": "^6.3.289",
     "react": "^19.2.6",
