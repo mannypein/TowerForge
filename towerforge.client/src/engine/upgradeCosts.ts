@@ -118,7 +118,7 @@ export const CARD_SLOT_GEMS = [0, 50, 100, 200, 300, 400, 500, 600, 750, 1000, 1
     2500, 3500, 4500, 5500, 6500, 7500, 8500, 10000];
 
 // Event Shop trades: medals for the 1st, 2nd … trade of one kind in an
-// event (7th and later 380). Each gives 15 Power Stones, 250 Module Shards
+// event (7th and later 380). Each gives 15 stones, 250 Module Shards
 // of one type, or 150 Gems.
 export const MEDAL_TRADE_PRICES = [40, 65, 90, 130, 175, 230, 380];
 export const MEDAL_TRADE_GIVES = { stones: 15, shards: 250, gems: 150 };

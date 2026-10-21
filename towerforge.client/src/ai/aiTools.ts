@@ -8,7 +8,9 @@
 //   • bestUpgrades — the Optimizer's next picks for a currency;
 //   • whatIfChanges — What If for upgrades named in words ("max CL");
 //   • levelsOf — current levels of upgrades named in words;
-//   • tournamentOutlook — the Tournament page's estimate for this week.
+//   • tournamentOutlook — the Tournament page's estimate for this week;
+//   • runsReport — the saved runs, with damage by source;
+//   • tierOutlook — how far the same damage gets on another tier.
 //  Pure functions — no store imports.
 // ============================================================
 
@@ -20,8 +22,9 @@ import { changeCost, upgradeTargets, whatIf } from '../engine/whatIf';
 import type { Change, Costs, UpgradeTarget } from '../engine/whatIf';
 import { buildTournamentModel, heatOf, newestTournament } from '../engine/tournamentModel';
 import type { Ticks } from '../engine/tournamentModel';
-import { killedBy } from '../engine/runLength';
-import { runKey } from '../engine/battleReport';
+import { buildRunLengthModel, deathWave, killedBy } from '../engine/runLength';
+import { extraDamage, runKey } from '../engine/battleReport';
+import type { BattleReport } from '../engine/battleReport';
 import { defaultBattleIndex } from '../engine/gameExport';
 import { formatGameNumber } from '../engine/gameNumbers';
 import { formatLabTime } from '../engine/upgradeCosts';
@@ -67,7 +70,7 @@ export function accountSummary(s: AiAccount, now = Date.now()): string {
     if (best.length) lines.push(`Best waves: ${best.map(([t, w]) => `T${t} W${w.toLocaleString()}`).join(', ')}.`);
 
     const c = s.currencies;
-    if (c) lines.push(`Holding: ${num(c.coins)} coins, ${c.stones.toLocaleString()} Power Stones, ${c.gems.toLocaleString()} gems, `
+    if (c) lines.push(`Holding: ${num(c.coins)} coins, ${c.stones.toLocaleString()} stones, ${c.gems.toLocaleString()} gems, `
         + `${c.medals.toLocaleString()} medals, ${c.bits.toLocaleString()} bits.`);
 
     const uws = UWS.filter(u => s.uwData.data[u.a]?.own).map(u => {
@@ -135,10 +138,17 @@ const CURRENCY_CATS: Record<OptCurrency, OptCategory[]> = {
     medals: ['bots'], gems: ['cards'], bits: ['guardian'],
 };
 const CURRENCY_NAMES: Record<OptCurrency, string> = {
-    stones: 'Power Stones', coins: 'coins (workshop and enhancements)', research: 'lab research', shards: 'Module Shards',
+    stones: 'stones', coins: 'coins (workshop and enhancements)', research: 'lab research', shards: 'Module Shards',
     medals: 'medals (bots)', gems: 'gems (card slots)', bits: 'bits (Guardian chips)',
 };
 const PICKS = 6;
+
+// What the player holds of a currency (null: not tracked, e.g. lab time).
+function held(s: AiAccount, c: OptCurrency): number | null {
+    const cur = s.currencies;
+    if (!cur) return null;
+    return { stones: cur.stones, coins: cur.coins, medals: cur.medals, gems: cur.gems, bits: cur.bits, shards: null, research: null }[c];
+}
 
 // The goal the Optimizer page uses for this build (its saved one when it fits).
 export function goalFor(build: BuildType, wanted?: string): OptGoal {
@@ -151,7 +161,7 @@ function costText(c: OptCandidate): string {
         return c.hours !== undefined ? `${formatLabTime(c.hours)} of research${c.coins ? `, ${num(c.coins)} coins` : ''}` : '';
     }
     if (c.costKnown === false) return '';
-    const unit = { stones: 'Power Stones', coins: 'coins', medals: 'medals', shards: 'shards', gems: 'gems', bits: 'bits', research: '' }[c.costType];
+    const unit = { stones: 'stones', coins: 'coins', medals: 'medals', shards: 'shards', gems: 'gems', bits: 'bits', research: '' }[c.costType];
     return c.cost > 0 ? `${num(c.cost)} ${unit}` : 'free';
 }
 
@@ -176,11 +186,20 @@ export function bestUpgrades(s: AiAccount, currency: AiCurrency, goalWanted?: st
             path.sort((a, b) => b.scorePerCost - a.scorePerCost);
         }
         if (path[0]) parts.push(`Headline: the best next ${CURRENCY_NAMES[cur].split(' (')[0]} buy is ${path[0].label} ${path[0].subLabel}${costText(path[0]) ? ` for ${costText(path[0])}` : ''} (${pct(path[0].scorePct)}).`);
-        const rows = path.slice(0, PICKS).map((c, i) => {
+        const have = held(s, cur);
+        const picks = path.slice(0, PICKS);
+        const rows = picks.map((c, i) => {
             const cost = costText(c);
-            return `${i + 1}. ${c.label} ${c.subLabel} — ${pct(c.scorePct)}${cost ? `, ${cost}` : ''}`;
+            const afford = have !== null && c.cost > 0 && c.costKnown !== false ? (c.cost <= have ? ' (you have enough now)' : ' (more than you have)') : '';
+            return `${i + 1}. ${c.label} ${c.subLabel} — ${pct(c.scorePct)}${cost ? `, ${cost}` : ''}${afford}`;
         });
         parts.push(`Next ${CURRENCY_NAMES[cur]}:\n${rows.length ? rows.join('\n') : 'nothing left worth buying'}`);
+        // Costs compared by the site: small models misread K, M, B, T, q, Q…
+        const priced = picks.filter(c => c.cost > 0 && c.costKnown !== false);
+        if (priced.length > 1) {
+            const cheap = [...priced].sort((a, b) => a.cost - b.cost);
+            parts.push(`Cheapest first: ${cheap.map(c => `${c.label} ${c.subLabel} (${costText(c)})`).join('; ')}.`);
+        }
     }
     return { title: `Optimizer — ${wanted.map(c => CURRENCY_NAMES[c].split(' (')[0]).join(', ')}`, text: parts.join('\n') };
 }
@@ -264,7 +283,7 @@ export function levelsOf(s: AiAccount, query: string): ToolResult {
 export interface AiChangeAsk { upgrade: string; level: string }
 
 const COSTS: [OptCurrency, (v: number) => string][] = [
-    ['coins', v => `${num(v)} coins`], ['stones', v => `${v.toLocaleString()} Power Stones`],
+    ['coins', v => `${num(v)} coins`], ['stones', v => `${v.toLocaleString()} stones`],
     ['research', v => `${formatLabTime(v)} of research`], ['medals', v => `${v.toLocaleString()} medals`],
     ['shards', v => `${num(v)} Module Shards`], ['bits', v => `${v.toLocaleString()} bits`],
 ];
@@ -353,4 +372,84 @@ export function tournamentOutlook(s: AiAccount, sim: AiTourneySettings): ToolRes
         out.push('Waves for tournaments are only estimated for Glass Cannon builds so far.');
     }
     return { title: 'Tournament', text: out.join('\n') };
+}
+
+// ── Runs ──────────────────────────────────────────────────────
+// Damage by source as shares of the run's damage (under 1% left out).
+export function damageShares(r: BattleReport): [string, number][] {
+    const d = r.damage;
+    if (!d || d.total <= 0) return [];
+    const x = extraDamage(r);
+    const parts: [string, number][] = [
+        ['Chain Lightning', d.chainLightning], ['Orbs', d.orbs], ['Death Ray', x.deathRay], ['Black Hole', d.blackHole],
+        ['Tower shots', d.projectiles], ['Smart Missiles', d.smartMissiles], ['Death Wave', d.deathWave],
+        ['Inner Land Mines', d.innerLandMines], ['Poison Swamp', d.poisonSwamp], ['Spotlight', x.spotlight],
+        ['Flame Bot', x.flameBot], ['Guardian', x.guardian], ['Electrons', x.electrons],
+        ['Thorns', d.thorns], ['Land Mines', d.landMines], ['Rend Armor', d.rendArmor],
+    ];
+    return parts.map(([n, v]) => [n, v / d.total] as [string, number])
+        .filter(([, share]) => share >= 0.01).sort((a, b) => b[1] - a[1]);
+}
+
+const sharesText = (shares: [string, number][]) =>
+    shares.map(([n, v]) => `${n} ${(v * 100).toFixed(v < 0.1 ? 1 : 0)}%`).join(', ');
+
+// The average share of each source over several runs.
+function averageShares(runs: BattleReport[]): [string, number][] {
+    const withDamage = runs.filter(r => r.damage && r.damage.total > 0);
+    if (!withDamage.length) return [];
+    const sum = new Map<string, number>();
+    for (const r of withDamage) for (const [n, v] of damageShares(r)) sum.set(n, (sum.get(n) ?? 0) + v / withDamage.length);
+    return [...sum.entries()].filter(([, v]) => v >= 0.01).sort((a, b) => b[1] - a[1]);
+}
+
+export type AiRunKind = 'any' | 'campaign' | 'tournament';
+
+export function runsReport(s: AiAccount, kind: AiRunKind = 'any'): ToolResult {
+    const all = [...s.importedBattles].sort((a, b) => (b.time ?? 0) - (a.time ?? 0));
+    if (!all.length) return { title: 'Your runs', text: 'No runs saved yet: import your game data to add your battle history.' };
+    const tourney = all.filter(r => r.tournament);
+    const campaign = all.filter(r => !r.tournament);
+    const out: string[] = [`Saved runs: ${all.length} (${campaign.length} campaign, ${tourney.length} tournament). Each import adds the game's latest runs.`];
+    // Where the damage comes from, campaign against tournaments.
+    const farmTier = campaign.length ? [...campaign.reduce((m, r) => m.set(r.tier, (m.get(r.tier) ?? 0) + 1), new Map<number, number>())]
+        .sort((a, b) => b[1] - a[1])[0][0] : null;
+    if (farmTier !== null) {
+        const sh = averageShares(campaign.filter(r => r.tier === farmTier && r.wave > 100).slice(0, 5));
+        if (sh.length) out.push(`Damage by source, last campaign runs on T${farmTier}: ${sharesText(sh)}.`);
+    }
+    const tSh = averageShares(tourney.filter(r => r.wave > 10).slice(0, 5));
+    if (tSh.length) out.push(`Damage by source, last tournament runs: ${sharesText(tSh)}.`);
+    const list = (kind === 'tournament' ? tourney : kind === 'campaign' ? campaign : all).slice(0, 12);
+    out.push(`${kind === 'any' ? 'Newest runs' : `Newest ${kind} runs`}:`);
+    for (const r of list) {
+        const by = killedBy(r);
+        const sh = damageShares(r).slice(0, 4);
+        out.push(`- ${r.date}: ${r.tournament ? 'tournament' : `T${r.tier}`} W${r.wave.toLocaleString()}`
+            + `${by ? `, killed by ${by}` : by === null ? ', ended by the player' : ''}`
+            + `${r.realTimeSec ? `, ${formatLabTime(r.realTimeSec / 3600)}` : ''}`
+            + `${!r.tournament && r.coinsPerHour ? `, ${num(r.coinsPerHour)} coins/h` : ''}`
+            + `${sh.length ? `; damage: ${sharesText(sh)}` : ''}`);
+    }
+    return { title: `Your runs${kind === 'any' ? '' : ` — ${kind}`}`, text: out.join('\n') };
+}
+
+// ── Another tier ──────────────────────────────────────────────
+// Your last campaign deaths: the basic enemy's health where each run ended
+// (Run Length), and the wave a run on another tier reaches that health with
+// the same damage and the same level skip. Health only — enemies on a higher
+// tier also hit harder, so it's where the damage runs out, not a promise.
+export function tierOutlook(s: AiAccount, target: number): ToolResult {
+    const model = buildRunLengthModel(s.importedBattles);
+    if (!model) return { title: 'Another tier', text: 'No campaign deaths with level skips saved yet, so there is nothing to measure from.' };
+    const to = Math.max(1, Math.min(24, Math.round(target || model.tier + 1)));
+    const waves = model.used.map(d => deathWave(d.enemyHealth!, to, Math.max(0, 1 - d.healthLevel! / d.run.wave)));
+    const avg = Math.round(waves.reduce((a, w) => a + w, 0) / waves.length);
+    const from = model.used.map(d => d.run.wave);
+    const out = [
+        `Headline: with the damage and level skip of your last ${from.length} deaths on T${model.tier} (W${Math.min(...from).toLocaleString()}–W${Math.max(...from).toLocaleString()}, about W${model.typicalWave.toLocaleString()}), runs on T${to} would end around W${avg.toLocaleString()} (W${Math.min(...waves).toLocaleString()}–W${Math.max(...waves).toLocaleString()}).`,
+        `How: each death's basic enemy health on T${model.tier}, and the wave where T${to} enemies reach the same health. Only health is compared: enemies on higher tiers also hit harder, and coins per wave are higher.`,
+        ...model.used.map((d, i) => `- T${model.tier} W${d.run.wave.toLocaleString()} → T${to} W${waves[i].toLocaleString()}`),
+    ];
+    return { title: `T${model.tier} → T${to}`, text: out.join('\n') };
 }

@@ -62,7 +62,7 @@ function linkText(l: ChainLink): string {
 
 const COST_LABEL: [OptCurrency, string, (v: number) => string][] = [
     ['coins', 'Coins', v => `${formatGameNumber(v < 1000 ? Math.round(v) : v)} 🪙`],
-    ['stones', 'Power Stones', v => `${v.toLocaleString()} Power Stones`],
+    ['stones', 'Stones', v => `${v.toLocaleString()} stones`],
     ['research', 'Lab time', v => `${formatLabTime(v)} 🔬`],
     ['medals', 'Medals', v => `${v.toLocaleString()} ${MEDAL_SYMBOL}`],
     ['shards', 'Module Shards', v => `${formatGameNumber(Math.round(v))} shards`],

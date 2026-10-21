@@ -9,7 +9,9 @@ import { snapshotFromState } from '../engine/accountModels';
 import { upgradeTargets } from '../engine/whatIf';
 import { UWS } from '../constants/gameData';
 import { battle, makeExport } from '../test/makeExport';
-import { accountSummary, bestUpgrades, findTargets, levelFor, levelsOf, whatIfChanges, wordsOf } from './aiTools';
+import {
+    accountSummary, bestUpgrades, findTargets, levelFor, levelsOf, runsReport, tierOutlook, whatIfChanges, wordsOf,
+} from './aiTools';
 import type { AiAccount } from './aiTools';
 import { searchNotes } from './aiKnowledge';
 
@@ -83,15 +85,46 @@ describe('what the assistant reads', () => {
     it('works out What If for named upgrades, with costs and waves', () => {
         const r = whatIfChanges(account(), [{ upgrade: 'CL damage', level: '+5' }]);
         expect(r.text).toContain('Chain Lightning — Damage: 10 → 15 (max 32), costs');
-        expect(r.text).toMatch(/^Headline: CL damage \+5 levels gives about \+[\d.]+ waves \(runs end around W[\d,]+ now, W[\d,]+ after\), for [\d,]+ Power Stones\./);
+        expect(r.text).toMatch(/^Headline: CL damage \+5 levels gives about \+[\d.]+ waves \(runs end around W[\d,]+ now, W[\d,]+ after\), for [\d,]+ stones\./);
         expect(r.text).toContain('Total cost:');
         expect(whatIfChanges(account(), [{ upgrade: 'banana', level: 'max' }]).text).toContain('Couldn\'t find "banana"');
     });
 
-    it('lists the Optimizer\'s next Power Stone picks', () => {
+    it('lists the Optimizer\'s next stone picks', () => {
         const r = bestUpgrades(account(), 'stones');
         expect(r.text).toContain('Goal: Push further');
-        expect(r.text).toMatch(/Next Power Stones:\n1\. /);
+        expect(r.text).toMatch(/Next stones:\n1\. /);
+    });
+});
+
+describe('runs and other tiers', () => {
+    it('lists the runs with damage by source', () => {
+        const r = runsReport(account());
+        expect(r.text).toContain('Saved runs: 5 (5 campaign, 0 tournament)');
+        expect(r.text).toContain('Damage by source, last campaign runs on T18: Orbs 40%, Chain Lightning 30%, Black Hole 20%, Tower shots 10%.');
+        expect(r.text).toContain('T18 W8,501, killed by Ray');
+    });
+
+    it('moves each death to another tier by the enemy health it ended at', () => {
+        // The same tier gives the same waves back, give or take the 2–3
+        // waves a health level lasts at 58% level skip (it's the first wave
+        // that reaches that health).
+        const same = tierOutlook(account(), 18).text;
+        for (const w of [8100, 8200, 8402, 8500, 8501]) {
+            const hit = new RegExp(`T18 W${w.toLocaleString()} → T18 W([\\d,]+)`).exec(same);
+            expect(Math.abs(Number(hit![1].replace(/,/g, '')) - w)).toBeLessThanOrEqual(3);
+        }
+        // Tougher enemies on T19: fewer waves for the same damage.
+        const next = tierOutlook(account(), 19).text;
+        const wave = Number(/runs on T19 would end around W([\d,]+)/.exec(next)![1].replace(/,/g, ''));
+        expect(wave).toBeGreaterThan(1000);
+        expect(wave).toBeLessThan(8341);
+    });
+
+    it('says what can be bought now and puts the cheapest first', () => {
+        const a = account();
+        const r = bestUpgrades({ ...a, currencies: { ...a.currencies, stones: 50 } }, 'stones');
+        expect(r.text).toMatch(/\((you have enough now|more than you have)\)/);
     });
 });
 

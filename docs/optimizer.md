@@ -32,7 +32,7 @@ What each currency buys (wiki Currencies page) and how it's ranked:
 
 | Currency | Ranked | Price source |
 |---|---|---|
-| Power Stones | UW stats, UW+, card mastery unlocks, assist modules — one path | wiki (see ultimate-weapons.md) |
+| Stones | UW stats, UW+, card mastery unlocks, assist modules — one path | wiki (see ultimate-weapons.md) |
 | Coins | workshop (per coin), enhancements (per coin) | game table via TheTowerSDK; discount labs |
 | Lab time | labs (per hour of research) | SDK lab catalog; Labs Speed, relic, Labs Coin Discount |
 | Module Shards | module slot levels, 5 at a time (per shard; coins shown) | SDK module tables + wiki level 1; Module Shard/Coin Cost labs (1% a level) |

@@ -9,7 +9,8 @@
 //  so each question takes two steps:
 //   1. Route — the model picks which data answers it (JSON, held to a
 //      schema): the Optimizer's next picks, What If for named upgrades,
-//      current levels, the tournament estimate, or the game notes.
+//      current levels, the saved runs, another tier, the tournament
+//      estimate, or the game notes.
 //   2. Answer — the site works that data out (aiTools.ts, the same
 //      engine the pages use) and the model answers from it and the
 //      account summary, written out as it goes.
@@ -20,8 +21,11 @@ import { create } from 'zustand';
 import type { WebWorkerMLCEngine } from '@mlc-ai/web-llm';
 import { AI_MODELS, CONTEXT_TOKENS, modelByKey } from './aiModels';
 import type { AiModel } from './aiModels';
-import { accountSummary, bestUpgrades, levelsOf, tournamentOutlook, whatIfChanges } from './aiTools';
-import type { AiAccount, AiChangeAsk, AiCurrency, AiTourneySettings, ToolResult } from './aiTools';
+import {
+    accountSummary, bestUpgrades, levelsOf, runsReport, tierOutlook, tournamentOutlook, whatIfChanges,
+} from './aiTools';
+import type { AiAccount, AiChangeAsk, AiCurrency, AiRunKind, AiTourneySettings, ToolResult } from './aiTools';
+import { TAB_PATHS } from '../routes';
 import { notesText, searchNotes } from './aiKnowledge';
 
 export interface AiMessage {
@@ -77,6 +81,17 @@ const gpuOf = () => (navigator as Navigator & { gpu?: Gpu }).gpu;
 
 export const hasWebGpu = () => !!gpuOf();
 
+// ── The download ──────────────────────────────────────────────
+// WebLLM keeps the weights in Cache Storage under their Hugging Face
+// addresses (…/mlc-ai/<model id>/resolve/main/params_shard_N.bin). Looked
+// up here directly: WebLLM's own check fetches each model's file list.
+const MODEL_CACHE = 'webllm/model';
+const isOf = (url: string, id: string) => url.includes(`/mlc-ai/${id}/`);
+
+async function cachedUrls(): Promise<string[]> {
+    try { return (await (await caches.open(MODEL_CACHE)).keys()).map(r => r.url); } catch { return []; }
+}
+
 // The model build this graphics card can run (16-bit floats or not).
 async function modelIdFor(m: AiModel): Promise<string> {
     const adapter = await gpuOf()?.requestAdapter({ powerPreference: 'high-performance' });
@@ -86,17 +101,19 @@ async function modelIdFor(m: AiModel): Promise<string> {
 
 // ── Step 1: route ─────────────────────────────────────────────
 interface Route {
-    tool: 'upgrades' | 'what_if' | 'levels' | 'tournament' | 'guide' | 'none';
+    tool: 'upgrades' | 'what_if' | 'levels' | 'runs' | 'tier' | 'tournament' | 'guide' | 'none';
     currency: AiCurrency;
     goal: 'default' | 'waves' | 'damage' | 'coins' | 'survival';
     changes: AiChangeAsk[];
     search: string;
+    runs: AiRunKind;
+    tier: number;
 }
 
 const ROUTE_SCHEMA = JSON.stringify({
     type: 'object',
     properties: {
-        tool: { type: 'string', enum: ['upgrades', 'what_if', 'levels', 'tournament', 'guide', 'none'] },
+        tool: { type: 'string', enum: ['upgrades', 'what_if', 'levels', 'runs', 'tier', 'tournament', 'guide', 'none'] },
         currency: { type: 'string', enum: ['any', 'stones', 'coins', 'research', 'shards', 'medals', 'gems', 'bits'] },
         goal: { type: 'string', enum: ['default', 'waves', 'damage', 'coins', 'survival'] },
         changes: {
@@ -108,29 +125,41 @@ const ROUTE_SCHEMA = JSON.stringify({
             },
         },
         search: { type: 'string' },
+        runs: { type: 'string', enum: ['any', 'campaign', 'tournament'] },
+        tier: { type: 'integer' },
     },
-    required: ['tool', 'currency', 'goal', 'changes', 'search'],
+    required: ['tool', 'currency', 'goal', 'changes', 'search', 'runs', 'tier'],
 });
 
 const ROUTE_PROMPT = `You pick the data that answers a player's question about their account in the mobile game The Tower (idle tower defense). Reply with JSON only.
 tool:
-- "upgrades": what to upgrade or spend on next. currency: stones (Power Stones: UWs, UW+, card mastery), coins (workshop, enhancements), research (labs), shards (module slots), medals (bots), gems (card slots), bits (Guardian chips), or any. goal: waves, damage, coins, survival, or default.
+- "upgrades": what to upgrade or spend on next. currency: stones (UWs, UW+, card mastery, assist modules), coins (workshop, enhancements), research (labs), shards (module slots), medals (bots), gems (card slots), bits (Guardian chips), or any. goal: waves, damage, coins, survival, or default.
 - "what_if": what specific upgrades would do (waves, damage, coins, cost). changes: each upgrade in the player's words and the level: "max", "+N" (N more levels) or a level number.
 - "levels": the player's current level of specific upgrades. search: the upgrade names.
-- "tournament": tournaments, this week's battle conditions, how far tournament runs get.
+- "runs": the player's past runs: waves, what killed them, coins, damage by source (which UW or weapon did the damage), campaign against tournaments. runs: campaign, tournament or any.
+- "tier": how far the player would get on another tier (farming or pushing a higher tier). tier: that tier's number.
+- "tournament": this week's tournament, its battle conditions, how far tournament runs should get.
 - "guide": how a game mechanic works or how TowerForge calculates something. search: a few keywords.
 - "none": greetings, or questions the account overview answers (tier, waves, what they own).
-Unused fields: currency "any", goal "default", changes [], search "".
+currency is what they want to spend; "any" when they name more than one (coins and stones) or none.
+goal is "coins" whenever they want more coins, "waves" to push further, "survival" to survive longer.
+Unused fields: currency "any", goal "default", changes [], search "", runs "any", tier 0.
 Examples:
-"what should I spend my stones on" → {"tool":"upgrades","currency":"stones","goal":"default","changes":[],"search":""}
-"how many waves would maxing CL and CF+ get me" → {"tool":"what_if","currency":"any","goal":"default","changes":[{"upgrade":"CL","level":"max"},{"upgrade":"CF+","level":"max"}],"search":""}
-"is 10 more levels of the damage lab worth it" → {"tool":"what_if","currency":"any","goal":"default","changes":[{"upgrade":"damage lab","level":"+10"}],"search":""}
-"how does Fast's Ultimate work" → {"tool":"guide","currency":"any","goal":"default","changes":[],"search":"Fast's Ultimate"}`;
+"what should I spend my stones on" → {"tool":"upgrades","currency":"stones","goal":"default","changes":[],"search":"","runs":"any","tier":0}
+"cheapest way to get more coins with coins and stones" → {"tool":"upgrades","currency":"any","goal":"coins","changes":[],"search":"","runs":"any","tier":0}
+"how many waves would maxing CL and CF+ get me" → {"tool":"what_if","currency":"any","goal":"default","changes":[{"upgrade":"CL","level":"max"},{"upgrade":"CF+","level":"max"}],"search":"","runs":"any","tier":0}
+"is 10 more levels of the damage lab worth it" → {"tool":"what_if","currency":"any","goal":"default","changes":[{"upgrade":"damage lab","level":"+10"}],"search":"","runs":"any","tier":0}
+"why is my chain lightning weak in tournaments" → {"tool":"runs","currency":"any","goal":"default","changes":[],"search":"","runs":"tournament","tier":0}
+"how far would I get farming T19" → {"tool":"tier","currency":"any","goal":"default","changes":[],"search":"","runs":"any","tier":19}
+"how does Fast's Ultimate work" → {"tool":"guide","currency":"any","goal":"default","changes":[],"search":"Fast's Ultimate","runs":"any","tier":0}`;
 
 // When the model's JSON can't be read: the same choice from keywords.
 function guessRoute(q: string): Route {
     const l = q.toLowerCase();
-    const base: Route = { tool: 'none', currency: 'any', goal: 'default', changes: [], search: '' };
+    const base: Route = { tool: 'none', currency: 'any', goal: 'default', changes: [], search: '', runs: 'any', tier: 0 };
+    const tier = /\bt(?:ier)?\s?(\d{1,2})\b/.exec(l);
+    if (tier && /farm|get to|make it|how far|move up|push/.test(l)) return { ...base, tool: 'tier', tier: Number(tier[1]) };
+    if (/\bruns?\b|history|damage (by|from)|killed/.test(l)) return { ...base, tool: 'runs', runs: /tourn/.test(l) ? 'tournament' : 'any' };
     if (/tourn|tourney|bracket|battle condition/.test(l)) return { ...base, tool: 'tournament' };
     if (/what if|would .*(max|level)|\bmax(ing)?\b/.test(l)) return { ...base, tool: 'what_if', changes: [{ upgrade: q, level: 'max' }] };
     if (/upgrade|spend|next|should i|priorit/.test(l)) {
@@ -151,6 +180,7 @@ function readRoute(raw: string, q: string): Route & { guessed?: boolean } {
         return {
             tool: r.tool, currency: r.currency ?? 'any', goal: r.goal ?? 'default',
             changes: Array.isArray(r.changes) ? r.changes.filter(c => c?.upgrade) : [], search: r.search ?? '',
+            runs: r.runs ?? 'any', tier: Number(r.tier) || 0,
         };
     } catch {
         return { ...guessRoute(q), guessed: true };
@@ -162,6 +192,8 @@ const routeText = (r: Route & { guessed?: boolean }) => [
     r.tool === 'upgrades' && `${r.currency}${r.goal !== 'default' ? `, goal ${r.goal}` : ''}`,
     r.tool === 'what_if' && r.changes.map(c => `${c.upgrade} → ${c.level}`).join('; '),
     (r.tool === 'levels' || r.tool === 'guide') && r.search && `"${r.search}"`,
+    r.tool === 'runs' && r.runs,
+    r.tool === 'tier' && `T${r.tier || '?'}`,
     r.guessed && '(from keywords: the model’s choice couldn’t be read)',
 ].filter(Boolean).join(' · ');
 
@@ -182,8 +214,12 @@ function lookUp(route: Route, question: string, ctx: AiContext): ToolResult[] {
         }
         case 'levels':
             return [levelsOf(account, route.search || question)];
+        case 'runs':
+            return [runsReport(account, route.runs)];
+        case 'tier':
+            return [tierOutlook(account, route.tier)];
         case 'tournament':
-            return [tournamentOutlook(account, ctx.tourney)];
+            return [tournamentOutlook(account, ctx.tourney), runsReport(account, 'tournament')];
         case 'guide': {
             const found = searchNotes(`${route.search} ${question}`);
             return [{ title: `Game notes — ${found.map(p => p.heading).slice(0, 2).join(', ') || 'nothing found'}`, text: found.length ? notesText(found) : 'No notes matched.' }];
@@ -193,13 +229,22 @@ function lookUp(route: Route, question: string, ctx: AiContext): ToolResult[] {
     }
 }
 
+// The pages the answer may point to, with their real addresses.
+const PAGE_LINKS = ([
+    ['Optimizer', 'optimizer'], ['What If', 'whatif'], ['Tournament', 'tournament'], ['Run Length', 'runlength'],
+    ['Coins per Run', 'runcoins'], ['Enemy Stats', 'enemies'], ['Labs', 'labs'], ['Workshop', 'workshop'],
+] as const).map(([name, tab]) => `${name} https://towerforge.net${TAB_PATHS[tab]}`).join(', ');
+
 const ANSWER_PROMPT = `You are TowerForge's assistant for the mobile idle tower defense game The Tower (by Tech Tree Games). You answer the player's questions about their own account from the data below, which TowerForge worked out from their game data.
 Rules:
 - Only use numbers that are in the data, copied exactly. When the data has a "Headline:" line, start from it. Never make up levels, costs, waves or percentages. If the data doesn't answer the question, say so and name the TowerForge page that does (Optimizer, What If, Tournament, Run Length, Coins per Run, Enemy Stats).
-- Use the game's own words: Power Stones, Ultimate Weapons (UWs), UW+, labs, workshop, enhancements, cards, modules, bots, Bot+, Guardian, tiers, waves.
+- Use the game's own words: stones, Ultimate Weapons (UWs), UW+, labs, workshop, enhancements, cards, modules, bots, Bot+, Guardian, tiers, waves.
 - Be brief and direct: answer first in a sentence or two, then a few short bullet points if they help.
 - If the data says an upgrade couldn't be found, or doesn't have the answer, say so plainly and don't guess.
-- Game notes are TowerForge's own notes: explain them in plain words and leave out code names and file names.`;
+- Game notes are TowerForge's own notes: explain them in plain words and leave out code names and file names.
+- In the account, "Damage 13/32" is an upgrade's level (13 of 32), not damage dealt.
+- Big numbers use the game's letters, smallest to largest: K (thousand), M (million), B (billion), T (trillion), q (quadrillion), Q (quintillion), s, S, O, N, D, then aa, ab… So 61.00K is far less than 4.67Q, and q is less than Q. When the data has a "Cheapest first" line, use it to compare costs.
+- To point to a page, use these addresses exactly (no others): ${PAGE_LINKS}.`;
 
 // Rough token count (about 3.5 characters a token for this text).
 const tokens = (s: string) => Math.ceil(s.length / 3.5);
@@ -230,12 +275,11 @@ export const useAiStore = create<AiStore>((set, get) => {
 
         // Which models are already downloaded (both builds count).
         checkCache: async () => {
-            const { hasModelInCache } = await import('@mlc-ai/web-llm');
-            const cached: Record<string, boolean> = {};
-            for (const m of AI_MODELS) {
-                try { cached[m.key] = (await hasModelInCache(m.f16)) || (await hasModelInCache(m.f32)); } catch { cached[m.key] = false; }
-            }
-            set({ cached });
+            const urls = await cachedUrls();
+            set({
+                cached: Object.fromEntries(AI_MODELS.map(m => [m.key,
+                    urls.some(u => (isOf(u, m.f16) || isOf(u, m.f32)) && u.endsWith('/params_shard_0.bin'))])),
+            });
         },
 
         start: async () => {
@@ -280,6 +324,11 @@ export const useAiStore = create<AiStore>((set, get) => {
             for (const id of [m.f16, m.f32]) {
                 try { await deleteModelAllInfoInCache(id); } catch { /* wasn't there */ }
             }
+            // WebLLM leaves each build's file list (tensor-cache.json) behind.
+            try {
+                const cache = await caches.open(MODEL_CACHE);
+                for (const req of await cache.keys()) if (isOf(req.url, m.f16) || isOf(req.url, m.f32)) await cache.delete(req);
+            } catch { /* storage unavailable */ }
             await get().checkCache();
         },
 

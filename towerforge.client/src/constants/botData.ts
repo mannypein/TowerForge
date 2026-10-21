@@ -9,7 +9,7 @@ import type { BotData, BotEntry, BotLoadouts } from '../types/gameTypes';
 
 // ── Bot+ (game v29) ───────────────────────────────────────────
 // Once all five bots are owned, each one's Bot+ ability can be unlocked for
-// 1,250 Power Stones and then levelled with medals. Level 0 is the unlock
+// 1,250 stones and then levelled with medals. Level 0 is the unlock
 // value and each level adds `step`; level L costs 100 + costStep × (L − 1)
 // medals. Checked 2026-10-19: TheTowerSDK 0.12.0 (data/bots, the plus tier
 // and BOT_PLUS_*_V29) and the wiki's five bot pages agree on every value,

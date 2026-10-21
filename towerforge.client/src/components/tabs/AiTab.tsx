@@ -16,12 +16,14 @@ import { AI_MODELS, modelByKey } from '../../ai/aiModels';
 import { hasWebGpu, useAiStore } from '../../ai/aiAssistant';
 import type { AiContext, AiMessage } from '../../ai/aiAssistant';
 import { loadTourneySim } from '../common/tourneySim';
+import { TAB_PATHS, tabFromPath } from '../../routes';
 
 const SUGGESTIONS = [
-    'What should I spend my Power Stones on next?',
+    'What should I spend my stones on next?',
     'How many waves would maxing Chain Lightning get me?',
     'What are my best lab upgrades right now?',
-    'How does Fast’s Ultimate affect my tournament runs?',
+    'How far would I get on the next tier?',
+    'Where does my damage come from in tournaments?',
 ];
 
 // The account as the tools read it, fresh for each question.
@@ -31,12 +33,33 @@ function contextNow(): AiContext {
     return { account: useGameStore.getState(), tourney: loadTourneySim(), goal };
 }
 
-// **bold** inside a line.
+// A link to one of the site's pages opens that tab here (no reload, so the
+// model and the chat stay); links anywhere else show as plain text.
+function PageLink({ href, children }: { href: string; children: ReactNode }) {
+    const path = href.replace(/^https?:\/\/(www\.)?towerforge\.net/i, '');
+    const tab = path.startsWith('/') ? tabFromPath(path) : null;
+    if (!tab) return <>{children}</>;
+    return (
+        <a href={TAB_PATHS[tab]} onClick={e => {
+            if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+            e.preventDefault();
+            useGameStore.getState().setActiveTab(tab);
+        }}>{children}</a>
+    );
+}
+
+// **bold**, [links](…) and bare addresses inside a line.
 function inline(text: string): ReactNode[] {
-    return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
-        part.startsWith('**') && part.endsWith('**') && part.length > 4
-            ? <strong key={i}>{part.slice(2, -2)}</strong>
-            : <Fragment key={i}>{part}</Fragment>);
+    return text.split(/(\*\*[^*]+\*\*|\[[^\]]+\]\([^)\s]+\)|https?:\/\/[^\s)]+)/g).map((part, i) => {
+        if (part.startsWith('**') && part.endsWith('**') && part.length > 4) return <strong key={i}>{part.slice(2, -2)}</strong>;
+        const md = /^\[([^\]]+)\]\(([^)\s]+)\)$/.exec(part);
+        if (md) return <PageLink key={i} href={md[2]}>{md[1]}</PageLink>;
+        if (/^https?:\/\//.test(part)) {
+            const url = part.replace(/[.,;:]+$/, '');
+            return <Fragment key={i}><PageLink href={url}>{url}</PageLink>{part.slice(url.length)}</Fragment>;
+        }
+        return <Fragment key={i}>{part}</Fragment>;
+    });
 }
 
 // The model writes a little Markdown: paragraphs, bullet lists, bold, headings.

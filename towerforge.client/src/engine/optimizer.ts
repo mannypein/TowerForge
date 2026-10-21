@@ -1161,7 +1161,7 @@ export function pathGain(path: OptCandidate[], spent: number, amount: number): n
 
 // ============================================================
 //  SIMULATE MEDAL PATH
-//  Medals buy bot levels, or Event Shop trades: 15 Power Stones or 250
+//  Medals buy bot levels, or Event Shop trades: 15 stones or 250
 //  Module Shards each, dearer with every trade of a kind in one event
 //  (40, 65, 90, 130, 175, 230, then 380). A trade is worth what those
 //  stones or shards buy next on their own ranked paths (`stonesHeld`
@@ -1187,7 +1187,7 @@ export function simulateMedalPath(
         if (!(gain >= GC_SCORING.minGainPct)) return null;
         return {
             category: 'bots',
-            label: kind === 'stones' ? `Event Shop — ${amount} Power Stones` : `Event Shop — ${amount} Module Shards`,
+            label: kind === 'stones' ? `Event Shop — ${amount} Stones` : `Event Shop — ${amount} Module Shards`,
             subLabel: `Trade ${k + 1} this event`,
             fromLv: k,
             toLv: k + 1,

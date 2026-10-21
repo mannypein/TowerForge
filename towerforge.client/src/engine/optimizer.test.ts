@@ -389,7 +389,7 @@ describe('every currency', () => {
         }));
         const rows = simulateMedalPath(5, snapshot(), stonePath, 0, []);
         expect(rows).toHaveLength(1);
-        expect(rows[0]).toMatchObject({ label: 'Event Shop — 15 Power Stones', subLabel: 'Trades 1–5 this event' });
+        expect(rows[0]).toMatchObject({ label: 'Event Shop — 15 Stones', subLabel: 'Trades 1–5 this event' });
         expect(rows[0].cost).toBe(40 + 65 + 90 + 130 + 175);
     });
 });

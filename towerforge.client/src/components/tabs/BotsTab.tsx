@@ -7,7 +7,7 @@
 //  Like in game, each preset keeps its own ON/OFF, medal and Bot+
 //  levels; only unlocking a bot or its Bot+ is account-wide. Bot+ (game
 //  v29) shows once all five bots are owned: one ability per bot, unlocked
-//  for 1,250 Power Stones, then levelled with medals.
+//  for 1,250 stones, then levelled with medals.
 // ============================================================
 
 import { useGameStore } from '../../store/useGameStore';
@@ -247,7 +247,7 @@ export default function BotsTab() {
                                         </div>
                                     ) : (
                                         <button className="botg-plus-unlock" onClick={() => setBotPlusOwned(bot.name, true)}
-                                            title={`Mark ${bot.name}+ as unlocked (${BOT_PLUS_UNLOCK_STONES.toLocaleString()} Power Stones in game)`}>
+                                            title={`Mark ${bot.name}+ as unlocked (${BOT_PLUS_UNLOCK_STONES.toLocaleString()} stones in game)`}>
                                             UNLOCK BOT+ · {bot.plus.label}
                                         </button>
                                     ))}
