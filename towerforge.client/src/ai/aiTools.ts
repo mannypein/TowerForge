@@ -21,6 +21,7 @@ import { mergeRepeats, simulateCategoryPath, simulateMedalPath, simulateStonePat
 import { changeCost, upgradeTargets, whatIf } from '../engine/whatIf';
 import type { Change, Costs, UpgradeTarget } from '../engine/whatIf';
 import { buildTournamentModel, heatOf, newestTournament } from '../engine/tournamentModel';
+import { leagueMoves, leagueStats, placed } from '../engine/tourneyHistory';
 import type { Ticks } from '../engine/tournamentModel';
 import { buildRunLengthModel, deathWave, killedBy } from '../engine/runLength';
 import { extraDamage, runKey } from '../engine/battleReport';
@@ -29,6 +30,7 @@ import { defaultBattleIndex } from '../engine/gameExport';
 import { formatGameNumber } from '../engine/gameNumbers';
 import { formatLabTime } from '../engine/upgradeCosts';
 import { activeLoadout } from '../engine/statHelpers';
+import { labFinishAt } from '../engine/labTimer';
 import { UWS, presetLabel } from '../constants/gameData';
 import { BOTS_CONFIG } from '../constants/botData';
 import { RARITIES, rarityStars } from '../constants/moduleRarities';
@@ -38,7 +40,7 @@ import { HEAT_CONDITIONS } from '../constants/tournamentData';
 
 // Everything the tools read: the account plus a few things the pages keep.
 export type AiAccount = AccountState & Pick<AppState,
-    'currencies' | 'labsRunning' | 'tourneyLog' | 'tierWaves' | 'botLoadouts'>;
+    'currencies' | 'labsRunning' | 'tourneyLog' | 'tierWaves' | 'botLoadouts'> & Partial<Pick<AppState, 'tourneyRecords'>>;
 
 // The Tournament page's settings (components/common/tourneySim.ts).
 export interface AiTourneySettings {
@@ -112,8 +114,9 @@ export function accountSummary(s: AiAccount, now = Date.now()): string {
     const running = (s.labsRunning ?? []).filter(l => l.lab);
     if (running.length) {
         lines.push(`Labs researching: ${running.map(l => {
-            const lv = (s.labData[l.lab!] ?? 0) + 1;
-            const left = l.doneAt ? Math.max(0, (l.doneAt - now) / 3600000) : null;
+            const lv = l.toLevel ?? (s.labData[l.lab!] ?? 0) + 1;
+            const done = labFinishAt(l);
+            const left = done ? Math.max(0, (done - now) / 3600000) : null;
             return `${l.lab} to Lv ${lv}${left !== null ? (left > 0 ? ` (${formatLabTime(left)} left)` : ' (done)') : ''}`;
         }).join('; ')}.`);
     }
@@ -370,6 +373,20 @@ export function tournamentOutlook(s: AiAccount, sim: AiTourneySettings): ToolRes
         out.push(`Runs usually end around W${model.run.typicalWave.toLocaleString()}; with this week's conditions, around W${Math.round(model.run.typicalWave + shift).toLocaleString()} (${shift >= 0 ? '+' : ''}${shift.toFixed(1)} waves).`);
     } else if (build !== 'Glass Cannon') {
         out.push('Waves for tournaments are only estimated for Glass Cannon builds so far.');
+    }
+    // Every tournament played (the game's records, 29.1.3+).
+    const recs = s.tourneyRecords ?? [];
+    if (recs.length) {
+        const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+        out.push(`Tournament history: ${recs.length} tournaments since ${day(recs[0].date)}. Waves only compare within a league. Rank 1 is the top of the bracket.`);
+        for (const st of leagueStats(recs).reverse()) {
+            out.push(`- ${st.league}: ${st.count} tournaments (${day(st.first)} to ${day(st.last)}), best W${st.bestWave.toLocaleString()}, `
+                + `average of the last 10 W${Math.round(st.recentWave ?? 0).toLocaleString()}, best rank ${st.bestRank ?? '—'}, `
+                + `average rank of the last 10 ${st.recentRank?.toFixed(1) ?? '—'}.`);
+        }
+        const moves = leagueMoves(recs).slice(-3).map(m => `${m.up ? 'up to' : 'down to'} ${m.to} on ${day(m.date)}`);
+        if (moves.length) out.push(`Last league moves: ${moves.join('; ')}.`);
+        out.push(`Last 8 tournaments: ${recs.slice(-8).map(r => `${day(r.date)} ${r.league} W${r.wave.toLocaleString()} ${placed(r) ? `rank ${r.rank}` : '(not placed yet)'}`).join('; ')}.`);
     }
     return { title: 'Tournament', text: out.join('\n') };
 }

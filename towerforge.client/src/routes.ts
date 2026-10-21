@@ -29,6 +29,7 @@ export const TAB_PATHS: Record<TabName, string> = {
     optimizer: '/optimizer',
     whatif: '/what-if',
     tournament: '/tournament',
+    tourneyhistory: '/tournament-history',
     enemies: '/enemy-stats',
     runcoins: '/coins-per-run',
     runlength: '/run-length',

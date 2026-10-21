@@ -10,6 +10,7 @@ import { LABS } from '../../constants/gameData';
 import NumericInput from '../common/NumericInput';
 import { milestoneReached } from '../../engine/statHelpers';
 import type { LabRunning } from '../../types/gameTypes';
+import { labFinishAt, labTimerLeft } from '../../engine/labTimer';
 
 const span = (sec: number) => {
     const m = Math.max(0, Math.round(sec / 60));
@@ -17,9 +18,11 @@ const span = (sec: number) => {
     return d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${min}m` : `${min}m`;
 };
 
-// The labs the game was researching when it exported. The finish time is
-// the game's own (ResearchCompleteDate); a speed-up's time left is as of
-// the export.
+// The labs the game was researching when it exported, with the level
+// being researched. The finish is the game's ResearchCompleteDate (normal
+// speed) brought forward by the speed-up (engine/labTimer.ts); the game's
+// own timer counts normal-speed time, so it reads longer while a speed-up
+// runs — shown too, to match the Labs screen.
 function LabsRunning({ labs }: { labs: LabRunning[] }) {
     const [now, setNow] = useState(() => Date.now());
     useEffect(() => {
@@ -36,17 +39,22 @@ function LabsRunning({ labs }: { labs: LabRunning[] }) {
                 {labs.map((r, i) => (
                     <div key={i} className="field-row lab-run">
                         <label className="field-label">
-                            {r.lab ?? `Lab #${r.labIndex}`}
+                            {r.lab ?? `Lab #${r.labIndex}`}{r.toLevel ? ` → Lv ${r.toLevel}` : ''}
                             {r.speedUp > 1 && r.speedUpLeftSec > 0 && (
                                 <span className="field-sub">
                                     ×{r.speedUp} speed-up, {span(r.speedUpLeftSec)} left when exported
+                                    {(labTimerLeft(r, now) ?? 0) > 0 && ` · game timer about ${span(labTimerLeft(r, now)!)}`}
                                 </span>
                             )}
                         </label>
                         <span className="lab-run-time">
-                            {r.doneAt === null ? '—'
-                                : r.doneAt <= now ? 'Done — collect it in the game'
-                                    : `Done in ${span((r.doneAt - now) / 1000)} · ${new Date(r.doneAt).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })}`}
+                            {(() => {
+                                const done = labFinishAt(r);
+                                if (done === null) return '—';
+                                if (done <= now) return 'Done — collect it in the game';
+                                const when = new Date(done).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+                                return `Done in ${span((done - now) / 1000)} · ${when}`;
+                            })()}
                         </span>
                     </div>
                 ))}

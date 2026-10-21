@@ -138,7 +138,7 @@ tool:
 - "levels": the player's current level of specific upgrades. search: the upgrade names.
 - "runs": the player's past runs: waves, what killed them, coins, damage by source (which UW or weapon did the damage), campaign against tournaments. runs: campaign, tournament or any.
 - "tier": how far the player would get on another tier (farming or pushing a higher tier). tier: that tier's number.
-- "tournament": this week's tournament, its battle conditions, how far tournament runs should get.
+- "tournament": tournaments: this week's battle conditions, how far tournament runs should get, past tournaments' waves and ranks, league moves.
 - "guide": how a game mechanic works or how TowerForge calculates something. search: a few keywords.
 - "none": greetings, or questions the account overview answers (tier, waves, what they own).
 currency is what they want to spend; "any" when they name more than one (coins and stones) or none.

@@ -48,6 +48,7 @@ const RunCoinsTab = lazy(() => import('./components/tabs/RunCoinsTab'));
 const RunLengthTab = lazy(() => import('./components/tabs/RunLengthTab'));
 const WhatIfTab = lazy(() => import('./components/tabs/WhatIfTab'));
 const TournamentTab = lazy(() => import('./components/tabs/TournamentTab'));
+const TourneyHistoryTab = lazy(() => import('./components/tabs/TourneyHistoryTab'));
 const AiTab = lazy(() => import('./components/tabs/AiTab'));
 
 // ── Tab Definitions ───────────────────────────────────────────
@@ -60,7 +61,7 @@ interface TabGroup {
     id: string;
     label: string;
     short?: string;
-    tabs: { id: TabName; label: string }[];
+    tabs: { id: TabName; label: string; title?: string }[];   // title: the page title, when the label needs its section
     preview?: string;
 }
 const TAB_GROUPS: TabGroup[] = [
@@ -98,10 +99,15 @@ const TAB_GROUPS: TabGroup[] = [
         id: 'optimizer', label: 'Optimizer', tabs: [
             { id: 'optimizer', label: 'Optimizer' },
             { id: 'whatif', label: 'What If' },
-            { id: 'tournament', label: 'Tournament' },
             { id: 'enemies', label: 'Enemy Stats' },
             { id: 'runcoins', label: 'Coins per Run' },
             { id: 'runlength', label: 'Run Length' },
+        ],
+    },
+    {
+        id: 'tournaments', label: 'Tournaments', short: 'Tourney', tabs: [
+            { id: 'tournament', label: 'This Week', title: 'Tournament' },
+            { id: 'tourneyhistory', label: 'History', title: 'Tournament History' },
         ],
     },
     { id: 'ai', label: 'Ask AI', tabs: [{ id: 'ai', label: 'Ask AI' }], preview: 'ai' },
@@ -113,7 +119,7 @@ const groupOf = (tab: TabName): TabGroup => TAB_GROUPS.find(g => g.tabs.some(t =
 const HOME_TITLE = 'TowerForge — The Tower Companion';
 const titleOf = (tab: TabName) => (tab === 'profile'
     ? HOME_TITLE
-    : `${groupOf(tab).tabs.find(t => t.id === tab)?.label ?? tab} — TowerForge`);
+    : `${(t => t?.title ?? t?.label)(groupOf(tab).tabs.find(t => t.id === tab)) ?? tab} — TowerForge`);
 
 // A plain click opens the tab here; Ctrl / ⌘ / Shift / middle click do
 // what they do on any link (new tab or window).
@@ -395,6 +401,7 @@ export default function App() {
             case 'runlength': return <RunLengthTab />;
             case 'whatif': return <WhatIfTab />;
             case 'tournament': return <TournamentTab />;
+            case 'tourneyhistory': return <TourneyHistoryTab />;
             case 'creators': return <CreatorCodesTab />;
             case 'share': return <ShareTab />;
             case 'account': return <AccountTab />;

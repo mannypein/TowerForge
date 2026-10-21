@@ -33,9 +33,10 @@ import type {
     SlotLevels,
     AssistEntry,
     TabName,
-    CloudSaveData, GuardianData, LabRunning, TourneyLog, TourneyLogEntry,
+    CloudSaveData, GuardianData, LabRunning, TourneyLog, TourneyLogEntry, TourneyRecord,
 } from '../types/gameTypes';
 import { mergeBattles } from '../engine/battleReport';
+import { mergeTourneyRecords } from '../engine/tourneyHistory';
 import type { BattleReport } from '../engine/battleReport';
 import { defaultBattleIndex } from '../engine/gameExport';
 import type { GameImport } from '../engine/gameExport';
@@ -75,6 +76,7 @@ const KEYS = {
     guardian: 'tc_guardian',
     labsRunning: 'tc_labs_running',
     tourneyLog: 'tc_tourney_log',
+    tourneyRecords: 'tc_tourney_records',
 } as const;
 
 // ── Default State ─────────────────────────────────────────────
@@ -337,6 +339,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     guardianData: defaultGuardianData(),
     labsRunning: [],
     tourneyLog: {},
+    tourneyRecords: [],
 
     // ── UI Actions ────────────────────────────────────────────────
     setActiveTab: (tab) => set({ activeTab: tab }),
@@ -367,12 +370,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
         const guardianData = { ...defaultGuardianData(), ...loadKey<Partial<GuardianData>>(KEYS.guardian, {}) };
         const labsRunning = loadKey<LabRunning[]>(KEYS.labsRunning, []);
         const tourneyLog = loadKey<TourneyLog>(KEYS.tourneyLog, {});
+        const tourneyRecords = loadKey<TourneyRecord[]>(KEYS.tourneyRecords, []);
 
         set({
             profile, tierWaves, wsData, enhData,
             labData, cardData, uwData, relicData,
             perkData, botData, botLoadouts, moduleState, battleReportText, currencies, importedBattles, battleReportChoice, cloudSaveData,
-            guardianData, labsRunning, tourneyLog,
+            guardianData, labsRunning, tourneyLog, tourneyRecords,
         });
     },
 
@@ -469,6 +473,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
         }
         // A snapshot: an older file (no lab timers) clears the last one's.
         const labsRunning = imp.labsRunning ?? [];
+        // Every tournament: kept across imports (older files don't have them).
+        const tourneyRecords = imp.tourneyRecords ? mergeTourneyRecords(s.tourneyRecords, imp.tourneyRecords) : s.tourneyRecords;
         set({
             currencies: imp.currencies,
             tierWaves,
@@ -476,7 +482,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
             importedBattles: battles,
             battleReportChoice: choice,
             wsData, enhData, uwData, cardData, perkData, labData, moduleState, guardianData, botData, botLoadouts, labsRunning,
+            tourneyRecords,
         });
+        saveKey(KEYS.tourneyRecords, tourneyRecords);
         saveKey(KEYS.guardian, guardianData);
         saveKey(KEYS.bots, botData);
         saveKey(KEYS.botLoadouts, botLoadouts);
@@ -821,6 +829,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             guardianData: defaultGuardianData(),
             labsRunning: [],
             tourneyLog: {},
+            tourneyRecords: [],
         });
     },
 
@@ -847,6 +856,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             battleReportChoice: s.battleReportChoice,
             guardianData: s.guardianData,
             tourneyLog: s.tourneyLog,
+            tourneyRecords: s.tourneyRecords,
         };
         return JSON.stringify(payload, null, 2);
     },
@@ -875,6 +885,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
                 battleReportChoice: data.battleReportChoice ?? -1,
                 guardianData: { ...defaultGuardianData(), ...(data.guardianData ?? {}) },
                 tourneyLog: data.tourneyLog ?? {},
+                tourneyRecords: data.tourneyRecords ?? [],
             });
             // Persist everything
             Object.entries(KEYS).forEach(([, storageKey]) => {
@@ -897,6 +908,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
                     tc_modules: moduleState,
                     tc_guardian: data.guardianData,
                     tc_tourney_log: data.tourneyLog,
+                    tc_tourney_records: data.tourneyRecords,
                 };
                 if (keyMap[storageKey] != null) saveKey(storageKey, keyMap[storageKey]);
             });

@@ -27,7 +27,7 @@ import type {
     Currencies, TierWaves, WSPreset, WSCategory, EnhData, EnhCategoryData, UWData,
     CardData, CardEntry, LabData, ModuleState, ModuleEntry, ModuleType, ModuleRarity,
     SubSlot, Loadout, LoadoutSlots, AssistData, League, GuardianData, GuardianPreset,
-    BotLoadouts, LabRunning,
+    BotLoadouts, LabRunning, TourneyRecord,
 } from '../types/gameTypes';
 import { BOTS_CONFIG } from '../constants/botData';
 import { CHIPS } from '../constants/guardianData';
@@ -62,6 +62,7 @@ export interface GameImport {
     currentLeague: League;             // LeagueID: the league you're in now
     bots: BotImport | null;            // bot levels and which are active, per preset
     labsRunning: LabRunning[] | null;
+    tourneyRecords: TourneyRecord[] | null;   // TournamentRecords (29.1.3+); null when the file has none
 }
 
 // Bot and Bot+ levels per site preset (from the bot preset its global
@@ -576,7 +577,28 @@ export function parseGameExport(raw: Raw): GameImport {
         currentLeague: typeof raw.LeagueID === 'number' ? GAME_LEAGUES[raw.LeagueID] ?? '' : '',
         bots: parseBots(raw),
         labsRunning: parseLabsRunning(raw),
+        tourneyRecords: parseTourneyRecords(raw),
     };
+}
+
+// Every tournament played (TournamentRecords): number, day, league, wave,
+// rank. Owner's export: #309 W135 rank 19 = the best tournament run that
+// day in the battle history (docs/game-export-format.md).
+function parseTourneyRecords(raw: Raw): TourneyRecord[] | null {
+    if (!Array.isArray(raw.TournamentRecords)) return null;
+    const out: TourneyRecord[] = [];
+    for (const r of raw.TournamentRecords as Raw[]) {
+        const date = dateMs(r?.Date);
+        if (typeof r?.TournamentNumber !== 'number' || date === null) continue;
+        out.push({
+            number: r.TournamentNumber,
+            date,
+            league: typeof r.LeagueID === 'number' ? GAME_LEAGUES[r.LeagueID] ?? '' : '',
+            wave: Math.max(0, num(r.Wave)),
+            rank: Math.max(0, num(r.Rank)),
+        });
+    }
+    return out.sort((a, b) => a.number - b.number);
 }
 
 // An ISO date in ms; null for missing or the game's empty date (year 1).
@@ -644,9 +666,15 @@ function parseLabsRunning(raw: Raw): LabRunning[] | null {
     active.forEach((on, slot) => {
         if (on !== true) return;
         const labIndex = num(arr(raw.LabResearchInt)[slot]);
+        // Card mastery labs aren't in GAME_LABS: "Enemy Balance Mastery" (169,
+        // owner's Labs screen 2026-10-21).
+        const mastery = MASTERY_LAB_CARDS[labIndex - MASTERY_LAB_START];
         out.push({
-            lab: GAME_LABS[labIndex] ?? null,
+            lab: GAME_LABS[labIndex] ?? (mastery ? `${mastery} Mastery` : null),
             labIndex,
+            // ResearchLevel doesn't count the level being researched (owner's
+            // Labs screen: stored 19 while researching Lv.20).
+            toLevel: num(arr(raw.ResearchLevel)[labIndex]) + 1,
             doneAt: dateMs(arr(raw.ResearchCompleteDate)[labIndex]),
             speedUp: num(arr(raw.LabSpeedUpSpeed)[slot]),
             speedUpLeftSec: num(arr(raw.LabSpeedUpRemainingSeconds)[slot]),

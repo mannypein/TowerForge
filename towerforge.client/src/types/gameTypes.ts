@@ -26,7 +26,7 @@ export type TabName =
     | 'profile' | 'perks' | 'tiers' | 'workshop'
     | 'labs' | 'cards' | 'uw' | 'puws' | 'relics'
     | 'bots' | 'modules' | 'guardian' | 'optimizer' | 'enemies' | 'runcoins' | 'runlength' | 'whatif' | 'tournament' | 'creators' | 'share' | 'account'
-    | 'ai';
+    | 'ai' | 'tourneyhistory';
 
 // ── Workshop Types ────────────────────────────────────────────
 export type WSCategory = 'attack' | 'defense' | 'utility';
@@ -373,6 +373,7 @@ export interface AppState {
     guardianData: GuardianData;
     labsRunning: LabRunning[];    // labs being researched at the last import (29.1.3+ exports)
     tourneyLog: TourneyLog;       // each tournament run's battle conditions, as the player ticked them
+    tourneyRecords: TourneyRecord[];   // every tournament played (TournamentRecords, 29.1.3+), oldest first
 }
 
 // A tournament run's league and battle conditions (HeatKey names from
@@ -384,6 +385,15 @@ export interface TourneyLogEntry {
 }
 export type TourneyLog = Record<string, TourneyLogEntry>;
 
+// One tournament from the game's TournamentRecords (29.1.3+).
+export interface TourneyRecord {
+    number: number;    // TournamentNumber
+    date: number;      // ms, the tournament day (00:00 UTC)
+    league: League;
+    wave: number;
+    rank: number;      // 0 = not placed yet
+}
+
 // A lab being researched when the game exported (LabActiveBool / LabResearchInt,
 // ResearchCompleteDate; the speed-up as of the export).
 export interface LabRunning {
@@ -393,6 +403,7 @@ export interface LabRunning {
     speedUp: number;           // speed-up multiplier (0 = none)
     speedUpLeftSec: number;    // seconds of speed-up left at export
     exportedAt: number | null; // ms, UTC
+    toLevel?: number;          // the level being researched (ResearchLevel + 1; older saves: absent)
 }
 
 // ── Guardian ──────────────────────────────────────────────────

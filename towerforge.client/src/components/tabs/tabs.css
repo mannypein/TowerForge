@@ -3878,3 +3878,248 @@
     font-size: 12px;
     color: var(--text-dim);
 }
+
+/* ── Tournaments → History (tnh-) ─────────────────────────── */
+/* League colors: fixed per league, validated as a set on --bg2. */
+.tnh {
+    --tnh-copper: #d95926;
+    --tnh-silver: #3987e5;
+    --tnh-gold: #c98500;
+    --tnh-platinum: #199e70;
+    --tnh-champion: #9085e9;
+    --tnh-legend: #008300;
+    --tnh-mythic: #d55181;
+}
+
+    .tnh i {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 3px;
+        margin-right: 6px;
+        vertical-align: -1px;
+    }
+
+.tnh-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+    .tnh-filters label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--text-dim);
+    }
+
+.tnh-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.tnh-tile {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+    .tnh-tile span {
+        font-size: 11px;
+        color: var(--text-dim);
+    }
+
+    .tnh-tile strong {
+        font-size: 20px;
+        color: var(--text-bright);
+    }
+
+.tnh-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 14px;
+    font-size: 12px;
+    color: var(--text);
+    margin-bottom: 6px;
+}
+
+.tnh-chart {
+    position: relative;
+    width: 100%;
+    min-width: 0;
+}
+
+    .tnh-chart svg {
+        display: block;
+        max-width: 100%;
+        outline: none;
+        touch-action: pan-y;
+    }
+
+        .tnh-chart svg:focus-visible {
+            box-shadow: 0 0 0 2px var(--accent);
+            border-radius: 4px;
+        }
+
+.tnh-grid {
+    stroke: var(--border);
+    stroke-width: 1;
+}
+
+.tnh-cross {
+    stroke: var(--text-dim);
+    stroke-width: 1;
+}
+
+.tnh-axis {
+    fill: var(--text-dim);
+    font-size: 11px;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+}
+
+.tnh-dot {
+    stroke: var(--bg2);
+    stroke-width: 2;
+}
+
+.tnh-tip {
+    position: absolute;
+    top: 0;
+    width: 150px;
+    padding: 6px 10px;
+    background: var(--bg4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    font-size: 12px;
+    color: var(--text-dim);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    pointer-events: none;
+}
+
+    .tnh-tip strong {
+        font-size: 15px;
+        color: var(--text-bright);
+    }
+
+.tnh-empty {
+    padding: 20px 0;
+    font-size: 12px;
+    color: var(--text-dim);
+}
+
+.tnh-moves {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 13px;
+}
+
+.tnh-up,
+.tnh-down {
+    display: inline-block;
+    min-width: 62px;
+    font-weight: 700;
+}
+
+.tnh-up {
+    color: var(--accent);
+}
+
+.tnh-down {
+    color: var(--text-dim);
+}
+
+.tnh-dim {
+    color: var(--text-dim);
+}
+
+.tnh-scroll {
+    overflow-x: auto;
+}
+
+.tnh-leagues {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 10px;
+}
+
+.tnh-league {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 10px 12px;
+}
+
+.tnh-league-head {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-bottom: 8px;
+}
+
+    .tnh-league-head strong {
+        color: var(--text-bright);
+        font-size: 14px;
+    }
+
+    .tnh-league-head span {
+        font-size: 11px;
+        color: var(--text-dim);
+    }
+
+.tnh-league dl {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 3px 12px;
+    margin: 0;
+    font-size: 12px;
+}
+
+.tnh-league dt {
+    color: var(--text-dim);
+}
+
+.tnh-league dd {
+    margin: 0;
+    color: var(--text);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.tnh-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+    .tnh-table th {
+        text-align: left;
+        font-weight: 600;
+        color: var(--text-dim);
+        padding: 4px 8px;
+        border-bottom: 1px solid var(--border);
+        white-space: nowrap;
+    }
+
+    .tnh-table td {
+        padding: 4px 8px;
+        border-bottom: 1px solid var(--bg3);
+        white-space: nowrap;
+        color: var(--text);
+    }
+
+.tnh-more {
+    margin-top: 10px;
+}

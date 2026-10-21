@@ -420,9 +420,38 @@ describe('29.1.3 exports (ExportVersion 1)', () => {
         }));
         const at = Date.UTC(2026, 9, 19, 14);
         expect(imp.labsRunning).toEqual([
-            { lab: 'Damage Lab', labIndex: dmg, doneAt: Date.UTC(2026, 9, 20, 8), speedUp: 2, speedUpLeftSec: 3600, exportedAt: at },
-            { lab: null, labIndex: 999, doneAt: null, speedUp: 0, speedUpLeftSec: 0, exportedAt: at },
+            { lab: 'Damage Lab', labIndex: dmg, toLevel: 1, doneAt: Date.UTC(2026, 9, 20, 8), speedUp: 2, speedUpLeftSec: 3600, exportedAt: at },
+            { lab: null, labIndex: 999, toLevel: 1, doneAt: null, speedUp: 0, speedUpLeftSec: 0, exportedAt: at },
         ]);
+    });
+
+    // Owner's Labs screen (2026-10-21): lab 169 is "Enemy Balance Mastery
+    // Lv.6" with ResearchLevel 5 — a card mastery lab, and the level being
+    // researched is the stored one + 1.
+    it('names card mastery labs and gives the level being researched', () => {
+        const eb = MASTERY_LAB_START + MASTERY_LAB_CARDS.indexOf('Enemy Balance');
+        expect(eb).toBe(169);
+        const imp = parseGameExport(makeExport({
+            LabActiveBool: [true, false, false, false, false],
+            LabResearchInt: [eb, 0, 0, 0, 0],
+            ResearchLevel: research({ [eb]: 5 }),
+        }));
+        expect(imp.labsRunning![0]).toMatchObject({ lab: 'Enemy Balance Mastery', labIndex: 169, toLevel: 6 });
+    });
+
+    it('reads every tournament played', () => {
+        const imp = parseGameExport(makeExport({
+            TournamentRecords: [
+                { TournamentNumber: 41, Date: '2026-10-21T00:00:00.000Z', LeagueID: 6, Wave: 1, Rank: 0 },
+                { TournamentNumber: 40, Date: '2026-10-17T00:00:00.000Z', LeagueID: 6, Wave: 135, Rank: 19 },
+                { TournamentNumber: 39, Date: 'not a date', LeagueID: 5, Wave: 300, Rank: 4 },
+            ],
+        }));
+        expect(imp.tourneyRecords).toEqual([
+            { number: 40, date: Date.UTC(2026, 9, 17), league: 'Mythic', wave: 135, rank: 19 },
+            { number: 41, date: Date.UTC(2026, 9, 21), league: 'Mythic', wave: 1, rank: 0 },
+        ]);
+        expect(parseGameExport(makeExport()).tourneyRecords).toBeNull();
     });
 
     it('reads InGuild into the Guardian', () => {
