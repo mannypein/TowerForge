@@ -77,6 +77,9 @@ describe('heat: conditions step up with the wave', () => {
         expect(heatValue(cond('orb'), 'steep', 100)).toBe(20);
         expect(heatValue(cond('orb'), 'gentle', 100)).toBe(30);
         expect(heatValue(cond('armored'), 'gentle', 1000)).toBe(100);
+        // In-game card (owner, 2026-10-21): Fast's Ultimate Level 5 — "Fasts buff up to
+        // 1 nearby enemies to match their speed" — the sheet's value at the start of a run.
+        expect(heatValue(cond('fastUltimate'), 'steep', 0)).toBe(1);
         // Thorns: the same numbers as TheTowerSDK's heat table, both columns.
         expect(cond('thorns').steep[11]).toBe(45);
         expect(cond('thorns').gentle![11]).toBe(50);

@@ -182,9 +182,9 @@ export const HEAT_CONDITIONS: HeatCondition[] = [
     },
     {
         key: 'fastUltimate', name: 'Fast’s Ultimate', effect: 'none', lab: "Fast's Ultimate",
-        text: 'Fast enemies speed up to x nearby enemies to their speed',
-        steep: [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10], fmt: v => `${v} enemies`,
-        why: 'The model already times every enemy at Fast speed.',
+        text: 'Fasts buff up to x nearby enemies to match their speed',
+        steep: [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10], fmt: v => `up to ${v} nearby`,
+        why: 'Slow enemies near a Fast (Overcharge, bosses, tanks) come in at its speed. The model times every enemy at Fast speed already, so it can’t show the difference yet — which makes it too hard on slow enemies the rest of the time.',
     },
     {
         key: 'basicUltimate', name: 'Basic’s Ultimate', effect: 'waves', lab: "Basic's Ultimate",

@@ -432,6 +432,13 @@ reports count kills per type, so the mix can be **calibrated per player**.
     Read with the in-game text ("x% faster") and a speed cap, that's the same
     thing: x% faster until the cap. The site counts it as x% faster (time in
     range ÷ (1 + x)); the cap isn't known, so past ~W800 it counts too much.
+  - **Fast's Ultimate (in-game card, owner, 2026-10-21):** "Level 5 — Fasts
+    buff up to 1 nearby enemies to match their speed". The sheet has 1 at
+    W0–W20, then 2, 2, 3 … 10 by W1000; that fits value = level ÷ 10 rounded
+    up with the level 5 higher each heat step (5, 10 … 95) — the code's
+    reading, one card seen. Slow enemies near a Fast come in at its speed;
+    the model times every enemy at Fast speed already, so it isn't counted
+    (which makes the model too hard on slow enemies the rest of the time).
   - The battle history doesn't record which conditions a run had (nor does
     29.1.3's export: `TournamentRecords` is empty on TTG's test file). The
     player ticks each run's on the Tournament page (store `tourneyLog`).
