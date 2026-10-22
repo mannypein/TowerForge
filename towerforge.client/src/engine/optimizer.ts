@@ -142,7 +142,7 @@ import { coinRate } from './farming';
 import type { FarmCalibration } from './farming';
 import { ehpScore } from './ehp';
 import type { EhpCalibration } from './ehp';
-import { edpsScore, edpsSurvivalScore } from './edps';
+import { edpsScore, edpsWaves } from './edps';
 import { healthSkipChance, healthSkipSources } from './levelSkip';
 import { healthLabCut } from './enemyStats';
 import type { EnemyType } from './enemyStats';
@@ -281,8 +281,8 @@ function getScore(raw: OptimizerSnapshot): number {
 // uncalibrated model without a run to calibrate from.
 function wavesScore(snap: OptimizerSnapshot): number {
     if (!snap.edps) return getEDPS(snap);
-    return edpsSurvivalScore(snap, snap.edps) * Math.exp((snap.skipWorth ?? 0) * scoredSkip(snap))
-        * killerHealthFactor(snap);
+    const w = edpsWaves(snap, snap.edps);
+    return w.flat * Math.exp(w.reach + (snap.skipWorth ?? 0) * scoredSkip(snap)) * killerHealthFactor(snap);
 }
 
 // Less health on the enemies that end runs works like more damage against

@@ -23,7 +23,7 @@ reports set the baseline, so even unmodeled effects are already in it; only
 | Guardian Attack chip | ◐ | From the run's GuardianDamage (2026-10-20): scales with Percentage × Targets ÷ Cooldown and with the health the rest of the damage takes off (it hits a share of lost health), so it counts for damage and run length. Assumes its targets are about as hurt as in the run; the boss half-damage mix stays as in the run |
 | Electrons, Spotlight damage | ◐ | Read from runs and shown, kept fixed |
 | Guardian (2026-10-19) | ◐ | Gear → Guardian; imported from the export (chips, presets, slots, skins). Scout → tower shots through Damage/Meter; Attack → its share of the run's damage (row above); Bounty, Summon → kill coins; Fetch → its coins and loot by finds per second; skins +0.6% coins each. Ally (overheal past Max Recovery) not counted — how it combines with the usual cap isn't confirmed |
-| Orbs, thorns, land mines | ◐ | Fixed share for damage; orbs and thorns modeled for coins / survival |
+| Orbs, thorns, land mines | ◐ | Fixed share for damage; orbs and thorns modeled for coins / survival. Waves (2026-10-22): orbs and Death Ray stopping more of the run-ending enemies they can touch (Tank, Ranged…) as enemies stay in range longer — orb count and speed not yet |
 | Demon Mode, Plasma Cannon, Berserker, Super Tower | ◐ | Berserker and Super Tower in the model; Demon Mode and Plasma Cannon aren't |
 | Protectors' damage reduction (55%) | ◐ | Inside the calibration; the Protector labs aren't valued |
 

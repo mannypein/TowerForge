@@ -136,6 +136,9 @@ export interface EdpsCalibration {
     crowd: number;
     armoredHits: number;
     fastUltimate: number;   // Fast's Ultimate the run had (up to N nearby; 0 = none)
+    // Orb / Death Ray Resistance the run had: what a touch takes (1 = destroys).
+    orbTouch: number;
+    deathRayTouch: number;
 }
 
 // What battle conditions do to flat damage, against the run's: the share
@@ -277,7 +280,84 @@ export function buildEdpsCalibration(snap: OptimizerSnapshot, report: BattleRepo
         anchor, shares, clReach, smiteProcs: smiteProcs0, bhKills,
         mix, hitsPerEnemy: perEnemy, crowd, armoredHits: snap.conditions?.armoredHits ?? 0,
         fastUltimate: snap.conditions?.fastUltimate ?? 0,
+        orbTouch: touchOf(snap.conditions?.orbLeftPct), deathRayTouch: touchOf(snap.conditions?.deathRayLeftPct),
     };
+}
+
+// ── Orbs and Death Ray against the enemies that end runs ──────
+// Both destroy what they touch — not bosses, elites, fleets or enemies a
+// Protector shields (TheTowerSDK, wiki) — and that's most of what reaches
+// them: on the owner's T18 run (W9,107) orbs made 70% of the kills, with
+// about one orb hit per enemy they can touch. A run that ends to an enemy
+// they can touch (Basic, Fast, Tank, Ranged — the owner's Ranged enemies
+// come within the orbs) ends when enough get past them, and the pressure on
+// the tower is how many get past × how long each lasts there. Adding up
+// the pressure: the touchable killers' share w of the deaths shrinks with
+// the share that gets past (L, against the run) and the rest stays, so it
+// works like 1 ÷ (1 − w + w·L) more damage — the same as w·(fewer getting
+// past) for small changes, and never more than 1 ÷ (1 − w): with none
+// getting past, runs end to the other enemies.
+// An enemy gets past with chance e^−λ, λ the touches it can expect: read
+// from the run (−ln of the share they let past, of the enemies they can
+// touch), and growing with the time each enemy is in range (Chrono Field,
+// CF+, Slow Aura … — longer among the orbs and in Death Ray's path). Orb /
+// Death Ray Resistance makes a touch take x% of health instead of all of
+// it: λ × x. Tank's Ultimate makes tanks immune. The code's model, not
+// checked against runs yet; orb count and orb speed aren't counted.
+const TOUCHABLE: EnemyType[] = ['Basic', 'Fast', 'Tank', 'Ranged'];
+const MAX_REACH = 0.95;   // λ ≤ 3: a run's last few % aren't a measurement
+
+const touchOf = (leftPct: number | undefined) => (leftPct !== undefined ? leftPct / 100 : 1);
+
+// Touches per enemy they can touch, from the share the run's orbs (or Death
+// Ray) destroyed.
+export function touchesOf(kills: number, touchable: number): number {
+    if (kills <= 0 || touchable <= 0) return 0;
+    return -Math.log(1 - Math.min(MAX_REACH, kills / touchable));
+}
+
+// The share of run-ending enemies orbs and Death Ray can touch.
+function touchableKillers(snap: OptimizerSnapshot): number {
+    const tankImmune = !!snap.conditions?.tankUltimate;
+    return (Object.entries(snap.killers ?? {}) as [EnemyType, number][])
+        .filter(([type]) => TOUCHABLE.includes(type) && !(tankImmune && type === 'Tank'))
+        .reduce((s, [, share]) => s + share, 0);
+}
+
+// Touches per enemy at the run, and how many more now (orbs + Death Ray).
+function touches(snap: OptimizerSnapshot, calib: EdpsCalibration, x: EdpsParts): { run: number; more: number } {
+    const orb0 = touchesOf(calib.mix.orbKills, calib.mix.touchable);
+    const dr0 = touchesOf(calib.mix.deathRayKills, calib.mix.touchable);
+    if (orb0 + dr0 <= 0) return { run: 0, more: 0 };
+    const c = snap.conditions;
+    const fast = fastUltimateTime(c?.fastUltimate, snap.killers) / fastUltimateTime(calib.fastUltimate, snap.killers);
+    const t = timeRatio(x, calib.anchor) * fast;
+    const orb = orb0 * t * (calib.orbTouch > 0 ? touchOf(c?.orbLeftPct) / calib.orbTouch : 1);
+    const dr = dr0 * t * (calib.deathRayTouch > 0 ? touchOf(c?.deathRayLeftPct) / calib.deathRayTouch : 1);
+    return { run: orb0 + dr0, more: orb - orb0 + dr - dr0 };
+}
+
+// log(damage-equivalent factor) of fewer run-ending enemies getting past
+// orbs and Death Ray, against the run (0 = no change).
+export function reachLog(snap: OptimizerSnapshot, calib: EdpsCalibration, x: EdpsParts): number {
+    const w = touchableKillers(snap);
+    if (w <= 0) return 0;
+    const { more } = touches(snap, calib, x);
+    return -Math.log(1 - w + w * Math.exp(-more));
+}
+
+// The share of the enemies orbs and Death Ray can touch that they stop
+// (What If's chain), now and at the run.
+export function reachShares(snap: OptimizerSnapshot, calib: EdpsCalibration, x: EdpsParts): { now: number; run: number } {
+    const { run, more } = touches(snap, calib, x);
+    return { now: 1 - Math.exp(-(run + more)), run: 1 - Math.exp(-run) };
+}
+
+// The waves score's two damage parts from one read of the account: flat
+// damage (edpsSurvivalScore) and the reach of orbs and Death Ray (reachLog).
+export function edpsWaves(snap: OptimizerSnapshot, calib: EdpsCalibration): { flat: number; reach: number } {
+    const x = edpsParts(snap);
+    return { flat: survivalFrom(snap, calib, x), reach: reachLog(snap, calib, x) };
 }
 
 // Relative eDPS: 1 at the calibration anchor.
@@ -320,7 +400,10 @@ export const attackRatio = (x: EdpsParts, a: EdpsParts, flatRatio: number) =>
 // with flat damage and counts with it.
 // Relative flat damage, 1 at the anchor; feeds runLength's waves gained.
 export function edpsSurvivalScore(snap: OptimizerSnapshot, calib: EdpsCalibration, ttt?: number): number {
-    const x = edpsParts(snap, ttt);
+    return survivalFrom(snap, calib, edpsParts(snap, ttt));
+}
+
+function survivalFrom(snap: OptimizerSnapshot, calib: EdpsCalibration, x: EdpsParts): number {
     const a = calib.anchor;
     const s = calib.shares;
     const flat = s.cl + s.sm + s.dw + s.ilm + s.ps + s.tower + s.flame;

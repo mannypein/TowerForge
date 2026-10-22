@@ -280,6 +280,41 @@ takes damage for as long as it's in range, so a 31% slower enemy (Slow Aura
 7★) takes 1 ÷ 0.69 = 1.45× the damage on its way in. Consequence to watch:
 range and slows are now worth much more for pushing than before.
 
+## Orbs and Death Ray against the enemies that end runs (2026-10-22)
+
+The waves score (`edps.reachLog`, in `wavesScore` next to the killers'
+health labs; What If line "Stopped by orbs and Death Ray") counts orbs and
+Death Ray for runs that end to enemies they can touch.
+
+- **Facts:** orbs destroy what they touch except bosses, elites, fleets and
+  enemies a Protector shields (TheTowerSDK knowledge "orb", wiki Orbs).
+  The owner's T18 W9,107 run (29.1.3 export): 1,387,746 enemies, 13.8k of
+  them bosses and elites; `DestroyedByOrbs` 976,135 (70%),
+  `DestroyedByChainLightning` 378,534, `OrbHits` 1,259,470 — about one orb
+  hit per enemy orbs can touch. Orbs dealt 71% of the damage. The owner's
+  Ranged enemies come within the orbs (owner, 2026-10-22). The owner's last
+  five T18 deaths: Ray, Ray, Tank, Tank, Overcharge.
+- **Model (the code's, not checked against runs yet):** an enemy orbs can
+  touch gets past with chance e^−λ, λ = −ln(1 − share destroyed ÷ share
+  touchable) from the run (capped at 95%), the same for Death Ray. λ grows
+  with the time each enemy is in range (CF, CF+, Slow Aura; Fast's Ultimate
+  against it); Orb / Death Ray Resistance makes a touch take x% of health,
+  λ × x (against the run's); Tank's Ultimate makes tanks immune. A run that
+  ends to a touchable enemy (Basic, Fast, Tank, Ranged; share w of the
+  deaths) ends when enough get past: the pressure on the tower is how many
+  get past × how long each lasts, so it counts as 1 ÷ (1 − w + w·L) more
+  damage, L = the share getting past against the run's. Small changes: w ×
+  fewer getting past; never more than 1 ÷ (1 − w) (runs then end to the
+  other enemies).
+- **Owner's account (2026-10-22):** CF+ 5 → 6 +60 waves (+20 of them this),
+  5 → 8 +149 (+50), 5 → 14 +428 (+136: orbs stop 71% → 94% of what they
+  can touch, time in range 13.2 s → 30.2 s); CL max +520; both +1,002.
+  CF+ hasn't been upgraded since, so the jump isn't checked yet.
+- **Not counted yet:** orb count and orb speed (five sources for the count —
+  workshop, perk, Ancestral Armor sub-effect, assist, vault — and the SDK's
+  speed formula is unverified), Death Ray's own upgrades, per-type speed
+  (tanks spend longer among the orbs than fast enemies).
+
 ## Paths
 
 - **Stone path** (`simulateStonePath`): UW stats, UW+, card mastery unlocks

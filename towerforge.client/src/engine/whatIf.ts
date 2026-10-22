@@ -41,7 +41,9 @@ import { settleGain } from './tournamentModel';
 import { killerMix, pathRunGains, wavesSpread } from './runLength';
 import { calcTTTDisplayStats } from './ttt';
 import { buildDamageContext } from './uwdps';
-import { attackRatio, buildEdpsCalibration, conditionRatios, edpsParts, edpsSurvivalScore, flatDamageRatio } from './edps';
+import {
+    attackRatio, buildEdpsCalibration, conditionRatios, edpsParts, edpsSurvivalScore, edpsWaves, flatDamageRatio, reachShares,
+} from './edps';
 import { buildFarmCalibration, coinFactors, FARM_EFFECTS, FARM_EFFECT_LABELS } from './farming';
 import { healthLabCut } from './enemyStats';
 import { deathDefyChance, hitsSurvived, saverAverages } from './runSavers';
@@ -269,7 +271,8 @@ export interface ChainLink {
 }
 
 // What the push gain is made of, to split the waves between the links:
-// waves ∝ log of each part (flat damage, level skip, killers' health labs).
+// waves ∝ log of each part (flat damage, level skip, killers' health labs,
+// run-ending enemies orbs and Death Ray stop).
 interface WaveSplit {
     waves: number;
     damage: number;       // flat damage ratio, where the changed run ends
@@ -277,6 +280,7 @@ interface WaveSplit {
                           // the stronger battle conditions further into the run)
     skipLog: number;      // skip points × skipWorth
     killerLog: number;    // log of the killers' health-lab factor
+    reachLog: number;     // fewer run-ending enemies past orbs and Death Ray (edps.reachLog)
 }
 
 export interface WhatIfResult {
@@ -317,7 +321,7 @@ function buildChain(
     report: BattleReport | null, models: GoalModels, split: WaveSplit | null,
 ): ChainLink[] {
     // A part's share of the waves, by its log against the whole gain's.
-    const totalLog = split ? Math.log(split.damage) + split.skipLog + split.killerLog : 0;
+    const totalLog = split ? Math.log(split.damage) + split.skipLog + split.killerLog + split.reachLog : 0;
     const wavesOf = (log: number) => (split && Math.abs(totalLog) > 1e-12 ? (split.waves * log) / totalLog : undefined);
     const links: ChainLink[] = [];
     const add = (l: ChainLink) => {
@@ -404,6 +408,13 @@ function buildChain(
         }
         add({ group: 'Damage to each enemy', label: 'Smite (share of health per proc)', before: p0.smite * 100, after: p1.smite * 100, kind: 'percent' });
         add({ group: 'Damage to each enemy', label: 'Consume (share of health)', before: p0.consume * 100, after: p1.consume * 100, kind: 'percent' });
+        // Enemies that end runs and can be touched (Basic, Fast, Tank, Ranged):
+        // the share orbs and Death Ray stop before they reach the tower.
+        if (killers) {
+            const [r0, r1] = [reachShares({ ...cond(base), killers }, calib, p0), reachShares({ ...cond(after), killers }, calib, p1)];
+            add({ group: 'Damage to each enemy', label: 'Stopped by orbs and Death Ray (enemies they can touch)',
+                before: r0.now * 100, after: r1.now * 100, kind: 'percent', waves: wavesOf(split?.reachLog ?? 0) });
+        }
     }
 
     add({ group: 'Level skip', label: 'Enemy Health Level Skip', before: skipOf(base, models), after: skipOf(after, models), kind: 'points',
@@ -548,6 +559,7 @@ export function whatIf(
                 skipLog: models.worth * skipPoints,
                 killerLog: killers.reduce((sum, [type, share]) =>
                     sum + share * Math.log(healthLabCut(base.labData, type) / healthLabCut(after.labData, type)), 0),
+                reachLog: edpsWaves(cond(after), calib).reach - edpsWaves(cond(base), calib).reach,
             };
         }
         // A longer run: coins for the extra waves, at the new coin bonuses;

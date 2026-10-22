@@ -150,6 +150,7 @@ export function withConditions(mb: ModBonuses, c: TourneyConditions | undefined)
 export interface RunMix {
     orbKills: number;
     deathRayKills: number;
+    touchable: number;      // share of enemies orbs and Death Ray can destroy (not bosses, elites, fleets)
     basic: number;
     tank: number;
     avgHealth: number;
@@ -160,8 +161,11 @@ const TYPE_HEALTH: [string, number][] = [
     ['TotalProtector', 0.6], ['TotalVampires', 2], ['TotalRays', 1], ['TotalScatters', 2],
     ['TotalSaboteurs', 20], ['TotalCommanders', 20], ['TotalOvercharges', 20],
 ];
+// Bosses, elites and fleets: immune to orbs and Death Ray (wiki, SDK).
+const IMMUNE = ['TotalBoss', 'TotalVampires', 'TotalRays', 'TotalScatters', 'TotalSaboteurs', 'TotalCommanders', 'TotalOvercharges'];
+
 const SDK_MIX: RunMix = {
-    orbKills: 0, deathRayKills: 0, basic: 0.199, tank: 0.267,
+    orbKills: 0, deathRayKills: 0, touchable: 1, basic: 0.199, tank: 0.267,
     avgHealth: 0.199 + 0.283 + 0.267 * 5 + 0.252,
 };
 
@@ -175,7 +179,11 @@ export function runMix(report: BattleReport | null): RunMix {
     const base = all > 0
         ? { basic: n('TotalBasic') / all, tank: n('TotalTank') / all, avgHealth: counts.reduce((s, [c, h]) => s + c * h, 0) / all }
         : { basic: SDK_MIX.basic, tank: SDK_MIX.tank, avgHealth: SDK_MIX.avgHealth };
-    return { ...base, orbKills: share('DestroyedByOrbs'), deathRayKills: share('DestroyedByDeathRay') };
+    const immune = IMMUNE.reduce((s, k) => s + n(k), 0);
+    return {
+        ...base, orbKills: share('DestroyedByOrbs'), deathRayKills: share('DestroyedByDeathRay'),
+        touchable: enemies > 0 && immune > 0 ? Math.max(0, 1 - immune / enemies) : 1,
+    };
 }
 
 // Basic's Ultimate turns a basic into a fast, tank, ranged, boss or

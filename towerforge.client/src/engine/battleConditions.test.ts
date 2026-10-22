@@ -165,7 +165,7 @@ describe('battle conditions in the model', () => {
     });
 
     it('more enemies share single-target fire; resistances leave the enemies orbs and Death Ray destroyed', () => {
-        const mix = { orbKills: 0.5, deathRayKills: 0.2, basic: 0.2, tank: 0.25, avgHealth: 2 };
+        const mix = { orbKills: 0.5, deathRayKills: 0.2, touchable: 1, basic: 0.2, tank: 0.25, avgHealth: 2 };
         expect(crowdFactor({ moreEnemiesPct: 25 }, mix)).toBeCloseTo(1.25, 10);
         expect(crowdFactor({ orbLeftPct: 20 }, mix)).toBeCloseTo(1 + 0.5 * 0.8, 10);
         expect(crowdFactor({ deathRayLeftPct: 55 }, mix)).toBeCloseTo(1 + 0.2 * 0.45, 10);

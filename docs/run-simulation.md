@@ -37,10 +37,12 @@ gets) and upgrades aren't in yet.
 Optimizer → Rank by → "How far runs get (waves)" (Glass Cannon, calibrated
 eDPS). Ranks stone upgrades by **flat damage** only (`edpsSurvivalScore`:
 CL, SM, DW, ILM, PS, tower shots, each by its share of the run's damage),
-because on Orb Resistance tiers (T18: orbs deal 10% of health per hit) orbs,
-Black Hole, Smite and Consume deal a share of enemy health and don't fall
-behind as enemies get tougher, and the enemies that end GC runs (elites,
-fleets, bosses) are immune to orbs and BH anyway. Each step's gain compounds
+because orbs, Black Hole, Smite and Consume take a share of an enemy's
+health (orbs destroy what they touch) and don't fall behind as enemies get
+tougher. Bosses, elites and fleets are immune to orbs, Death Ray and BH —
+but runs also end to Tanks and Ranged, which aren't: for those, orbs and
+Death Ray stopping more of them counts too (2026-10-22, [optimizer.md](optimizer.md)
+"Orbs and Death Ray against the enemies that end runs"). Each step's gain compounds
 along the path and becomes waves (`pathRunGains` → Run Length) and coins per
 run (Coins per Run). Totals far past the current death wave are rough.
 - **Run-to-run luck on path rows** (code's assumption): along a path the
