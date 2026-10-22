@@ -110,9 +110,16 @@ What went wrong, and what changed:
 - It read levels like "Damage 13/32" as damage; the prompt says they're
   levels.
 
+## Download size
+
+The two WebLLM scripts (the worker and the page's copy) are ~6 MB each.
+Since 2026-10-22 nginx compresses JavaScript, CSS, JSON and SVG
+(`ops/nginx/towerforge-gzip.conf`, installed in `/etc/nginx/conf.d/`): each
+AI script goes out as ~2.1 MB, the main bundle 359 KB → 111 KB. The model
+itself (Hugging Face) is already compressed weights.
+
 ## Not done yet
 
-- Gzip for the two ~6 MB WebLLM scripts (nginx serves `.js` uncompressed).
 - Tournament What If (the tool uses campaign mode), Guardian and module
   questions beyond the summary, and the account summary's labs (only the
   ones being researched).
