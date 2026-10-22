@@ -305,18 +305,19 @@ export default function App() {
                     `  (${imp.modules.unnamed.length} more unique modules aren’t identified yet — those were skipped)`,
                 ] : []),
                 ...(imp.bots ? ['• Bots: medal and Bot+ levels and which bots run, per preset'] : []),
+                ...(imp.relics ? [
+                    `• Relics: ${imp.relics.owned} owned, their bonus totals${imp.relics.unknown
+                        ? ` (${imp.relics.unknown} newer relic${imp.relics.unknown === 1 ? ' isn’t' : 's aren’t'} known to TowerForge yet — compare the Relics tab with the game’s ⓘ totals)`
+                        : ''}`,
+                ] : []),
                 ...(imp.guardian?.unlocked ? [
                     `• Guardian: chips, presets and skins${imp.guardian.inGuild === false
                         ? ' (the file says you weren’t in a guild — the Guardian only fights in one; the game also says this if your guild hadn’t loaded yet)'
                         : ''}`,
                 ] : []),
-                '',
-                ...(imp.bots ? [
-                    'Not imported yet: relics.',
-                    'We’re still confirming those, so what you entered there was left as it is.',
-                ] : [
-                    'Not imported yet: bots and relics.',
-                    'Bots come with the game’s 29.1.3 export, and we’re still confirming relics, so what you entered there was left as it is.',
+                ...(imp.bots ? [] : [
+                    '',
+                    'Not imported yet: bots — they come with the game’s 29.1.3 export, so what you entered there was left as it is.',
                 ]),
                 ...(imp.exportVersion !== null && imp.exportVersion > SUPPORTED_EXPORT_VERSION ? [
                     '',

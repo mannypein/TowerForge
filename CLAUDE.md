@@ -9,7 +9,7 @@ suggests what to upgrade next.
 
 - `towerforge.client/` — React 19 + TypeScript + Vite, state in Zustand (`src/store/useGameStore.ts`, saved to localStorage under `tc_*` keys).
   - `src/engine/` — calculations and the game-export importer. **Pure functions, no store imports.**
-  - `src/constants/` — game data tables (`gameData.ts`, `moduleData.ts`, `botData.ts`), the export index maps (`gameExportMaps.ts`), and the Creator Codes list (`creatorCodes.ts` — add a creator's link only when it's confirmed as theirs). `workshopCosts.ts`, `labCosts.ts` and `moduleCosts.ts` are generated from TheTowerSDK — don't edit them by hand.
+  - `src/constants/` — game data tables (`gameData.ts`, `moduleData.ts`, `botData.ts`), the export index maps (`gameExportMaps.ts`), and the Creator Codes list (`creatorCodes.ts` — add a creator's link only when it's confirmed as theirs). `workshopCosts.ts`, `labCosts.ts`, `moduleCosts.ts` and `relicCatalog.ts` are generated from TheTowerSDK — don't edit them by hand.
   - `src/components/tabs/` — one component per tab; styles in `tabs.css`, theme tokens in `src/styles/variables.css`.
   - `src/routes.ts` — each tab's address (`/creators`, `/what-if`…; Profile is `/`). The address follows the open tab and the tab bar's entries are links. The server sends unknown paths to `index.html` (nginx `try_files`), so a new tab only needs a path here — never one the server uses (`/api`, `/analytics`, `/assets`, `/downloads`).
   - `src/assets/{modules,bots}/` — game icons, looked up by slug in `constants/gameIcons.ts`.
@@ -36,6 +36,7 @@ Run from `towerforge.client/` unless noted.
 | Import game icons (repo root) | `powershell -ExecutionPolicy Bypass -File import-icons.ps1` — trims, centers and resizes PNGs from `Desktop\Tower-Forge-Assets` |
 | Creator profile pictures | `npm run creator-avatars` — downloads each YouTube-linked creator's picture into `src/assets/creators/`; run after adding a YouTube link to `creatorCodes.ts` (a test fails until you do) |
 | Cost tables | `npm run upgrade-costs -- <unpacked thetowersdk package>` — rewrites `workshopCosts.ts`, `labCosts.ts` and `moduleCosts.ts` (steps in the script header) |
+| Relic catalog | `npm run relic-catalog -- <unpacked thetowersdk package>` — rewrites `relicCatalog.ts` (each export relic slot's relic and bonus); rerun when the game adds relics |
 | TowerForge Link exe (repo root) | `dotnet publish TowerForge.Link -c Release -o <folder>` — one self-contained `TowerForgeLink.exe` (unsigned for now) |
 
 `npx eslint src` shows older `no-explicit-any` errors in LoginModal, moduleDefinitions,

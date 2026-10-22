@@ -473,6 +473,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
         }
         // A snapshot: an older file (no lab timers) clears the last one's.
         const labsRunning = imp.labsRunning ?? [];
+        // Relics: the totals of the relics owned (older saves typed them in).
+        const relicData = imp.relics ? imp.relics.totals : s.relicData;
         // Every tournament: kept across imports (older files don't have them).
         const tourneyRecords = imp.tourneyRecords ? mergeTourneyRecords(s.tourneyRecords, imp.tourneyRecords) : s.tourneyRecords;
         set({
@@ -482,9 +484,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
             importedBattles: battles,
             battleReportChoice: choice,
             wsData, enhData, uwData, cardData, perkData, labData, moduleState, guardianData, botData, botLoadouts, labsRunning,
-            tourneyRecords,
+            tourneyRecords, relicData,
         });
         saveKey(KEYS.tourneyRecords, tourneyRecords);
+        saveKey(KEYS.relics, relicData);
         saveKey(KEYS.guardian, guardianData);
         saveKey(KEYS.bots, botData);
         saveKey(KEYS.botLoadouts, botLoadouts);

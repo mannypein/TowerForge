@@ -439,6 +439,27 @@ describe('29.1.3 exports (ExportVersion 1)', () => {
         expect(imp.labsRunning![0]).toMatchObject({ lab: 'Enemy Balance Mastery', labIndex: 169, toLevel: 6 });
     });
 
+    // Slots from TheTowerSDK's catalog: 0 No Spoon (Defense Absolute 2%),
+    // 1 Red Pill (Health 5%), 2 Copper Badge (Damage 3%), 318 Massive
+    // Abduction (Cash 5%), 320 Alien Encounter (Bot Range 2 m).
+    it('adds up the relics owned into the Relics totals, and counts slots it doesn’t know', () => {
+        const slots = zeros(336);
+        for (const i of [0, 1, 2, 318, 320, 330]) slots[i] = 2;
+        const r = parseGameExport(makeExport({ RelicsUnlocked: slots })).relics!;
+        expect(r.owned).toBe(6);
+        expect(r.unknown).toBe(1);                                         // slot 330: newer than the catalog
+        expect(r.totals).toMatchObject({ rDefAbs: 2, rHP: 5, rDmg: 3, rCash: 5, rBotRange: 2, rCoins: 0 });
+        expect(Object.keys(r.totals)).toHaveLength(27);                    // every Relics stat, 0 when none owned
+        expect(parseGameExport(makeExport()).relics).toBeNull();
+    });
+
+    it('imports the relic totals over what was typed in', () => {
+        useGameStore.getState().setRelic('rDmg', 99);
+        const raw = makeExport({ RelicsUnlocked: [0, 0, 2] });
+        useGameStore.getState().applyGameImport(parseGameExport(raw), raw);
+        expect(useGameStore.getState().relicData.rDmg).toBe(3);
+    });
+
     it('reads every tournament played', () => {
         const imp = parseGameExport(makeExport({
             TournamentRecords: [

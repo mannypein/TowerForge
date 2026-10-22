@@ -1,6 +1,8 @@
 // ============================================================
 //  TowerForge Companion — Relics Tab
-//  Enter total bonus per category as shown in-game.
+//  Total bonus per category as the game's Relics → ⓘ screen shows it:
+//  filled in by Import Game Data (the relics owned, engine/gameExport.ts),
+//  or typed in.
 // ============================================================
 
 import { useGameStore } from '../../store/useGameStore';
@@ -22,10 +24,10 @@ export default function RelicsTab() {
         <div>
             {/* ── Note ── */}
             <div className="relics-note">
-                <strong>Quick Entry:</strong> In game, open Profile → Relics and tap the ⓘ at
-                the top left. It lists every relic bonus total in this same order — copy them
-                top to bottom. (Relics don&apos;t come from Import Game Data yet: the game file
-                only says which relic slots you own, not which relic each slot is.)
+                <strong>Relics</strong> come with <em>Import Game Data</em>: the totals of every relic you
+                own. To enter them by hand, open Profile → Relics in the game and tap the ⓘ at the top
+                left — it lists every relic bonus total in this same order, so copy them top to bottom.
+                Relics newer than TowerForge&apos;s list are counted when you import; add their bonus here.
             </div>
 
             <div className="flex-row" style={{ marginBottom: '12px' }}>

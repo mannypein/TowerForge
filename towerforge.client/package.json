@@ -11,7 +11,8 @@
     "test:watch": "vitest",
     "preview": "vite preview",
     "creator-avatars": "node scripts/fetch-creator-avatars.mjs",
-    "upgrade-costs": "node scripts/upgrade-costs.mjs"
+    "upgrade-costs": "node scripts/upgrade-costs.mjs",
+    "relic-catalog": "node scripts/relic-catalog.mjs"
   },
   "dependencies": {
     "@mlc-ai/web-llm": "0.2.85",

@@ -15,7 +15,7 @@
 // ============================================================
 
 import type { BattleField, BattleReport } from './battleReport';
-import { WS_STATS, WS_ENH, UWS, LABS } from '../constants/gameData';
+import { WS_STATS, WS_ENH, UWS, LABS, RELICS } from '../constants/gameData';
 import {
     GAME_CARDS, MASTERY_LAB_START, MASTERY_LAB_CARDS, CARD_PRESET_SLOTS, GAME_PERKS, GAME_LABS, GAME_LAB_GROUPS,
     GAME_MODULES, GAME_MODULE_RARITY, GAME_MODULE_EFFECT_RUNS, MODULE_EFFECT_SLOT_UNLOCK, isUniqueModule,
@@ -30,6 +30,7 @@ import type {
     BotLoadouts, LabRunning, TourneyRecord,
 } from '../types/gameTypes';
 import { BOTS_CONFIG } from '../constants/botData';
+import { RELIC_CATALOG } from '../constants/relicCatalog';
 import { CHIPS } from '../constants/guardianData';
 
 type Raw = Record<string, unknown>;
@@ -63,6 +64,7 @@ export interface GameImport {
     bots: BotImport | null;            // bot levels and which are active, per preset
     labsRunning: LabRunning[] | null;
     tourneyRecords: TourneyRecord[] | null;   // TournamentRecords (29.1.3+); null when the file has none
+    relics: RelicImport | null;
 }
 
 // Bot and Bot+ levels per site preset (from the bot preset its global
@@ -578,7 +580,37 @@ export function parseGameExport(raw: Raw): GameImport {
         bots: parseBots(raw),
         labsRunning: parseLabsRunning(raw),
         tourneyRecords: parseTourneyRecords(raw),
+        relics: parseRelics(raw),
     };
+}
+
+// Relics: RelicsUnlocked has one slot per relic, 2 = owned; each slot's
+// relic and bonus from TheTowerSDK (constants/relicCatalog.ts). The totals
+// are what the game's Relics → ⓘ screen shows: on the owner's account all
+// 27 matched (docs/game-export-format.md). Owned slots the catalog doesn't
+// know yet (relics newer than it) are counted, not guessed.
+export interface RelicImport {
+    totals: Record<string, number>;   // Relics tab keys → bonus total
+    owned: number;
+    unknown: number;                  // owned slots without a known relic
+}
+
+const RELIC_BY_SLOT = new Map(RELIC_CATALOG.map(([slot, , key, value]) => [slot, { key, value }]));
+const RELIC_KEYS = Object.values(RELICS).flat().map(([key]) => key);
+
+function parseRelics(raw: Raw): RelicImport | null {
+    const slots = arr(raw.RelicsUnlocked);
+    if (slots.length === 0) return null;
+    const totals: Record<string, number> = Object.fromEntries(RELIC_KEYS.map(k => [k, 0]));
+    let owned = 0, unknown = 0;
+    slots.forEach((v, slot) => {
+        if (v !== 2) return;
+        owned++;
+        const relic = RELIC_BY_SLOT.get(slot);
+        if (!relic) { unknown++; return; }
+        totals[relic.key] = Math.round(((totals[relic.key] ?? 0) + relic.value) * 100) / 100;
+    });
+    return { totals, owned, unknown };
 }
 
 // Every tournament played (TournamentRecords): number, day, league, wave,
