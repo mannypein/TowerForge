@@ -1841,6 +1841,30 @@
     border-color: var(--accent);
 }
 
+/* Optimizer filter: its UW and workshop sections. */
+.opt-filter-head {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: var(--text-bright);
+    margin: 14px 0 8px;
+}
+
+    .opt-filter-head:first-of-type {
+        margin-top: 0;
+    }
+
+.opt-filter-sec {
+    margin-bottom: 10px;
+}
+
+.opt-filter-sub {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+}
+
 .uw-filter-name {
     flex: 1;
     font-size: 13px;

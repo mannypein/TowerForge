@@ -67,6 +67,7 @@ export function snapshotFromState(s: AccountState): OptimizerSnapshot {
         botData: botsForPreset(s.botData, s.activePreset),
         guardian: s.guardianData ? copy(s.guardianData) : undefined,
         excludedUWs: [...(s.profile.excludedUWs ?? [])],
+        excludedWorkshop: [...(s.profile.excludedWorkshop ?? [])],
         metric: s.profile.build === 'Farming' ? 'coins' : s.profile.build === 'eHP' ? 'ehp' : 'edps',
     };
 }

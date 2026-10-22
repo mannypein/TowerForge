@@ -223,6 +223,15 @@ describe('Glass Cannon workshop and labs', () => {
         expect(dmg.toLv - dmg.fromLv).toBe(10);                           // 6000-level stats move 10 at a time
     });
 
+    // Some builds keep a stat low on purpose (an orb build's Range at 0).
+    it('leaves out the workshop stats the player unticked', () => {
+        const snap = calibrated(s => { s.excludedWorkshop = ['attack|Range', 'attack|Rend Armor Chance']; });
+        expect(ws(snap, 'Range')).toBeUndefined();
+        expect(ws(snap, 'Rend Armor Chance')).toBeUndefined();
+        expect(ws(snap, 'Rend Armor Mult')).toBeDefined();
+        expect(ws(calibrated(), 'Range')).toBeDefined();
+    });
+
     it('counts Enemy Health Level Skip in waves mode, at what a point is worth', () => {
         const skip = (worth?: number) => ws(calibrated(s => {
             s.edpsMode = 'waves';

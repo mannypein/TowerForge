@@ -14,7 +14,7 @@ import {
 import type { OptGoal } from '../../constants/optimizerConfig';
 import { presetLabel, UWS, WS_STATS, WS_ENH, MEDAL_SYMBOL } from '../../constants/gameData';
 import stoneIcon from '../../assets/stone.png';
-import { simulateStonePath, simulateCategoryPath, simulateMedalPath, attachParts } from '../../engine/optimizer';
+import { simulateStonePath, simulateCategoryPath, simulateMedalPath, attachParts, workshopKey } from '../../engine/optimizer';
 import { calcTTT, calcTTTDisplayStats } from '../../engine/ttt';
 import { calcTowerEDPS, calcSmiteWaveHPFraction } from '../../engine/uwdps';
 import type { OptCandidate, OptCategory, OptCurrency, BuildType, ModuleType } from '../../types/gameTypes';
@@ -340,7 +340,7 @@ export default function OptimizerTab() {
         setUndoStack(s => s.slice(0, -1));
     }
 
-    // ── UW exclusion toggle ───────────────────────────────────
+    // ── UW and workshop exclusion toggles ─────────────────────
     const excludedUWs = profile.excludedUWs ?? [];
     function toggleUW(abbr: string) {
         const set = new Set(excludedUWs);
@@ -348,6 +348,17 @@ export default function OptimizerTab() {
         else set.add(abbr);
         updateProfile({ excludedUWs: [...set] });
     }
+    const excludedWs = profile.excludedWorkshop ?? [];
+    function toggleWs(key: string) {
+        const set = new Set(excludedWs);
+        if (set.has(key)) set.delete(key);
+        else set.add(key);
+        updateProfile({ excludedWorkshop: [...set] });
+    }
+    const filterOff = [
+        excludedUWs.length > 0 && `${excludedUWs.length} UW${excludedUWs.length === 1 ? '' : 's'}`,
+        excludedWs.length > 0 && `${excludedWs.length} stat${excludedWs.length === 1 ? '' : 's'}`,
+    ].filter(Boolean).join(', ');
 
     // ── Gain color ────────────────────────────────────────────
     function gainColor(scorePct: number): string {
@@ -473,9 +484,9 @@ export default function OptimizerTab() {
                         <button
                             className="btn btn-dim"
                             onClick={() => setShowUWFilter(true)}
-                            title="Choose which UWs the optimizer suggests upgrades for"
+                            title="Choose which UWs and workshop stats the optimizer suggests upgrades for"
                         >
-                            ⚙ UW Filter{excludedUWs.length > 0 ? ` (${excludedUWs.length} off)` : ''}
+                            ⚙ Filter{filterOff ? ` (${filterOff} off)` : ''}
                         </button>
 
                         <button
@@ -501,6 +512,7 @@ export default function OptimizerTab() {
                             <p className="opt-row-explainer" style={{ marginTop: 0, marginBottom: '12px' }}>
                                 Unchecked UWs are skipped — no stone (UW or UW+) upgrades will be suggested for them.
                             </p>
+                            <div className="opt-filter-head">Ultimate Weapons</div>
                             <div className="uw-filter-list">
                                 {UWS.map(uw => {
                                     const checked = !excludedUWs.includes(uw.a);
@@ -517,7 +529,7 @@ export default function OptimizerTab() {
                                     );
                                 })}
                             </div>
-                            <div className="modal-actions" style={{ marginTop: '16px', justifyContent: 'flex-start' }}>
+                            <div className="modal-actions" style={{ marginTop: '10px', justifyContent: 'flex-start' }}>
                                 <button
                                     className="btn btn-dim"
                                     onClick={() => updateProfile({ excludedUWs: [] })}
@@ -529,6 +541,37 @@ export default function OptimizerTab() {
                                     onClick={() => updateProfile({ excludedUWs: UWS.map(u => u.a) })}
                                 >
                                     Clear All
+                                </button>
+                            </div>
+
+                            {/* Workshop stats some builds keep low on purpose (an orb build's Range). */}
+                            <div className="opt-filter-head">Workshop</div>
+                            <p className="opt-row-explainer" style={{ marginTop: 0, marginBottom: '10px' }}>
+                                Untick a stat you keep low on purpose (like Range on an orb build) and the coin
+                                rankings won&apos;t suggest it.
+                            </p>
+                            {(['attack', 'defense', 'utility'] as const).map(sec => (
+                                <div key={sec} className="opt-filter-sec">
+                                    <div className="opt-filter-sub">{sec.charAt(0).toUpperCase() + sec.slice(1)}</div>
+                                    <div className="uw-filter-list">
+                                        {(WS_STATS[sec] ?? []).map(([stat]) => {
+                                            const key = workshopKey(sec, stat);
+                                            return (
+                                                <label key={key} className="uw-filter-row">
+                                                    <input type="checkbox" checked={!excludedWs.includes(key)} onChange={() => toggleWs(key)} />
+                                                    <span className="uw-filter-name">{stat}</span>
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            ))}
+                            <div className="modal-actions" style={{ marginTop: '16px', justifyContent: 'flex-start' }}>
+                                <button
+                                    className="btn btn-dim"
+                                    onClick={() => updateProfile({ excludedWorkshop: [] })}
+                                >
+                                    Include all stats
                                 </button>
                                 <button
                                     className="btn btn-accent"

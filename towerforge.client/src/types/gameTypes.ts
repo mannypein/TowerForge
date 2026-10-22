@@ -65,6 +65,7 @@ export interface Profile {
     completedTier: number;
     currentLeague?: League;   // league you're in now (the file's LeagueID, 29.1.3+); `league` is the highest reached
     excludedUWs?: string[];   // UW abbrs the optimizer should not suggest upgrades for
+    excludedWorkshop?: string[];   // workshop stats it should not suggest ("attack|Range" — kept low on purpose)
     presetNames?: string[];   // custom preset names (from the game import or typed in); blank = default
 }
 

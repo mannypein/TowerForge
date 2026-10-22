@@ -187,6 +187,9 @@ export interface OptimizerSnapshot {
     // The Guardian (chips per Guardian preset; engine/guardian.ts). Omitted = none.
     guardian?: GuardianData;
     excludedUWs?: string[];   // UW abbrs to skip in uw / uwp candidates
+    // Workshop stats to skip ("attack|Range"): some builds keep a stat low on
+    // purpose (an orb build's Range at 0), so buying it back isn't advice.
+    excludedWorkshop?: string[];
     // What upgrades are scored on: tower eDPS (Glass Cannon), coins per
     // hour (Farming, calibrated by `farm`) or survival (eHP, calibrated by
     // `ehp`). Defaults to eDPS.
@@ -215,6 +218,9 @@ export interface OptimizerSnapshot {
     // (engine/battleConditions.ts); calibrations are built under them too.
     conditions?: TourneyConditions;
 }
+
+// A workshop stat as the filter names it.
+export const workshopKey = (section: string, stat: string) => `${section}|${stat}`;
 
 // ── Deep Clone Snapshot ───────────────────────────────────────
 function cloneSnapshot(s: OptimizerSnapshot): OptimizerSnapshot {
@@ -348,6 +354,7 @@ export function buildCandidates(
     const basEDPS = getScore(snap);
     const isEdps = (snap.metric ?? 'edps') === 'edps';
     const excluded = new Set(snap.excludedUWs ?? []);
+    const excludedWs = new Set(snap.excludedWorkshop ?? []);
     // Coins, gems, medals and shards: rank by gain per unit; free steps first.
     const perCost = (delta: number, cost: number) => (cost > 0 ? delta / cost : delta > 0 ? Infinity : 0);
 
@@ -665,6 +672,7 @@ export function buildCandidates(
         for (const wsCat of cats) {
             const stats = WS_STATS[wsCat] ?? [];
             stats.forEach(([statName, maxLv], idx) => {
+                if (excludedWs.has(workshopKey(wsCat, statName))) return;
                 const curLv = snap.wsData[snap.presetIdx]?.[wsCat]?.[idx] ?? 0;
                 if (curLv >= maxLv) return;
                 const toLv = Math.min(maxLv, curLv + wsStep(maxLv));
