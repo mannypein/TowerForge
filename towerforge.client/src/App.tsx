@@ -22,6 +22,7 @@ import LoginModal from './components/LoginModal';
 import LinkModal from './components/LinkModal';
 import AutoImport from './components/common/AutoImport';
 import ThemePicker from './components/common/ThemePicker';
+import DiscordLink from './components/common/DiscordLink';
 import { exportAge, linkExport } from './engine/linkClient';
 import PerksTab from './components/tabs/PerksTab';
 import TiersTab from './components/tabs/TiersTab';
@@ -429,6 +430,7 @@ export default function App() {
                 <span className="app-version">v{__APP_VERSION__}</span>
 
                 <div className="header-actions">
+                    <DiscordLink />
                     <ThemePicker />
                     {/* TODO: Re-enable cloud save button after testing */}
                     {/* <button className="btn btn-cloud" onClick={() => setShowLoginModal(true)}>

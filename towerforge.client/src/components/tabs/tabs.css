@@ -3499,6 +3499,48 @@
     color: var(--gold);
 }
 
+/* Discord link (header): Discord's own blurple in every theme, so it
+   reads as Discord. */
+.dsc-btn {
+    --discord: #5865f2;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--discord);
+    border-color: var(--discord);
+    color: #ffffff;
+    text-decoration: none;
+    white-space: nowrap;
+    box-shadow: 0 0 12px rgba(88, 101, 242, 0.45);
+}
+
+    .dsc-btn:hover {
+        background: #4752c4;
+        border-color: #4752c4;
+        box-shadow: 0 0 18px rgba(88, 101, 242, 0.65);
+    }
+
+.dsc-logo {
+    width: 16px;
+    height: 16px;
+    fill: currentColor;
+    flex-shrink: 0;
+}
+
+.dsc-short {
+    display: none;
+}
+
+@media (max-width: 600px) {
+    .dsc-long {
+        display: none;
+    }
+
+    .dsc-short {
+        display: inline;
+    }
+}
+
 /* Theme picker (header): each card sets data-theme on itself, so its
    colors are that theme's. */
 .modal-box.thm-box {

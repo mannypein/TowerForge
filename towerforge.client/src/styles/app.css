@@ -74,6 +74,22 @@
     margin-left: auto;
 }
 
+    .header-actions .btn {
+        white-space: nowrap;
+    }
+
+/* Phones: Discord, Theme and Import fit one row at 375px; narrower
+   screens move Import to a second row instead of squeezing labels. */
+@media (max-width: 600px) {
+    .header-actions {
+        flex-wrap: wrap;
+    }
+
+        .header-actions .btn {
+            padding: 4px 8px;
+        }
+}
+
 /* ── Summary Bar ─────────────────────────────────────────────── */
 .summary-bar {
     display: flex;
