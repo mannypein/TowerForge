@@ -119,6 +119,10 @@ export interface RelicData {
 export interface BotLevels {
     medals: number[];   // medal upgrade levels per stat (0 = Lv 0 base)
     plusLv: number;     // Bot+ ability level (0 = the unlock value), when Bot+ is unlocked
+    // Bots and Bot+ unlock per preset in game (each bot preset row's Unlocked /
+    // PlusUnlocked). Absent: the bot's account-wide flags (older saves).
+    owned?: boolean;
+    plusOwned?: boolean;
 }
 
 export interface BotEntry extends BotLevels {
@@ -375,6 +379,7 @@ export interface AppState {
     labsRunning: LabRunning[];    // labs being researched at the last import (29.1.3+ exports)
     tourneyLog: TourneyLog;       // each tournament run's battle conditions, as the player ticked them
     tourneyRecords: TourneyRecord[];   // every tournament played (TournamentRecords, 29.1.3+), oldest first
+    vaultLevels: Record<string, number>;   // Vault upgrade levels by the game's vault id (Vault.UpgradesLevel)
 }
 
 // A tournament run's league and battle conditions (HeatKey names from

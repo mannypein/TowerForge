@@ -212,19 +212,22 @@ const RAW_BOTS: {
                         '87s', '84s', '81s', '78s', '75s',
                     ],
                 },
+                // ×1.05 at Lv 0, +0.05 a level to ×2.00 at Lv 19 (TheTowerSDK
+                // data/bots; the owner's Bots screen shows ×2.00 Max at 19).
                 {
                     label: 'Bonus',
                     values: [
-                        '1.05x', '1.10x', '1.15x', '1.20x', '1.25x', '1.30x', '1.35x', '1.40x', '1.45x', '1.50x',
-                        '1.55x', '1.60x', '1.65x', '1.70x', '1.75x', '1.80x', '1.85x', '1.90x', '1.95x', '2.00x',
-                        '2.05x', '2.10x', '2.15x', '2.20x', '2.25x', '2.30x', '2.35x', '2.40x', '2.45x', '2.50x',
+                        '1.10x', '1.15x', '1.20x', '1.25x', '1.30x', '1.35x', '1.40x', '1.45x', '1.50x', '1.55x',
+                        '1.60x', '1.65x', '1.70x', '1.75x', '1.80x', '1.85x', '1.90x', '1.95x', '2.00x',
                     ],
                 },
+                // 20 m at Lv 0, +2 m a level to 60 m at Lv 20, like Golden Bot's
+                // (TheTowerSDK; the owner's Range is Max at 20).
                 {
                     label: 'Range',
                     values: [
-                        '27m', '29m', '31m', '33m', '35m', '37m', '39m', '41m', '43m', '45m',
-                        '47m', '49m', '51m', '53m', '55m', '57m', '59m', '61m',
+                        '22m', '24m', '26m', '28m', '30m', '32m', '34m', '36m', '38m', '40m',
+                        '42m', '44m', '46m', '48m', '50m', '52m', '54m', '56m', '58m', '60m',
                     ],
                 },
             ],
@@ -284,18 +287,28 @@ export function isBotPlusOwned(entry: BotEntry | undefined): boolean {
 }
 
 // Bot levels as one preset sees them (each preset keeps its own medal and
-// Bot+ levels, like in game), flattened so the calculators can read them.
+// Bot+ levels, and unlocks its own bots, like in game), flattened so the
+// calculators can read them. A bot locked in the preset doesn't run there.
 export function botsForPreset(botData: BotData, presetIdx: number): BotData {
     return Object.fromEntries(Object.entries(botData).map(([name, e]) => {
         const p = e.presets?.[presetIdx];
+        const owned = p?.owned ?? isBotEntryOwned(e);
         return [name, {
-            owned: isBotEntryOwned(e),
-            plusOwned: isBotPlusOwned(e),
+            owned,
+            plusOwned: owned && (p?.plusOwned ?? isBotPlusOwned(e)),
             medals: [...(p?.medals ?? e.medals ?? [])],
             plusLv: p?.plusLv ?? e.plusLv ?? 0,
         }];
     }));
 }
+
+// The Vault's Bot Range upgrade (v29 vault id 1810, 4 levels — TheTowerSDK
+// vault-v29 data): 2 m on every bot a level. Owner's account (2026-10-22):
+// level 4 → 8 m; with Range Lv 20 (60 m) and 12 m of Bot Range relics the
+// game's Bots screen shows 80 m for Golden Bot and Bot Bot.
+export const VAULT_BOT_RANGE_ID = '1810';
+export const vaultBotRange = (vault: Record<string, number> | undefined): number =>
+    2 * Math.max(0, Math.min(4, Math.floor(vault?.[VAULT_BOT_RANGE_ID] ?? 0)));
 
 // Bots active in a preset. A preset that was never edited defaults to every
 // owned bot, so new players see their bots as running.

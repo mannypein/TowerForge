@@ -33,7 +33,7 @@ import { LEAGUE_HEAT } from '../constants/tournamentData';
 export type AccountState = Pick<AppState,
     'activePreset' | 'profile' | 'perkData' | 'wsData' | 'enhData' | 'labData' | 'cardData' | 'uwData'
     | 'relicData' | 'botData' | 'moduleState' | 'battleReportText' | 'importedBattles' | 'battleReportChoice'>
-    & Partial<Pick<AppState, 'guardianData'>>;
+    & Partial<Pick<AppState, 'guardianData' | 'vaultLevels'>>;
 
 const copy = <T>(v: T): T => JSON.parse(JSON.stringify(v));
 
@@ -68,6 +68,7 @@ export function snapshotFromState(s: AccountState): OptimizerSnapshot {
         guardian: s.guardianData ? copy(s.guardianData) : undefined,
         excludedUWs: [...(s.profile.excludedUWs ?? [])],
         excludedWorkshop: [...(s.profile.excludedWorkshop ?? [])],
+        vault: s.vaultLevels ? { ...s.vaultLevels } : undefined,
         metric: s.profile.build === 'Farming' ? 'coins' : s.profile.build === 'eHP' ? 'ehp' : 'edps',
     };
 }

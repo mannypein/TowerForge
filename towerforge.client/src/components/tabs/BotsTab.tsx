@@ -12,7 +12,7 @@
 
 import { useGameStore } from '../../store/useGameStore';
 import {
-    BOT_PLUS_UNLOCK_STONES, BOTS_CONFIG, botsForPreset, getPresetBots, isBotEntryOwned, isBotPlusOwned,
+    BOT_PLUS_UNLOCK_STONES, BOTS_CONFIG, botsForPreset, getPresetBots, isBotEntryOwned, isBotPlusOwned, vaultBotRange,
 } from '../../constants/botData';
 import { presetLabel } from '../../constants/gameData';
 import { readActiveModuleBonuses } from '../../engine/modBonuses';
@@ -79,12 +79,18 @@ export default function BotsTab() {
     const moduleState = useGameStore(s => s.moduleState);
     const perkData = useGameStore(s => s.perkData);
     const cardData = useGameStore(s => s.cardData);
+    const vaultLevels = useGameStore(s => s.vaultLevels);
 
     // Flat range bonuses on every bot: the Bot Range relic and Singularity Harness.
     const harnessRange = singularityHarnessRange(readActiveModuleBonuses(moduleState, perkData, labData, cardData));
-    const rangeBonus = (relicData['rBotRange'] ?? 0) + harnessRange;
+    const vaultRange = vaultBotRange(vaultLevels);
+    const rangeBonus = (relicData['rBotRange'] ?? 0) + vaultRange + harnessRange;
 
-    const ownedBotNames = BOTS_CONFIG.filter(b => isBotEntryOwned(botData[b.name])).map(b => b.name);
+    // This preset's medal and Bot+ levels, and which bots it has unlocked.
+    const presetBotData = botsForPreset(botData, activePreset);
+    const ownedBotNames = BOTS_CONFIG.filter(b => isBotEntryOwned(presetBotData[b.name])).map(b => b.name);
+    // Bot+ opens once all five bots are unlocked in the preset (the owner's
+    // GC Farm preset, with two bots, shows no Bot+ in game).
     const allBotsOwned = ownedBotNames.length >= BOTS_CONFIG.length;
 
     const presetCount = profile.presets || 2;
@@ -92,8 +98,6 @@ export default function BotsTab() {
     // Only owned bots can be on; drop any that were un-owned since.
     const presetBots = getPresetBots(botLoadouts, activePreset, ownedBotNames)
         .filter(name => ownedBotNames.includes(name));
-    // This preset's medal and Bot+ levels.
-    const presetBotData = botsForPreset(botData, activePreset);
 
     function toggleBotInPreset(name: string) {
         const next = presetBots.includes(name)
@@ -118,8 +122,8 @@ export default function BotsTab() {
             </div>
             <p style={{ fontSize: '12px', color: 'var(--text-dim)', margin: '0 0 12px', lineHeight: 1.6 }}>
                 Switch bots ON or OFF and set medal levels for <strong>{presetLabel(profile.presetNames, activePreset)}</strong> —
-                each preset keeps its own, like in game. Values include labs, the Bot Range relic
-                {harnessRange > 0 ? ' and Singularity Harness' : ''}.
+                each preset keeps its own and unlocks its own bots, like in game. Values include labs, the Bot
+                Range relic{vaultRange > 0 ? ', the Vault' : ''}{harnessRange > 0 ? ' and Singularity Harness' : ''}.
             </p>
 
             <div className="botg-list">
@@ -128,7 +132,9 @@ export default function BotsTab() {
                     const owned = isBotEntryOwned(entry);
                     const on = owned && presetBots.includes(bot.name);
                     const medals = entry.medals ?? [];
-                    const plusOwned = allBotsOwned && isBotPlusOwned(entry);
+                    // Bot+ unlocked in this preset counts (and shows) as the game says;
+                    // unlocking it needs all five bots in the preset.
+                    const plusOwned = isBotPlusOwned(entry);
                     const plusLv = Math.min(entry.plusLv ?? 0, bot.plusMax);
                     const plusMaxed = plusLv >= bot.plusMax;
                     const bonuses = BOT_LAB_BONUSES[bot.name] ?? [];
@@ -173,8 +179,8 @@ export default function BotsTab() {
                             </div>
 
                             {!owned ? (
-                                <button className="botg-unlock" onClick={() => setBotOwned(bot.name, true)}
-                                    title="Mark this bot as unlocked">
+                                <button className="botg-unlock" onClick={() => setBotOwned(bot.name, true, activePreset)}
+                                    title="Mark this bot as unlocked in this preset">
                                     UNLOCK BOT
                                 </button>
                             ) : (
@@ -224,7 +230,7 @@ export default function BotsTab() {
                                         </div>
                                     )}
 
-                                    {allBotsOwned && (plusOwned ? (
+                                    {(plusOwned || allBotsOwned) && (plusOwned ? (
                                         <div className={`botg-plusbox ${plusMaxed ? 'maxed' : ''}`}>
                                             <span className="botg-plusbox-label">Bot+ · {bot.plus.label}</span>
                                             <span className="botg-plusbox-value">
@@ -246,14 +252,14 @@ export default function BotsTab() {
                                             </button>
                                         </div>
                                     ) : (
-                                        <button className="botg-plus-unlock" onClick={() => setBotPlusOwned(bot.name, true)}
+                                        <button className="botg-plus-unlock" onClick={() => setBotPlusOwned(bot.name, true, activePreset)}
                                             title={`Mark ${bot.name}+ as unlocked (${BOT_PLUS_UNLOCK_STONES.toLocaleString()} stones in game)`}>
                                             UNLOCK BOT+ · {bot.plus.label}
                                         </button>
                                     ))}
 
                                     <div className="botg-foot">
-                                        {!allBotsOwned && <span>Bot+ unlocks once all 5 bots are owned</span>}
+                                        {!allBotsOwned && <span>Bot+ unlocks once all 5 bots are unlocked in this preset</span>}
                                         <span style={{ flex: 1 }} />
                                         <button className="btn btn-dim botg-small" disabled={allMaxed}
                                             onClick={() => {
@@ -264,14 +270,14 @@ export default function BotsTab() {
                                         </button>
                                         {plusOwned && (
                                             <button className="btn btn-dim botg-small"
-                                                onClick={() => setBotPlusOwned(bot.name, false)}
+                                                onClick={() => setBotPlusOwned(bot.name, false, activePreset)}
                                                 title="Mark Bot+ as not unlocked">
                                                 Lock Bot+
                                             </button>
                                         )}
                                         <button className="btn btn-dim botg-small"
-                                            onClick={() => setBotOwned(bot.name, false)}
-                                            title="Mark this bot as not unlocked">
+                                            onClick={() => setBotOwned(bot.name, false, activePreset)}
+                                            title="Mark this bot as not unlocked in this preset">
                                             Lock
                                         </button>
                                     </div>

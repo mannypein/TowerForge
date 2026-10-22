@@ -25,7 +25,7 @@
 // ============================================================
 
 import { WS_STATS, WS_ENH } from '../constants/gameData';
-import { BOTS_CONFIG, isBotEntryOwned } from '../constants/botData';
+import { BOTS_CONFIG, isBotEntryOwned, vaultBotRange } from '../constants/botData';
 import { labValue, WS_COIN_PER_KILL, WS_COIN_PER_WAVE } from '../constants/buildStatCurves';
 import { uwStatValue, calcEffCD, getMultiverseNexusCombinedCD } from './uwdps';
 import { calcModuleSlotMult } from './towerDamage';
@@ -208,7 +208,7 @@ export function readFarmInputs(snap: OptimizerSnapshot): FarmInputs {
         const cd = botStat(cdS.values, cdS.lv0, med[1] ?? 0) + labValue('Golden Bot Cooldown', snap.labData['Golden Bot Cooldown'] ?? 0);
         mult.gb = botStat(bonusS.values, bonusS.lv0, med[2] ?? 0);
         const range = botStat(rangeS.values, rangeS.lv0, med[3] ?? 0) + (snap.relicData['rBotRange'] ?? 0)
-            + singularityHarnessRange(mb);
+            + vaultBotRange(snap.vault) + singularityHarnessRange(mb);
         uptime.gb = Math.min(1, dur / Math.max(1, cd));
         reach.gb = uptime.gb * range;
     }

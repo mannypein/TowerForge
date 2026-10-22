@@ -190,6 +190,7 @@ export interface OptimizerSnapshot {
     // Workshop stats to skip ("attack|Range"): some builds keep a stat low on
     // purpose (an orb build's Range at 0), so buying it back isn't advice.
     excludedWorkshop?: string[];
+    vault?: Record<string, number>;   // Vault upgrade levels by vault id (Bot Range)
     // What upgrades are scored on: tower eDPS (Glass Cannon), coins per
     // hour (Farming, calibrated by `farm`) or survival (eHP, calibrated by
     // `ehp`). Defaults to eDPS.

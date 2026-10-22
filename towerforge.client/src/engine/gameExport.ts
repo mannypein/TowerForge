@@ -65,15 +65,18 @@ export interface GameImport {
     labsRunning: LabRunning[] | null;
     tourneyRecords: TourneyRecord[] | null;   // TournamentRecords (29.1.3+); null when the file has none
     relics: RelicImport | null;
+    vault: Record<string, number> | null;     // Vault.UpgradesLevel: vault id → level
 }
 
 // Bot and Bot+ levels per site preset (from the bot preset its global
 // preset uses) and the bots active in it.
 export interface BotImport {
-    owned: Record<string, boolean>;
+    owned: Record<string, boolean>;                     // unlocked in any preset
     medals: Record<string, Record<number, number[]>>;   // bot → site preset → medal levels
-    plusOwned: Record<string, boolean>;                 // Bot+ unlocked
+    plusOwned: Record<string, boolean>;                 // Bot+ unlocked in any preset
     plusLv: Record<string, Record<number, number>>;     // bot → site preset → Bot+ level
+    unlocked: Record<string, Record<number, boolean>>;  // bot → site preset → unlocked there
+    plusUnlocked: Record<string, Record<number, boolean>>;
     loadouts: BotLoadouts;
 }
 
@@ -581,7 +584,29 @@ export function parseGameExport(raw: Raw): GameImport {
         labsRunning: parseLabsRunning(raw),
         tourneyRecords: parseTourneyRecords(raw),
         relics: parseRelics(raw),
+        vault: parseVault(raw),
     };
+}
+
+// The Vault (v29): UpgradesLevel maps each vault id to its level (a JSON
+// object in the export; key/value pairs in some saves). Only Bot Range
+// (1810) is used so far — constants/botData.ts vaultBotRange.
+function parseVault(raw: Raw): Record<string, number> | null {
+    const v = raw.Vault;
+    if (!isObj(v)) return null;
+    const levels = v.UpgradesLevel;
+    const out: Record<string, number> = {};
+    if (Array.isArray(levels)) {
+        for (const e of levels.filter(isObj)) {
+            const k = e.Key ?? e.key, n = e.Value ?? e.value;
+            if (k !== undefined && typeof n === 'number') out[String(k)] = n;
+        }
+    } else if (isObj(levels)) {
+        for (const [k, n] of Object.entries(levels)) if (typeof n === 'number') out[k] = n;
+    } else {
+        return null;
+    }
+    return out;
 }
 
 // Relics: RelicsUnlocked has one slot per relic, 2 = owned; each slot's
@@ -652,7 +677,9 @@ function dateMs(v: unknown): number | null {
 // count from 0 = the base value, like the site's. PlusLevel is the level of
 // the bot's one Bot+ ability, 0 = its unlock value, clamped to its max
 // (TheTowerSDK readUserBotDataRow / clampBotPlusStatLevel: PlusLevel goes to
-// Bot+ stat 0, the only one); it counts only where PlusUnlocked.
+// Bot+ stat 0, the only one); it counts only where PlusUnlocked. Bots unlock
+// per bot preset: the owner's GC Farm preset shows only Golden Bot and Bot
+// Bot unlocked ("UNLOCK BOT 600" on the others), as its row's Unlocked says.
 const BOT_LISTS: [string, string][] = [
     ['Flame Bot', 'FlameBotPresets'], ['Thunder Bot', 'ThunderBotPresets'], ['Golden Bot', 'GoldenBotPresets'],
     ['Amplify Bot', 'AmplifyBotPresets'], ['Bot Bot', 'BotBotPresets'],
@@ -661,7 +688,7 @@ const fromSaveOrder = (l: number[]) => [l[3] ?? 0, l[2] ?? 0, l[0] ?? 0, l[1] ??
 
 function parseBots(raw: Raw): BotImport | null {
     if (!BOT_LISTS.some(([, key]) => Array.isArray(raw[key]))) return null;
-    const out: BotImport = { owned: {}, medals: {}, plusOwned: {}, plusLv: {}, loadouts: {} };
+    const out: BotImport = { owned: {}, medals: {}, plusOwned: {}, plusLv: {}, unlocked: {}, plusUnlocked: {}, loadouts: {} };
     for (const [name, key] of BOT_LISTS) {
         const rows = arr(raw[key]).filter(isObj);
         const config = BOTS_CONFIG.find(b => b.name === name);
@@ -670,6 +697,8 @@ function parseBots(raw: Raw): BotImport | null {
         out.plusOwned[name] = out.owned[name] && rows.some(r => r.PlusUnlocked === true);
         out.medals[name] = {};
         out.plusLv[name] = {};
+        out.unlocked[name] = {};
+        out.plusUnlocked[name] = {};
         for (let i = 0; i < APP_PRESETS; i++) {
             const g = arr(raw.GlobalPresets)[i];
             const idx = isObj(g) && typeof g.BotsIndex === 'number' ? g.BotsIndex : 0;
@@ -679,7 +708,9 @@ function parseBots(raw: Raw): BotImport | null {
             out.medals[name][i] = bought
                 .map((v, k) => clamp(Math.max(v, picked[k]), 0, config.stats[k]?.values.length ?? 0));
             out.plusLv[name][i] = row.PlusUnlocked === true ? clamp(Math.floor(num(row.PlusLevel)), 0, config.plusMax) : 0;
-            if (row.Active === true && out.owned[name]) (out.loadouts[i] ??= []).push(name);
+            out.unlocked[name][i] = row.Unlocked === true;
+            out.plusUnlocked[name][i] = row.Unlocked === true && row.PlusUnlocked === true;
+            if (row.Active === true && row.Unlocked === true) (out.loadouts[i] ??= []).push(name);
         }
     }
     for (let i = 0; i < APP_PRESETS; i++) out.loadouts[i] ??= [];

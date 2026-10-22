@@ -32,7 +32,7 @@ import { formatLabTime } from '../engine/upgradeCosts';
 import { activeLoadout } from '../engine/statHelpers';
 import { labFinishAt } from '../engine/labTimer';
 import { UWS, presetLabel } from '../constants/gameData';
-import { BOTS_CONFIG } from '../constants/botData';
+import { BOTS_CONFIG, botsForPreset } from '../constants/botData';
 import { RARITIES, rarityStars } from '../constants/moduleRarities';
 import { BUILD_GOALS, GOAL_LABELS } from '../constants/optimizerConfig';
 import type { OptGoal } from '../constants/optimizerConfig';
@@ -104,8 +104,9 @@ export function accountSummary(s: AiAccount, now = Date.now()): string {
         lines.push(`Modules equipped: ${mods.join('; ')}.`);
     }
 
-    const bots = BOTS_CONFIG.filter(b => s.botData[b.name]?.owned).map(b => {
-        const e = s.botData[b.name]!;
+    const presetBots = botsForPreset(s.botData, s.activePreset);
+    const bots = BOTS_CONFIG.filter(b => presetBots[b.name]?.owned).map(b => {
+        const e = presetBots[b.name]!;
         const lv = b.stats.map((st, i) => `${st.label} ${e.medals?.[i] ?? 0}/${st.values.length}`).join(', ');
         return `${b.name} (${lv}${e.plusLv ? `; Bot+ ${e.plusLv}/${b.plusMax}` : ''})`;
     });

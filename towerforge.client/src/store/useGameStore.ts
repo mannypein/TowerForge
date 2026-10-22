@@ -49,9 +49,22 @@ import { defaultGuardianData } from '../engine/guardian';
 function withPresetLevels(entry: BotEntry, presetIdx: number, levels: BotLevels): BotEntry {
     return {
         ...entry, owned: isBotEntryOwned(entry), plusOwned: isBotPlusOwned(entry),
-        presets: { ...entry.presets, [presetIdx]: levels },
+        presets: { ...entry.presets, [presetIdx]: { ...entry.presets?.[presetIdx], ...levels } },
     };
 }
+
+// Bots unlock per preset in game. The first per-preset unlock or lock writes
+// every preset's current state down, so the other presets keep theirs.
+const BOT_PRESETS = 5;
+function withPresetFlags(entry: BotEntry): BotEntry {
+    const presets: Record<number, BotLevels> = {};
+    for (let i = 0; i < BOT_PRESETS; i++) {
+        const cur = botsForPreset({ bot: entry }, i).bot;
+        presets[i] = { medals: cur.medals, plusLv: cur.plusLv, owned: !!cur.owned, plusOwned: !!cur.plusOwned };
+    }
+    return { ...entry, presets };
+}
+const anyPreset = (e: BotEntry, flag: 'owned' | 'plusOwned') => Object.values(e.presets ?? {}).some(p => p[flag]);
 
 // ── localStorage Keys ─────────────────────────────────────────
 // Matches v8 keys exactly — existing saves load without migration.
@@ -77,6 +90,7 @@ const KEYS = {
     labsRunning: 'tc_labs_running',
     tourneyLog: 'tc_tourney_log',
     tourneyRecords: 'tc_tourney_records',
+    vault: 'tc_vault',
 } as const;
 
 // ── Default State ─────────────────────────────────────────────
@@ -254,10 +268,10 @@ interface GameStore extends AppState {
     setRelic: (key: string, value: number) => void;
 
     // ── Bots ─────────────────────────────────────────────────────
-    setBotOwned: (botName: string, owned: boolean) => void;
+    setBotOwned: (botName: string, owned: boolean, presetIdx?: number) => void;
     setBotMedal: (botName: string, presetIdx: number, medalIdx: number, value: number) => void;
     setBotPlusLevel: (botName: string, presetIdx: number, level: number) => void;
-    setBotPlusOwned: (botName: string, owned: boolean) => void;
+    setBotPlusOwned: (botName: string, owned: boolean, presetIdx?: number) => void;
     setBotLoadout: (presetIdx: number, bots: string[]) => void;
 
     // ── Optimizer ────────────────────────────────────────────────
@@ -340,6 +354,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     labsRunning: [],
     tourneyLog: {},
     tourneyRecords: [],
+    vaultLevels: {},
 
     // ── UI Actions ────────────────────────────────────────────────
     setActiveTab: (tab) => set({ activeTab: tab }),
@@ -371,12 +386,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
         const labsRunning = loadKey<LabRunning[]>(KEYS.labsRunning, []);
         const tourneyLog = loadKey<TourneyLog>(KEYS.tourneyLog, {});
         const tourneyRecords = loadKey<TourneyRecord[]>(KEYS.tourneyRecords, []);
+        const vaultLevels = loadKey<Record<string, number>>(KEYS.vault, {});
 
         set({
             profile, tierWaves, wsData, enhData,
             labData, cardData, uwData, relicData,
             perkData, botData, botLoadouts, moduleState, battleReportText, currencies, importedBattles, battleReportChoice, cloudSaveData,
-            guardianData, labsRunning, tourneyLog, tourneyRecords,
+            guardianData, labsRunning, tourneyLog, tourneyRecords, vaultLevels,
         });
     },
 
@@ -463,7 +479,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
                 const entry = s.botData[name] ?? { medals: [], plusLv: 0 };
                 const presets: Record<number, BotLevels> = { ...entry.presets };
                 for (const [i, medals] of Object.entries(byPreset)) {
-                    presets[Number(i)] = { medals: [...medals], plusLv: imp.bots.plusLv[name]?.[Number(i)] ?? 0 };
+                    const p = Number(i);
+                    presets[p] = {
+                        medals: [...medals], plusLv: imp.bots.plusLv[name]?.[p] ?? 0,
+                        owned: imp.bots.unlocked[name]?.[p] ?? false, plusOwned: imp.bots.plusUnlocked[name]?.[p] ?? false,
+                    };
                 }
                 botData[name] = {
                     ...entry, owned: imp.bots.owned[name] ?? false, plusOwned: imp.bots.plusOwned[name] ?? false, presets,
@@ -484,9 +504,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
             importedBattles: battles,
             battleReportChoice: choice,
             wsData, enhData, uwData, cardData, perkData, labData, moduleState, guardianData, botData, botLoadouts, labsRunning,
-            tourneyRecords, relicData,
+            tourneyRecords, relicData, vaultLevels: imp.vault ?? s.vaultLevels,
         });
         saveKey(KEYS.tourneyRecords, tourneyRecords);
+        saveKey(KEYS.vault, imp.vault ?? s.vaultLevels);
         saveKey(KEYS.relics, relicData);
         saveKey(KEYS.guardian, guardianData);
         saveKey(KEYS.bots, botData);
@@ -707,12 +728,21 @@ export const useGameStore = create<GameStore>((set, get) => ({
     },
 
     // ── Bots ──────────────────────────────────────────────────────
-    setBotOwned: (botName, owned) => {
-        // Owning a bot starts every stat at Lv 0 (base unlock) — medals all 0,
-        // in every preset. Un-owning clears medals and Bot+ too.
+    setBotOwned: (botName, owned, presetIdx) => {
+        // Unlocking a bot starts its stats at Lv 0 (base unlock); locking it
+        // clears its levels and Bot+. Bots unlock per preset in game, so with
+        // a preset only that one changes; without, every preset.
         const botData = get().botData;
         const entry = botData[botName] ?? { medals: [], plusLv: 0 };
-        const next = { ...botData, [botName]: { ...entry, owned, plusOwned: false, medals: [], plusLv: 0, presets: {} } };
+        let bot: BotEntry;
+        if (presetIdx === undefined) {
+            bot = { ...entry, owned, plusOwned: false, medals: [], plusLv: 0, presets: {} };
+        } else {
+            const e = withPresetFlags(entry);
+            e.presets![presetIdx] = { medals: [], plusLv: 0, owned, plusOwned: false };
+            bot = { ...e, owned: anyPreset(e, 'owned'), plusOwned: anyPreset(e, 'plusOwned') };
+        }
+        const next = { ...botData, [botName]: bot };
         set({ botData: next });
         saveKey(KEYS.bots, next);
     },
@@ -739,14 +769,23 @@ export const useGameStore = create<GameStore>((set, get) => ({
         saveKey(KEYS.bots, next);
     },
 
-    // Unlocking Bot+ (account-wide) starts it at Lv 0 in every preset;
-    // locking it clears its levels.
-    setBotPlusOwned: (botName, owned) => {
+    // Unlocking Bot+ starts it at Lv 0; locking it clears its level. With a
+    // preset only that one (Bot+ unlocks per preset in game), else every one.
+    setBotPlusOwned: (botName, owned, presetIdx) => {
         const botData = get().botData;
         const entry = botData[botName] ?? { medals: [], plusLv: 0 };
-        const presets = Object.fromEntries(Object.entries(entry.presets ?? {})
-            .map(([i, p]) => [i, { ...p, plusLv: 0 }]));
-        const next = { ...botData, [botName]: { ...entry, owned: isBotEntryOwned(entry), plusOwned: owned, plusLv: 0, presets } };
+        let bot: BotEntry;
+        if (presetIdx === undefined) {
+            const presets = Object.fromEntries(Object.entries(entry.presets ?? {})
+                .map(([i, p]) => [i, { ...p, plusLv: 0, ...(p.owned !== undefined ? { plusOwned: owned && p.owned } : {}) }]));
+            bot = { ...entry, owned: isBotEntryOwned(entry), plusOwned: owned, plusLv: 0, presets };
+        } else {
+            const e = withPresetFlags(entry);
+            const p = e.presets![presetIdx];
+            e.presets![presetIdx] = { ...p, plusLv: 0, plusOwned: owned && !!p.owned };
+            bot = { ...e, owned: anyPreset(e, 'owned'), plusOwned: anyPreset(e, 'plusOwned') };
+        }
+        const next = { ...botData, [botName]: bot };
         set({ botData: next });
         saveKey(KEYS.bots, next);
     },
@@ -833,6 +872,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             labsRunning: [],
             tourneyLog: {},
             tourneyRecords: [],
+            vaultLevels: {},
         });
     },
 
@@ -860,6 +900,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             guardianData: s.guardianData,
             tourneyLog: s.tourneyLog,
             tourneyRecords: s.tourneyRecords,
+            vaultLevels: s.vaultLevels,
         };
         return JSON.stringify(payload, null, 2);
     },
@@ -889,6 +930,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
                 guardianData: { ...defaultGuardianData(), ...(data.guardianData ?? {}) },
                 tourneyLog: data.tourneyLog ?? {},
                 tourneyRecords: data.tourneyRecords ?? [],
+                vaultLevels: data.vaultLevels ?? {},
             });
             // Persist everything
             Object.entries(KEYS).forEach(([, storageKey]) => {
@@ -912,6 +954,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
                     tc_guardian: data.guardianData,
                     tc_tourney_log: data.tourneyLog,
                     tc_tourney_records: data.tourneyRecords,
+                    tc_vault: data.vaultLevels,
                 };
                 if (keyMap[storageKey] != null) saveKey(storageKey, keyMap[storageKey]);
             });

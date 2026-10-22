@@ -12,7 +12,7 @@ import { GAME_CARDS, MASTERY_LAB_CARDS, MASTERY_LAB_START, CARD_PRESET_SLOTS } f
 import { SUB_EFFECTS, SUB_RARITIES } from '../constants/moduleData';
 import { battle, gameModule, labIndex, makeExport, research, zeros } from '../test/makeExport';
 import { useGameStore } from '../store/useGameStore';
-import { botsForPreset } from '../constants/botData';
+import { BOTS_CONFIG, botsForPreset, vaultBotRange } from '../constants/botData';
 import { echoingShotBullets } from './towerDamage';
 
 const labMax = (name: string) => LABS.flatMap(c => c.l).find(([n]) => n === name)![1];
@@ -396,6 +396,62 @@ describe('29.1.3 exports (ExportVersion 1)', () => {
         expect(b.owned).toMatchObject({ 'Flame Bot': true, 'Thunder Bot': false });
         expect(b.loadouts[0]).toEqual(['Flame Bot']);
         expect(b.loadouts[1]).toEqual([]);
+    });
+
+    // The owner's GC Farm preset (2026-10-22 Bots screen): only Golden Bot and
+    // Bot Bot unlocked, the rest "UNLOCK BOT 600" — though other presets have
+    // them. Save order [secondary, range, cooldown, primary].
+    it('unlocks bots per preset, as each bot preset row says', () => {
+        const imp = parseGameExport(makeExport({
+            ...noBots,
+            ThunderBotPresets: [off, row([20, 15, 15, 20])],
+            GoldenBotPresets: [row([30, 20, 15, 19]), off],
+            AmplifyBotPresets: [off, row([30, 18, 15, 11], { PlusUnlocked: true })],
+            GlobalPresets: [{ BotsIndex: 0 }, { BotsIndex: 1 }],
+        }));
+        const b = imp.bots!;
+        expect([b.unlocked['Thunder Bot'][0], b.unlocked['Thunder Bot'][1]]).toEqual([false, true]);
+        expect(b.owned['Thunder Bot']).toBe(true);                         // unlocked somewhere
+        expect(b.plusUnlocked['Amplify Bot'][0]).toBe(false);              // Bot+ only counts where the bot is
+        expect(b.loadouts[0]).toEqual(['Golden Bot']);
+        expect(b.loadouts[1]).toEqual(['Thunder Bot', 'Amplify Bot']);
+        useGameStore.getState().applyGameImport(imp, {});
+        const gcFarm = botsForPreset(useGameStore.getState().botData, 0);
+        expect(gcFarm['Thunder Bot'].owned).toBe(false);
+        expect(gcFarm['Golden Bot'].owned).toBe(true);
+        expect(gcFarm['Amplify Bot'].plusOwned).toBe(false);
+        expect(botsForPreset(useGameStore.getState().botData, 1)['Thunder Bot'].owned).toBe(true);
+    });
+
+    it('unlocking or locking a bot by hand changes that preset only, and edits keep the flags', () => {
+        const st = useGameStore.getState();
+        st.applyGameImport(parseGameExport(makeExport({
+            ...noBots, GoldenBotPresets: [row([30, 20, 15, 19]), off], GlobalPresets: [{ BotsIndex: 0 }, { BotsIndex: 1 }],
+        })), {});
+        useGameStore.getState().setBotOwned('Golden Bot', true, 1);
+        useGameStore.getState().setBotMedal('Golden Bot', 1, 0, 5);
+        const bots = useGameStore.getState().botData;
+        expect(botsForPreset(bots, 1)['Golden Bot'].owned).toBe(true);
+        expect(botsForPreset(bots, 1)['Golden Bot'].medals[0]).toBe(5);    // the rest Lv 0 (unset)
+        expect(botsForPreset(bots, 0)['Golden Bot']).toMatchObject({ owned: true, medals: [19, 15, 30, 20] });
+        useGameStore.getState().setBotOwned('Golden Bot', false, 0);
+        expect(botsForPreset(useGameStore.getState().botData, 0)['Golden Bot'].owned).toBe(false);
+        expect(botsForPreset(useGameStore.getState().botData, 1)['Golden Bot'].owned).toBe(true);
+    });
+
+    // The owner's Bots screen: Bot Bot Bonus ×2.00 Max at level 19; Golden Bot
+    // and Bot Bot Range 80 m Max at level 20 = 60 m + 12 m of Bot Range relics
+    // + 8 m from the Vault's Bot Range (id 1810, level 4).
+    it('matches the game’s Bot Bot table and Vault Bot Range', () => {
+        const botBot = BOTS_CONFIG.find(b => b.name === 'Bot Bot')!;
+        const [, , bonus, range] = botBot.stats;
+        expect([bonus.lv0, bonus.values.length, bonus.values[18]]).toEqual(['1.05x', 19, '2.00x']);
+        expect([range.lv0, range.values.length, range.values[19]]).toEqual(['20m', 20, '60m']);
+        const vault = parseGameExport(makeExport({ Vault: { UpgradesLevel: { 1810: 4, 600: 5 } } })).vault!;
+        expect(vault).toEqual({ 1810: 4, 600: 5 });
+        expect(parseFloat(range.values[19]) + 12 + vaultBotRange(vault)).toBe(80);
+        expect(vaultBotRange(parseGameExport(makeExport({ Vault: { UpgradesLevel: [{ Key: 1810, Value: 2 }] } })).vault!)).toBe(4);
+        expect(parseGameExport(makeExport()).vault).toBeNull();
     });
 
     it('takes the higher of the bought and picked level, up to the stat’s max', () => {
