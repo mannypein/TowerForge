@@ -12,6 +12,7 @@ each deploy shipped; the site said v1.0.0 until then. Times are US Eastern.
 
 | Version | Deployed | What changed |
 |---|---|---|
+| 1.24.0 | 2026-10-22 10:40 | **Relics come with Import Game Data**: every relic you own, added up into the Relics tab's bonus totals (checked against the game's ⓘ screen). Optimizer **Filter**: untick workshop stats you keep low on purpose (like Range on an orb build) and the coin rankings leave them out. |
 | 1.23.0 | 2026-10-22 10:01 | Waves count your **orbs and Death Ray** against the Tanks and Ranged that end runs: slowing enemies (CF, CF+, Slow Aura) lets them stop more of those before they reach the tower. What If shows it as its own line. |
 | 1.22.0 | 2026-10-21 16:05 | **Tournaments** section: This Week (the Tournament page) and **History** — every tournament you've played (29.1.3 exports), waves and rank over time by league, league moves, per-league numbers. **Auto import**: keeps the site in step with the game's Auto export through TowerForge Link (Link 0.2). Labs being researched: the level, card mastery labs by name, and the real finish with the speed-up. "Stones", like the game. Ask AI (preview): your runs, another tier, cheapest picks, tournament history. |
 | 1.21.0 | 2026-10-21 11:55 | **Ask AI** (preview, owner's account only): ask about your account in plain words — an open model (Qwen3) runs in your browser on the graphics card, downloaded once, and answers from the site's own numbers (Optimizer, What If, Tournament, game notes). Preview tabs show only for accounts the server lists. |
