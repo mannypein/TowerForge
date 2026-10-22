@@ -12,6 +12,7 @@ each deploy shipped; the site said v1.0.0 until then. Times are US Eastern.
 
 | Version | Deployed | What changed |
 |---|---|---|
+| 1.26.1 | 2026-10-22 16:05 | **Join our Discord**: a Discord button in the header (the TowerForge server). Phones: the header's buttons keep their labels on one line. |
 | 1.26.0 | 2026-10-22 15:35 | **Themes**: a 🎨 Theme button in the header with eight color themes (Synthwave, Neon Mint, Ember, Acid, Crimson, Ultraviolet, Stealth, Royal Gold), remembered per browser; Modules, Bots and share cards follow the theme. Glowing logo, tabs and buttons. **Easier to read**: clearer fonts (Exo 2, JetBrains Mono for numbers), nothing tiny, brighter secondary text. Phones: the sections sit in two rows; long table lines wrap. |
 | 1.25.0 | 2026-10-22 13:20 | **Modules** like the game's screen: your module currencies (Reroll Shards and each type's shards, imported) and **Inventory / Assist** tabs — Assist shows each assist slot's tier, Main and Substat efficiency (stones and lab), and what the next upgrades cost. Shared module cards show each assist's tier and efficiencies. |
 | 1.24.1 | 2026-10-22 11:24 | Fixes in Bots: each preset unlocks its own bots, like in game (a bot locked in a preset doesn't count there); Bot Bot's Bonus (×2.00 at Lv 19) and Range tables match the game; bot range adds the Vault's Bot Range. |
