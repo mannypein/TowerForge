@@ -246,7 +246,7 @@ export default function UWTab() {
                                                         </span>
                                                         <button
                                                             className="btn btn-dim"
-                                                            style={{ fontSize: '10px', padding: '2px 7px' }}
+                                                            style={{ fontSize: '11px', padding: '2px 7px' }}
                                                             disabled={curLv >= trueMax}
                                                             title={`Max ${statName}`}
                                                             onClick={() => setUWStat(uw.a, statIdx, trueMax)}
@@ -323,7 +323,7 @@ export default function UWTab() {
                                                     {/* Max button */}
                                                     <button
                                                         className="btn btn-dim"
-                                                        style={{ fontSize: '10px', padding: '2px 7px' }}
+                                                        style={{ fontSize: '11px', padding: '2px 7px' }}
                                                         disabled={upLvl >= uw.upMax}
                                                         onClick={() => setUWPlusLevel(uw.a, uw.upMax)}
                                                     >
@@ -346,7 +346,7 @@ export default function UWTab() {
                                                     )}
 
                                                     {upLvl >= uw.upMax && (
-                                                        <span style={{ color: 'var(--gold)', fontSize: '11px' }}>
+                                                        <span style={{ color: 'var(--gold)', fontSize: '12px' }}>
                                                             ✓ Maxed
                                                         </span>
                                                     )}

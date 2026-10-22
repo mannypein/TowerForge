@@ -102,7 +102,7 @@ export default function ShareTab() {
                         <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginBottom: '10px', lineHeight: 1.6 }}>
                             <button
                                 className="btn btn-dim"
-                                style={{ fontSize: '11px', padding: '2px 8px', marginRight: '6px' }}
+                                style={{ fontSize: '12px', padding: '2px 8px', marginRight: '6px' }}
                                 onClick={() => setActiveTab('account')}
                             >
                                 Create an account

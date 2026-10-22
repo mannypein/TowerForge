@@ -111,7 +111,7 @@ export default function TiersTab() {
                                                     onChange={v => setTierWave(tier, v)}
                                                 />
                                                 <span style={{
-                                                    fontSize: '11px',
+                                                    fontSize: '12px',
                                                     color: 'var(--text-dim)',
                                                     fontFamily: 'var(--font-mono)',
                                                 }}>
@@ -127,7 +127,7 @@ export default function TiersTab() {
                                         </div>
                                         <span style={{
                                             fontFamily: 'var(--font-mono)',
-                                            fontSize: '11px',
+                                            fontSize: '12px',
                                             color: isMaxed ? 'var(--gold)' : 'var(--text-dim)',
                                             minWidth: '36px',
                                             textAlign: 'right',

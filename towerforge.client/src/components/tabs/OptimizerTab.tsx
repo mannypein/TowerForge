@@ -372,16 +372,16 @@ export default function OptimizerTab() {
         const map: Record<OptCategory, { bg: string; color: string }> = {
             uw: { bg: 'rgba(0,230,118,.12)', color: 'var(--ra)' },
             uwp: { bg: 'rgba(147,51,234,.15)', color: 'var(--purple)' },
-            mast: { bg: 'rgba(186,117,23,.15)', color: 'var(--gold)' },
+            mast: { bg: 'var(--gold-glow)', color: 'var(--gold)' },
             assist: { bg: 'rgba(79,195,247,.15)', color: 'var(--rr)' },
             stones: { bg: 'var(--bg4)', color: 'var(--text-dim)' },
-            workshop: { bg: 'rgba(29,158,117,.15)', color: 'var(--accent)' },
+            workshop: { bg: 'var(--accent-glow)', color: 'var(--accent)' },
             labs: { bg: 'rgba(59,130,246,.15)', color: '#4fc3f7' },
-            cards: { bg: 'rgba(186,117,23,.15)', color: 'var(--gold)' },
+            cards: { bg: 'var(--gold-glow)', color: 'var(--gold)' },
             enhancements: { bg: 'rgba(147,51,234,.15)', color: '#e040fb' },
             bots: { bg: 'rgba(231,76,60,.15)', color: '#e74c3c' },
             modules: { bg: 'rgba(79,195,247,.15)', color: '#4fc3f7' },
-            guardian: { bg: 'rgba(29,158,117,.15)', color: 'var(--accent)' },
+            guardian: { bg: 'var(--accent-glow)', color: 'var(--accent)' },
         };
         return {
             background: map[cat]?.bg ?? 'var(--bg4)',

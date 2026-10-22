@@ -292,7 +292,7 @@ export default function CardsTab() {
                                 ))}
                             </div>
 
-                            <p style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '6px' }}>
+                            <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginTop: '6px' }}>
                                 {activeInPreset} / {cardData.slots ?? 1} slots used
                             </p>
                         </div>

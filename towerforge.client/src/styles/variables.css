@@ -1,32 +1,22 @@
 /* ============================================================
    TowerForge Companion — Design Tokens
    All CSS custom properties used throughout the application.
-   Import this file once in main.tsx and never touch it again
-   unless adding a new token.
+   Themes: each sets a palette (accent, backgrounds, text) on
+   [data-theme]; everything else — panels, lines, glows, the page's
+   background light — is mixed from it below, so one palette recolors
+   the whole site. <html data-theme> is the player's pick (the header's
+   Theme button, components/common/ThemePicker.tsx); the picker's
+   swatches set data-theme on themselves to show each theme.
+   Semantic colors (rarities, leagues, enemies, social sites) stay the
+   same in every theme.
    ============================================================ */
 
 :root {
-    /* ── Core Palette ───────────────────────────────────────── */
-    --accent: #1D9E75;
-    --accent-dark: #0F6E56;
-    --accent-glow: rgba(29, 158, 117, 0.18);
-    --gold: #BA7517;
-    --gold-glow: rgba(186, 117, 23, 0.18);
-    --blue: #3B82F6;
-    --purple: #9333EA;
-    --red: #e05252;
-    /* ── Backgrounds ────────────────────────────────────────── */
-    --bg: #0d0f12; /* page background              */
-    --bg2: #13171c; /* card / panel background      */
-    --bg3: #1a1f26; /* section header / input bg    */
-    --bg4: #222831; /* badge / inset background     */
-    /* ── Borders ────────────────────────────────────────────── */
-    --border: #2a3040;
-    /* ── Text ───────────────────────────────────────────────── */
-    --text: #c8d0dc; /* default body text            */
-    --text-dim: #6b7585; /* labels, secondary info       */
-    --text-bright: #e8edf5; /* headings, values             */
-    --danger: #e05252;
+    --blue: #4f8cff;
+    --purple: #a970ff;
+    --red: #ff5a6a;
+    --danger: #ff5a6a;
+
     /* ── Module Rarity Colors ───────────────────────────────── */
     --rc: #8a9ab5; /* Common                       */
     --rr: #4fc3f7; /* Rare                         */
@@ -39,8 +29,8 @@
     --rmp: #e53935; /* Mythic+                      */
     --ra: #00e676; /* Ancestral (all tiers)        */
     /* ── Typography ─────────────────────────────────────────── */
-    --font-ui: 'Rajdhani', sans-serif;
-    --font-mono: 'Share Tech Mono', monospace;
+    --font-ui: 'Exo 2', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
     /* ── Spacing Scale ──────────────────────────────────────── */
     --space-xs: 4px;
     --space-sm: 8px;
@@ -54,4 +44,185 @@
     /* ── Transitions ────────────────────────────────────────── */
     --transition-fast: 0.15s ease;
     --transition-med: 0.25s ease;
+}
+
+/* ── Palettes ───────────────────────────────────────────────── */
+/* Each later block overrides the default (Synthwave) on the same
+   element, so they stay after it. */
+
+/* Synthwave (default): hot pink and electric violet on plum black */
+:root,
+[data-theme="synthwave"] {
+    --accent: #ff4fa3;      /* primary: active tabs, buttons, links  */
+    --accent-2: #7b6dff;    /* secondary: gradients, panel tint      */
+    --on-accent: #1c0411;   /* text on a solid accent                */
+    --gold: #ffc14d;        /* coins, maxed upgrades                 */
+    --good: #3ee08f;        /* equipped, gains                       */
+    --plus: #b98cff;        /* Bot+, assist                          */
+    --bg: #0b0812;          /* page background                       */
+    --bg2: #130f1c;         /* card / panel background               */
+    --bg3: #1a1526;         /* section header / input bg             */
+    --bg4: #221c31;         /* badge / inset background              */
+    --border: #2e2642;
+    --text: #ded7ea;        /* default body text                     */
+    --text-dim: #a096b6;    /* labels, secondary info                */
+    --text-bright: #f8f3fe; /* headings, values                      */
+}
+
+/* Neon Mint: mint and violet on blue-black */
+[data-theme="mint"] {
+    --accent: #33f0c0;
+    --accent-2: #8b6cff;
+    --on-accent: #04140f;
+    --gold: #f7b733;
+    --good: #4ade80;
+    --plus: #b18cff;
+    --bg: #08090d;
+    --bg2: #10131a;
+    --bg3: #161a23;
+    --bg4: #1d222d;
+    --border: #262c3a;
+    --text: #d5dbe6;
+    --text-dim: #949db0;
+    --text-bright: #f3f6fb;
+}
+
+/* Ember: amber and rose on warm charcoal */
+[data-theme="ember"] {
+    --accent: #ff9a3c;
+    --accent-2: #ff4d6d;
+    --on-accent: #1d0e02;
+    --gold: #ffd166;
+    --good: #4ade80;
+    --plus: #c08cff;
+    --bg: #0c0908;
+    --bg2: #15100e;
+    --bg3: #1d1714;
+    --bg4: #261e1a;
+    --border: #362a23;
+    --text: #e8ded6;
+    --text-dim: #ad9f94;
+    --text-bright: #fcf6f1;
+}
+
+/* Acid: lime and aqua on green-black */
+[data-theme="acid"] {
+    --accent: #b8f53d;
+    --accent-2: #22d3c5;
+    --on-accent: #0e1503;
+    --gold: #ffc94d;
+    --good: #4ade80;
+    --plus: #b18cff;
+    --bg: #080a08;
+    --bg2: #10130f;
+    --bg3: #161a15;
+    --bg4: #1d221c;
+    --border: #283026;
+    --text: #d9e1d6;
+    --text-dim: #9aa697;
+    --text-bright: #f4f9f1;
+}
+
+/* Crimson: red and violet on red-black */
+[data-theme="crimson"] {
+    --accent: #ff3b5c;
+    --accent-2: #8a5cff;
+    --on-accent: #1d0207;
+    --gold: #ffc14d;
+    --good: #4ade80;
+    --plus: #b98cff;
+    --danger: #ff8a4c;
+    --bg: #0c0809;
+    --bg2: #150e10;
+    --bg3: #1d1417;
+    --bg4: #261a1e;
+    --border: #37252a;
+    --text: #e8dadd;
+    --text-dim: #ad979c;
+    --text-bright: #fcf4f6;
+}
+
+/* Ultraviolet: violet and electric blue on indigo black */
+[data-theme="ultraviolet"] {
+    --accent: #b07cff;
+    --accent-2: #4f8cff;
+    --on-accent: #12052a;
+    --gold: #ffc94d;
+    --good: #4ade80;
+    --plus: #e07cff;
+    --bg: #09080f;
+    --bg2: #110f1b;
+    --bg3: #171425;
+    --bg4: #1e1a30;
+    --border: #2a2541;
+    --text: #dcd8ec;
+    --text-dim: #9d97b6;
+    --text-bright: #f6f4ff;
+}
+
+/* Stealth: silver and steel blue on graphite */
+[data-theme="stealth"] {
+    --accent: #e4e9f2;
+    --accent-2: #7d93b8;
+    --on-accent: #0b0d11;
+    --gold: #f2c25b;
+    --good: #5ee08f;
+    --plus: #b39cff;
+    --bg: #070708;
+    --bg2: #0f1012;
+    --bg3: #16171a;
+    --bg4: #1d1f23;
+    --border: #2a2c32;
+    --text: #d6d9df;
+    --text-dim: #989ca6;
+    --text-bright: #ffffff;
+}
+
+/* Royal Gold: gold and royal blue on ink black */
+[data-theme="royal"] {
+    --accent: #ffc94a;
+    --accent-2: #5b7cff;
+    --on-accent: #1a1202;
+    --gold: #ffa94d;
+    --good: #4ade80;
+    --plus: #b48cff;
+    --bg: #09090c;
+    --bg2: #111117;
+    --bg3: #18181f;
+    --bg4: #1f1f28;
+    --border: #2c2c38;
+    --text: #e2e0e8;
+    --text-dim: #a3a0ad;
+    --text-bright: #fbfaff;
+}
+
+/* ── Mixed from the palette ─────────────────────────────────── */
+/* Declared wherever a palette is, so a theme swatch mixes its own. */
+:root,
+[data-theme] {
+    --accent-dark: color-mix(in srgb, var(--accent) 65%, black);
+    --accent-glow: color-mix(in srgb, var(--accent) 15%, transparent);
+    --accent-2-glow: color-mix(in srgb, var(--accent-2) 15%, transparent);
+    --gold-glow: color-mix(in srgb, var(--gold) 15%, transparent);
+    --gold-line: color-mix(in srgb, var(--gold) 55%, transparent);
+    --plus-glow: color-mix(in srgb, var(--plus) 18%, transparent);
+    --line-soft: color-mix(in srgb, var(--border) 60%, var(--bg2));
+    /* Panels with a game-screen layout (Modules, Bots, share cards) */
+    --panel-a: color-mix(in srgb, var(--accent-2) 10%, var(--bg2));
+    --panel-b: var(--bg2);
+    --panel-line: color-mix(in srgb, var(--accent-2) 32%, var(--border));
+    --inset: color-mix(in srgb, var(--bg) 60%, var(--bg2));
+    --inset-line: color-mix(in srgb, var(--accent-2) 18%, var(--border));
+    --hover-line: color-mix(in srgb, var(--accent) 45%, var(--border));
+    --select: var(--accent);
+    --select-bg: color-mix(in srgb, var(--accent) 12%, var(--bg2));
+    --tab-bg: color-mix(in srgb, var(--accent-2) 8%, var(--bg3));
+    --tab-on: color-mix(in srgb, var(--accent-2) 30%, var(--bg3));
+    /* Glow */
+    --grad: linear-gradient(90deg, var(--accent), var(--accent-2));
+    --glow-sm: 0 0 10px color-mix(in srgb, var(--accent) 45%, transparent);
+    --glow-md: 0 0 22px color-mix(in srgb, var(--accent) 35%, transparent);
+    --page-light:
+        radial-gradient(900px 520px at 0% -8%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%),
+        radial-gradient(900px 520px at 100% -8%, color-mix(in srgb, var(--accent-2) 17%, transparent), transparent 70%);
 }

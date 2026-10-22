@@ -22,8 +22,8 @@ const FRAMES: Record<ModuleType, string> = {
 // share image export (html-to-image) keeps it: a rarity-colored outline,
 // or a dashed one for an empty slot.
 const framePaint = (color: string, empty: boolean) => (empty
-    ? { fill: 'rgba(10, 14, 30, 0.5)', stroke: '#3b4a80', strokeWidth: 3, strokeDasharray: '8 6' }
-    : { fill: 'rgba(10, 14, 30, 0.85)', stroke: color, strokeWidth: 5 });
+    ? { fill: 'rgba(8, 10, 14, 0.5)', stroke: '#566074', strokeWidth: 3, strokeDasharray: '8 6' }
+    : { fill: 'rgba(8, 10, 14, 0.85)', stroke: color, strokeWidth: 5 });
 
 // How much of the badge the art fills, and how far down it sits, so it
 // fits inside each frame shape. Icons are trimmed to their art and

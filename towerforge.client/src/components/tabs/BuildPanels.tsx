@@ -85,7 +85,7 @@ export function BattleReportPanel({ purpose }: { purpose: 'farming' | 'ehp' | 'e
                             ))}
                             <option value={-1}>{text ? 'Pasted Battle Report' : 'Pasted Battle Report (none yet)'}</option>
                         </select>
-                        <span style={{ fontSize: '11px', color: 'var(--text-dim)', flexBasis: '100%' }}>
+                        <span style={{ fontSize: '12px', color: 'var(--text-dim)', flexBasis: '100%' }}>
                             {imported.length} run{imported.length === 1 ? '' : 's'} saved — the game&apos;s file only
                             holds your last 5, so importing after a few runs keeps adding to this history.
                         </span>
@@ -143,7 +143,7 @@ export function BattleReportPanel({ purpose }: { purpose: 'farming' | 'ehp' | 'e
                             onChange={e => setDraft(e.target.value)}
                             placeholder={'Battle Report\nBattle Date\t…\nGame Time\t…'}
                             rows={6}
-                            style={{ width: '100%', fontFamily: 'var(--font-mono)', fontSize: '11px' }}
+                            style={{ width: '100%', fontFamily: 'var(--font-mono)', fontSize: '12px' }}
                         />
                         {error && <p style={{ fontSize: '12px', color: 'var(--red, #e74c3c)', marginTop: '6px' }}>{error}</p>}
                         <div className="flex-row" style={{ marginTop: '8px' }}>
@@ -181,7 +181,7 @@ export function EconomyStats({ calib }: { calib: FarmCalibration }) {
                             <span className="stat-pill-label">{FARM_EFFECT_LABELS[e]}</span>
                             <span className="stat-pill-val">
                                 ×{a.mult[e].toFixed(2)}
-                                <span style={{ color: 'var(--text-dim)', fontSize: '11px' }}> · {pct(calib.coverage[e])}</span>
+                                <span style={{ color: 'var(--text-dim)', fontSize: '12px' }}> · {pct(calib.coverage[e])}</span>
                             </span>
                         </div>
                     ))}
@@ -223,7 +223,7 @@ function FactorList({ title, factors, total, percent }: {
                 <div key={f.label} className="flex-row" style={{ fontSize: '12px', gap: '8px' }}>
                     <span style={{ flex: 1, color: 'var(--text-dim)' }}>
                         {f.label}
-                        {f.note && <span style={{ fontSize: '11px' }}> — {f.note}</span>}
+                        {f.note && <span style={{ fontSize: '12px' }}> — {f.note}</span>}
                     </span>
                     <span style={{ fontFamily: 'var(--font-mono)' }}>{fmt(f)}</span>
                 </div>
@@ -300,7 +300,7 @@ export function EhpStats({ calib }: { calib: EhpCalibration }) {
                                 module card into the module&apos;s Main effect.
                             </p>
                         )}
-                        <p style={{ fontSize: '11px', color: 'var(--text-dim)', lineHeight: 1.6 }}>
+                        <p style={{ fontSize: '12px', color: 'var(--text-dim)', lineHeight: 1.6 }}>
                             Perks count all-or-nothing: every perk you haven&apos;t banned is counted at 5 picks,
                             including trade-offs. Mid-run the game only has the perks you&apos;ve picked so far, and
                             the Death Wave bonus grows during the run. The health pool also counts package overheal

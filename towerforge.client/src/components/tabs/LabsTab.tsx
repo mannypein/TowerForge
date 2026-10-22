@@ -194,7 +194,7 @@ export default function LabsTab() {
                                                 />
                                             <button
                                                 className="btn btn-dim"
-                                                style={{ fontSize: '10px', padding: '2px 7px' }}
+                                                style={{ fontSize: '11px', padding: '2px 7px' }}
                                                 disabled={!isUnlocked || isMaxed}
                                                 title={`Max ${labName}`}
                                                 onClick={() => setLabLevel(labName, maxLv)}

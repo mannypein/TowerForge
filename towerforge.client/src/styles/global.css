@@ -4,7 +4,7 @@
    No component styles live here.
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Exo+2:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 @import './variables.css';
 
 *,
@@ -17,7 +17,8 @@
 
 html, body {
     height: 100%;
-    background: var(--bg);
+    background: var(--page-light), var(--bg);
+    background-attachment: fixed;
     color: var(--text);
     font-family: var(--font-ui);
     font-size: 15px;
@@ -57,7 +58,17 @@ textarea {
     select:focus,
     textarea:focus {
         border-color: var(--accent);
+        box-shadow: 0 0 0 2px var(--accent-glow);
     }
+
+/* Words read better in the UI font; numbers keep the mono font. */
+input[type='text'],
+select,
+textarea {
+    font-family: var(--font-ui);
+    font-size: 14px;
+    font-weight: 500;
+}
 
 input[type='number'] {
     width: 80px;
@@ -93,6 +104,7 @@ input[type='checkbox'] {
 
 .num-input:focus-within {
     border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-glow);
 }
 
 .num-input input[type='number'] {
@@ -144,7 +156,7 @@ input[type='checkbox'] {
 
 .num-btn:active:not(:disabled) {
     background: var(--accent);
-    color: #fff;
+    color: var(--on-accent);
 }
 
 .num-btn:disabled {

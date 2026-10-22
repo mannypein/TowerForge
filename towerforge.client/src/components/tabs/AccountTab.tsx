@@ -186,7 +186,7 @@ export default function AccountTab() {
                         )}
 
                         {mode === 'register' && (
-                            <p style={{ fontSize: '11px', color: 'var(--text-dim)' }}>
+                            <p style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
                                 Usernames are 3–24 letters, numbers, _ or -. Passwords need 8+ characters.
                                 There&apos;s no password reset yet, so keep it somewhere safe.
                             </p>

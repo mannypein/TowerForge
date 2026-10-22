@@ -21,6 +21,7 @@ import ProfileTab from './components/tabs/ProfileTab';
 import LoginModal from './components/LoginModal';
 import LinkModal from './components/LinkModal';
 import AutoImport from './components/common/AutoImport';
+import ThemePicker from './components/common/ThemePicker';
 import { exportAge, linkExport } from './engine/linkClient';
 import PerksTab from './components/tabs/PerksTab';
 import TiersTab from './components/tabs/TiersTab';
@@ -428,6 +429,7 @@ export default function App() {
                 <span className="app-version">v{__APP_VERSION__}</span>
 
                 <div className="header-actions">
+                    <ThemePicker />
                     {/* TODO: Re-enable cloud save button after testing */}
                     {/* <button className="btn btn-cloud" onClick={() => setShowLoginModal(true)}>
                         ☁ Cloud Pull
