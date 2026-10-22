@@ -55,6 +55,7 @@ export default function ShareTab() {
                 library: moduleState.library,
                 slotLevels: moduleState.slotLevels,
                 activeLoadout: activeLoadout(moduleState)?.id,
+                assistData: moduleState.assistData,
             };
         }
 

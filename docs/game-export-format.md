@@ -100,8 +100,8 @@ never read them.
 | Field | Status | Notes |
 |---|---|---|
 | `Coins`, `Gems`, `Stones`, `Medals`, `Cells`, `Keys`, `Tokens`, `Bits` | ✅ | Shown and editable in the currency bar. |
-| `ModuleCannonShards`, `ModuleArmorShards`, `ModuleGeneratorShards`, `ModuleCoreShards` | 📊 | Module shards — easy to add to the bar if wanted. |
-| `ModuleRerollCurrency`, `ModuleTickets` | 📊 | Reroll shards and module tickets. |
+| `ModuleCannonShards`, `ModuleArmorShards`, `ModuleGeneratorShards`, `ModuleCoreShards` | ✅ | Each type's module shards — imported (2026-10-22) and shown on the Modules page, like the row on the game's Modules screen (cannon circle, armor square, generator triangle, core diamond). Owner's export 8,597 / 114,026 / 8,856 / 6,559 against a later screen 510 / 115,500 / 818 / 716, after levelling the cannon, generator and core slots two levels each. |
+| `ModuleRerollCurrency`, `ModuleTickets` | ✅ / 📊 | Reroll Shards — imported and shown first in that row (owner: 23,507,946 in the export, 24,065,485 on the later screen). Module tickets not used. |
 | `CurrencyEarnedThisCycle`, `CurrencySpentThisCycle` | ❓ | `{ Currencies: { coin, gem, … } }` totals "this cycle" — what is a cycle (tournament season? event?). |
 
 ## Tier progress

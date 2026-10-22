@@ -100,6 +100,7 @@ export default function SharedView({ code }: Props) {
         loadout,
         library: sharedModules.library ?? [],
         slotLevels: sharedModules.slotLevels,
+        assistData: sharedModules.assistData,
         equipped: loadout.id === equippedId,
         showAssists,
     } : null;

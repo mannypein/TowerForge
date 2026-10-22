@@ -3,11 +3,12 @@
 //  One module preset, drawn like the Modules tab (the game's Modules
 //  screen): the tower with its primary and assist slots around it,
 //  each module's badge in its rarity's glow with the slot level, and
-//  next to it the modules by name, rarity and stars.
+//  next to it the modules by name, rarity and stars — an assist with its
+//  slot's unique-effect tier and Main / Substat efficiency.
 // ============================================================
 
 import type { Ref } from 'react';
-import type { Loadout, ModuleEntry, ModuleType, SlotLevels } from '../../types/gameTypes';
+import type { AssistData, Loadout, ModuleEntry, ModuleType, SlotLevels } from '../../types/gameTypes';
 import { RARITIES, moduleMaxLevel, rarityColor, rarityStars } from '../../constants/moduleRarities';
 import { BOARD } from '../../constants/moduleBoard';
 import type { SlotKey } from '../../constants/moduleBoard';
@@ -19,11 +20,12 @@ import { ShareHeader, ShareFooter } from './shareCommon';
 const TYPE_ORDER: ModuleType[] = ['cannon', 'armor', 'generator', 'core'];
 const TYPE_LABELS: Record<ModuleType, string> = { cannon: 'Cannon', armor: 'Armor', generator: 'Generator', core: 'Core' };
 
-export default function ModulesShareCard({ ref, loadout, library, slotLevels, equipped, showAssists, poster }: {
+export default function ModulesShareCard({ ref, loadout, library, slotLevels, assistData, equipped, showAssists, poster }: {
     ref?: Ref<HTMLDivElement>;
     loadout: Loadout;
     library: ModuleEntry[];
     slotLevels: SlotLevels;
+    assistData?: AssistData;
     equipped?: boolean;
     showAssists: boolean;   // the sender has assist slots (an assist module or slot level anywhere)
     poster?: boolean;
@@ -85,6 +87,11 @@ export default function ModulesShareCard({ ref, loadout, library, slotLevels, eq
                                         {mod && <> · <span style={{ color }}>{RARITIES.find(r => r.k === mod.rarity)?.label ?? mod.rarity}</span></>}
                                         {stars > 0 && <span className="shr-mod-stars" style={{ color }}> {'★'.repeat(stars)}</span>}
                                     </div>
+                                    {key === 'assist' && assistData?.[type] && assistData[type].rarity !== 'locked' && (
+                                        <div className="shr-mod-meta">
+                                            {assistData[type].rarity} tier · Main {assistData[type].multEff}% · Substats {assistData[type].subEff}%
+                                        </div>
+                                    )}
                                 </div>
                                 <span className="shr-mod-lv">Lv.{levelAt(type, key, mod)}</span>
                             </div>

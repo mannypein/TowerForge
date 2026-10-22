@@ -22,6 +22,10 @@ import { SUB_RARITIES, UNIQUE_MODULES, SUB_EFFECTS, UNIQUE_EFFECT_MODEL } from '
 import type { SubRarity, RarityProgression, SubEffectDef } from '../../constants/moduleData';
 import { calcModuleDamageMult, primaryMainMult } from '../../engine/towerDamage';
 import { activeLoadout, milestoneReached } from '../../engine/statHelpers';
+import { assistPart, nextAssistTier } from '../../engine/assistModules';
+import type { AssistPart } from '../../engine/assistModules';
+import { CurrencyField } from '../common/CurrencyBar';
+import type { Currencies } from '../../types/gameTypes';
 
 // ── Types ─────────────────────────────────────────────────────
 const MODULE_TYPES: ModuleType[] = ['cannon', 'armor', 'generator', 'core'];
@@ -152,8 +156,55 @@ const ASSIST_UNLOCK_TIER = 19;
 const ASSIST_UNLOCK_WAVE = 40;
 
 
+// The game's module currencies (the row above its Inventory / Assist tabs).
+const MODULE_CURRENCIES: { key: keyof Currencies; label: string; icon: 'reroll' | ModuleType }[] = [
+    { key: 'rerollShards', label: 'Reroll Shards', icon: 'reroll' },
+    { key: 'cannonShards', label: 'Cannon Shards', icon: 'cannon' },
+    { key: 'armorShards', label: 'Armor Shards', icon: 'armor' },
+    { key: 'generatorShards', label: 'Generator Shards', icon: 'generator' },
+    { key: 'coreShards', label: 'Core Shards', icon: 'core' },
+];
+
+// Each currency's icon, simplified from the game's: Reroll Shards, and
+// each type's shards in its module shape.
+function ShardIcon({ kind }: { kind: 'reroll' | ModuleType }) {
+    const shape = {
+        reroll: <><polygon points="12,2 21,7 21,17 12,22 3,17 3,7" /><circle cx="12" cy="12" r="3.5" /></>,
+        cannon: <circle cx="12" cy="12" r="8.5" />,
+        armor: <rect x="4" y="4" width="16" height="16" rx="2.5" />,
+        generator: <polygon points="12,3.5 21,19.5 3,19.5" />,
+        core: <polygon points="12,2.5 21.5,12 12,21.5 2.5,12" />,
+    }[kind];
+    return <svg className="modg-shard" viewBox="0 0 24 24" aria-hidden="true">{shape}</svg>;
+}
+
+// An assist efficiency: its total, how much is stones and lab, and what
+// the next stone level and the rest cost.
+function AssistEffRow({ label, part, max, onChange }: {
+    label: string; part: AssistPart; max: number; onChange: (v: number) => void;
+}) {
+    return (
+        <div className="modg-assist-eff">
+            <div className="field-row">
+                <label className="field-label">{label}<span className="field-sub">1–{max}%</span></label>
+                <NumericInput value={part.total} min={0} max={max} className="num-sm" onChange={onChange} />
+                <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>%</span>
+            </div>
+            <div className="modg-assist-split">
+                1% + stones {part.stones}/{part.maxStones} + lab {part.lab}/30
+                <span>
+                    {part.next !== null
+                        ? `Next +1%: ${part.next.toLocaleString()} stones · ${part.toMax.toLocaleString()} to finish`
+                        : 'Stones maxed'}
+                </span>
+            </div>
+        </div>
+    );
+}
+
 export default function ModulesTab() {
     const [search, setSearch] = useState('');
+    const [panel, setPanel] = useState<'inventory' | 'assist'>('inventory');
     const [typeFilter, setTypeFilter] = useState<ModuleType | ''>('');
     const [rarityFilter, setRarityFilter] = useState<'' | 'E' | 'L' | 'M' | 'A'>('');
     const [modal, setModal] = useState<ModalState>(defaultModal());
@@ -169,6 +220,8 @@ export default function ModulesTab() {
     const setSlotLevel = useGameStore(s => s.setSlotLevel);
     const updateAssist = useGameStore(s => s.updateAssist);
     const updateAssistRarity = useGameStore(s => s.updateAssistRarity);
+    const currencies = useGameStore(s => s.currencies);
+    const setCurrency = useGameStore(s => s.setCurrency);
 
     const { library, loadouts, assistData, slotLevels } = moduleState;
     const equipped = activeLoadout(moduleState);
@@ -442,11 +495,101 @@ export default function ModulesTab() {
             </div>
 
             {/* ══════════════════════════════════════
+          MODULE CURRENCIES, then Inventory / Assist (like the game)
+      ══════════════════════════════════════ */}
+            <div className="modg-currencies">
+                {MODULE_CURRENCIES.map(c => (
+                    <label key={c.key} className="modg-cur" title={`${c.label} — click to edit`}>
+                        <ShardIcon kind={c.icon} />
+                        <CurrencyField label={c.label} value={currencies[c.key] ?? 0} onCommit={n => setCurrency(c.key, n)} />
+                    </label>
+                ))}
+            </div>
+            <div className="modg-tabs" role="tablist">
+                <button role="tab" aria-selected={panel === 'inventory'} className={`modg-tab ${panel === 'inventory' ? 'active' : ''}`}
+                    onClick={() => setPanel('inventory')}>Inventory</button>
+                <button role="tab" aria-selected={panel === 'assist'} className={`modg-tab ${panel === 'assist' ? 'active' : ''}`}
+                    onClick={() => setPanel('assist')}>Assist</button>
+            </div>
+
+            {/* ══════════════════════════════════════
+          ASSIST — each type's assist slot and its stone upgrades
+      ══════════════════════════════════════ */}
+            {panel === 'assist' && (
+                <div className="modg-panel">
+                    <div className="modg-inv-head">
+                        <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
+                            You have {(currencies.stones ?? 0).toLocaleString()} stones
+                        </span>
+                    </div>
+                    {!assistUnlocked ? (
+                        <p className="modg-hint">Assist slots unlock at Tier {ASSIST_UNLOCK_TIER} Wave {ASSIST_UNLOCK_WAVE}.</p>
+                    ) : (
+                        <div className="modg-assist-grid">
+                            {MODULE_TYPES.map(type => {
+                                const ad = assistData[type] ?? { rarity: 'locked' as const, multEff: 0, subEff: 0 };
+                                const mod = modById(equipped?.slots[type].assist);
+                                const tier = nextAssistTier(ad.rarity);
+                                return (
+                                    <div key={type} className="modg-assist-card">
+                                        <div className="modg-assist-head">
+                                            <button className="modg-assist-mod" onClick={() => setSlotEdit({ type, slot: 'assist' })}
+                                                title="Change the assist module or its slot level">
+                                                <ModuleBadge type={type} module={mod} size={46} />
+                                            </button>
+                                            <div className="modg-assist-title">
+                                                <strong>{TYPE_LABELS[type]} assist</strong>
+                                                <span style={mod ? { color: rarityColor(mod.rarity) } : undefined}>
+                                                    {mod ? `${mod.name} · ${rarityLabel(mod.rarity)}` : 'No module equipped'}
+                                                </span>
+                                            </div>
+                                            <span className="modg-assist-lv">Lv.{slotLevels?.[type]?.assist ?? 0}</span>
+                                        </div>
+                                        <div className="field-row">
+                                            <label className="field-label">Unique effect tier</label>
+                                            <select value={ad.rarity}
+                                                onChange={e => updateAssistRarity(type, e.target.value as typeof ad.rarity)}>
+                                                <option value="locked">Locked</option>
+                                                <option value="Epic">Epic</option>
+                                                <option value="Legendary">Legendary</option>
+                                                <option value="Mythic">Mythic</option>
+                                                <option value="Ancestral">Ancestral</option>
+                                            </select>
+                                        </div>
+                                        <div className="modg-assist-split">
+                                            <span>
+                                                {tier
+                                                    ? `${ad.rarity === 'locked' ? 'Unlock' : `Next: ${tier.tier}`} · ${tier.cost.toLocaleString()} stones`
+                                                    : 'Highest tier'}
+                                            </span>
+                                        </div>
+                                        {ad.rarity !== 'locked' && (
+                                            <>
+                                                <AssistEffRow label="Main effect" max={130}
+                                                    part={assistPart(type, 'multEff', ad.multEff ?? 0, labData)}
+                                                    onChange={v => updateAssist(type, 'multEff', v)} />
+                                                <AssistEffRow label="Substats" max={100}
+                                                    part={assistPart(type, 'subEff', ad.subEff ?? 0, labData)}
+                                                    onChange={v => updateAssist(type, 'subEff', v)} />
+                                            </>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                    <p className="modg-hint">
+                        Stones raise the Main effect to 100% and Substats to 70%; each type&apos;s Assist lab adds up
+                        to 30% more. Tap a module to change it or its slot level.
+                    </p>
+                </div>
+            )}
+
+            {/* ══════════════════════════════════════
           INVENTORY
       ══════════════════════════════════════ */}
-            <div className="modg-panel">
+            {panel === 'inventory' && <div className="modg-panel">
                 <div className="modg-inv-head">
-                    <span className="modg-inv-title">Inventory</span>
                     <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>{library.length} modules</span>
                     <span style={{ flex: 1 }} />
                     <button className="btn btn-accent" onClick={openAdd}>+ Add Module</button>
@@ -495,7 +638,7 @@ export default function ModulesTab() {
                         })}
                     </div>
                 )}
-            </div>
+            </div>}
 
             {/* ══════════════════════════════════════
           INSPECT — the module's card, like in game

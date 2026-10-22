@@ -536,6 +536,14 @@ export function parseGameExport(raw: Raw): GameImport {
         keys: num(raw.Keys),
         tokens: num(raw.Tokens),
         bits: num(raw.Bits),
+        // Module currencies (the row on the game's Modules screen).
+        ...(typeof raw.ModuleRerollCurrency === 'number' ? {
+            rerollShards: num(raw.ModuleRerollCurrency),
+            cannonShards: num(raw.ModuleCannonShards),
+            armorShards: num(raw.ModuleArmorShards),
+            generatorShards: num(raw.ModuleGeneratorShards),
+            coreShards: num(raw.ModuleCoreShards),
+        } : {}),
     };
 
     // HighestWaveThisTier is indexed by tier number (index 0 is unused).

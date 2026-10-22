@@ -22,7 +22,9 @@ const FIELDS: { key: keyof Currencies; label: string; icon: string | null }[] = 
     { key: 'bits', label: 'Bits', icon: '💾' },
 ];
 
-function CurrencyField({ label, value, onCommit }: { label: string; value: number; onCommit: (n: number) => void }) {
+// One currency's box: shows the game's format, takes its suffixes (also the
+// Modules page's shard row).
+export function CurrencyField({ label, value, onCommit }: { label: string; value: number; onCommit: (n: number) => void }) {
     const [draft, setDraft] = useState<string | null>(null);
     const cancelled = useRef(false);
 
@@ -63,7 +65,7 @@ export default function CurrencyBar() {
                         ? <span className="cur-icon" aria-hidden="true">{f.icon}</span>
                         : <img src={stoneIcon} alt="" className="cur-icon-img" />}
                     <span className="cur-label">{f.label}</span>
-                    <CurrencyField label={f.label} value={currencies[f.key]} onCommit={n => setCurrency(f.key, n)} />
+                    <CurrencyField label={f.label} value={currencies[f.key] ?? 0} onCommit={n => setCurrency(f.key, n)} />
                 </label>
             ))}
         </div>

@@ -5,7 +5,7 @@
 //  to anyone else's saved data.
 // ============================================================
 
-import type { BotData, BotLoadouts, CardData, Loadout, ModuleEntry, SlotLevels, UWData } from '../types/gameTypes';
+import type { AssistData, BotData, BotLoadouts, CardData, Loadout, ModuleEntry, SlotLevels, UWData } from '../types/gameTypes';
 import { apiRequest } from './http';
 
 // Keep in sync with SharesController.MaxPayloadBytes on the server.
@@ -31,6 +31,7 @@ export interface SharedModules {
     library: ModuleEntry[];
     slotLevels: SlotLevels;
     activeLoadout?: string;
+    assistData?: AssistData;    // each type's assist tier and efficiencies (shares from 1.25+)
 }
 
 export interface SharePayload {

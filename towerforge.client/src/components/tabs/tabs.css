@@ -1617,6 +1617,151 @@
 }
 
 /* Slot editor */
+/* Modules page: the module currencies row and the Inventory / Assist tabs,
+   like the game's Modules screen. */
+.modg-currencies {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px 14px;
+    margin: 0 0 10px;
+}
+
+.modg-cur {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: text;
+}
+
+    .modg-cur .cur-input {
+        width: 76px;
+        background: transparent;
+        text-align: left;
+    }
+
+.modg-shard {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    fill: rgba(232, 237, 245, 0.12);
+    stroke: var(--text-bright);
+    stroke-width: 1.8;
+    stroke-linejoin: round;
+}
+
+.modg-tabs {
+    display: flex;
+    background: #20285a;
+    border: 2px solid #33437a;
+    border-radius: 10px 10px 0 0;
+    margin-bottom: -2px;
+}
+
+.modg-tab {
+    flex: 1;
+    font: inherit;
+    font-size: 15px;
+    font-weight: 800;
+    padding: 9px 12px;
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+}
+
+    .modg-tab.active {
+        background: #3a4690;
+        color: var(--text-bright);
+    }
+
+    .modg-tab:first-child {
+        border-radius: 8px 0 0 0;
+    }
+
+    .modg-tab:last-child {
+        border-radius: 0 8px 0 0;
+    }
+
+.modg-tabs + .modg-panel {
+    border-radius: 0 0 10px 10px;
+}
+
+/* Assist tab: one card per type. */
+.modg-assist-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+@media (max-width: 620px) {
+    .modg-assist-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+.modg-assist-card {
+    background: #11152b;
+    border: 1px solid #2a3566;
+    border-radius: 8px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.modg-assist-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.modg-assist-mod {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+}
+
+.modg-assist-title {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+    font-size: 12px;
+    color: var(--text-dim);
+}
+
+    .modg-assist-title strong {
+        font-size: 14px;
+        color: var(--text-bright);
+    }
+
+    .modg-assist-title span {
+        overflow-wrap: anywhere;
+    }
+
+.modg-assist-lv {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--text-bright);
+}
+
+.modg-assist-split {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 2px 10px;
+    font-size: 11px;
+    color: var(--text-dim);
+}
+
+.modg-assist-eff {
+    border-top: 1px solid #2a3566;
+    padding-top: 6px;
+}
+
 .modg-assist-box {
     background: #11152b;
     border: 1px solid #2a3566;

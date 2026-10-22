@@ -145,6 +145,7 @@ import type { EhpCalibration } from './ehp';
 import { edpsScore, edpsWaves } from './edps';
 import { healthSkipChance, healthSkipSources } from './levelSkip';
 import { healthLabCut } from './enemyStats';
+import { assistLevelCost } from './assistModules';
 import type { EnemyType } from './enemyStats';
 import {
     botMedalCost, botPlusMedalCost, CARD_SLOT_GEMS, enhancementCost, enhancementDiscount, labLevelCost, MEDAL_TRADE_GIVES,
@@ -549,7 +550,7 @@ export function buildCandidates(
             if (ad.rarity !== 'locked' && multEffStone < ASSIST_STONE_MAX.multEff) {
                 const totalPct = ad.multEff ?? 0;
                 const stoneLv = multEffStone;
-                const cost = 12 + Math.max(1, stoneLv) * 3;
+                const cost = assistLevelCost(stoneLv - 1);
                 const after = cloneSnapshot(snap);
                 after.moduleState.assistData[type] = { ...ad, multEff: totalPct + 1 };
                 // Recalculate modBonuses since assist multEff changed
@@ -577,7 +578,7 @@ export function buildCandidates(
             if (ad.rarity !== 'locked' && subEffStone < ASSIST_STONE_MAX.subEff) {
                 const totalPct = ad.subEff ?? 0;
                 const stoneLv = subEffStone;
-                const cost = 12 + Math.max(1, stoneLv) * 3;
+                const cost = assistLevelCost(stoneLv - 1);
                 const after = cloneSnapshot(snap);
                 after.moduleState.assistData[type] = { ...ad, subEff: totalPct + 1 };
                 // Recalculate modBonuses since assist subEff changed

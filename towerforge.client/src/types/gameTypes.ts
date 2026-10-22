@@ -16,6 +16,13 @@ export interface Currencies {
     keys: number;
     tokens: number;
     bits: number;
+    // Module currencies, shown on the Modules page like the game's
+    // (ModuleRerollCurrency, Module<Type>Shards). Absent in older saves.
+    rerollShards?: number;
+    cannonShards?: number;
+    armorShards?: number;
+    generatorShards?: number;
+    coreShards?: number;
 }
 
 // ── Build Types ───────────────────────────────────────────────

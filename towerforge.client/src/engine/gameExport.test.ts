@@ -516,6 +516,18 @@ describe('29.1.3 exports (ExportVersion 1)', () => {
         expect(useGameStore.getState().relicData.rDmg).toBe(3);
     });
 
+    // The row on the game's Modules screen: Reroll Shards, then each type's shards.
+    it('reads the module currencies', () => {
+        const imp = parseGameExport(makeExport({
+            ModuleRerollCurrency: 24065485, ModuleCannonShards: 510, ModuleArmorShards: 115500,
+            ModuleGeneratorShards: 818, ModuleCoreShards: 716,
+        }));
+        expect(imp.currencies).toMatchObject({
+            rerollShards: 24065485, cannonShards: 510, armorShards: 115500, generatorShards: 818, coreShards: 716,
+        });
+        expect(parseGameExport(makeExport()).currencies.rerollShards).toBeUndefined();
+    });
+
     it('reads every tournament played', () => {
         const imp = parseGameExport(makeExport({
             TournamentRecords: [
