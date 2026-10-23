@@ -97,7 +97,12 @@ export default function WelcomeGuide({ onImportFile, onEmulator, emulatorBusy }:
                         <em>On an Android phone only:</em> the game keeps the file in its own app folder
                         (<code>Android/data/com.TechTreeGames.TheTower/files</code>), which most apps can&apos;t open. If
                         your file manager can, copy <code>tool_export.json</code> to Downloads and import it in the next
-                        step. <em>iPhone:</em> iOS doesn&apos;t let other apps reach the file, so it can&apos;t be imported yet.
+                        step.
+                    </span>
+                    <span className="wlc-way">
+                        <em>iPhone:</em> iOS keeps the file to itself, but a backup of the iPhone to a Windows PC includes
+                        it — TowerForge Link reads it from there (Get from emulator or phone → iPhone, on the PC). On the
+                        iPhone alone it can&apos;t be imported yet.
                     </span>
                 </li>
                 <li>

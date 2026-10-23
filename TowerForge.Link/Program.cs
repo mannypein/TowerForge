@@ -4,7 +4,8 @@
 //  console window open with what it's doing. Close the window to
 //  stop it. How it works: docs/towerforge-link.md.
 //  --port N listens on another port (for testing beside a running copy;
-//  the site only talks to 47821).
+//  the site only talks to 47821). --backups <folder> reads iPhone
+//  backups from that folder instead (testing with a made-up backup).
 // ============================================================
 
 using System.Net;
@@ -23,11 +24,13 @@ internal static class Program
         var port = Port;
         var at = Array.IndexOf(args, "--port");
         if (at >= 0 && at + 1 < args.Length && int.TryParse(args[at + 1], out var p) && p is > 1024 and < 65536) port = p;
+        var bk = Array.IndexOf(args, "--backups");
+        if (bk >= 0 && bk + 1 < args.Length) IPhoneBackups.Override = args[bk + 1];
 
         Console.Title = "TowerForge Link";
         Console.OutputEncoding = System.Text.Encoding.UTF8;
         Console.WriteLine($"TowerForge Link {Version}");
-        Console.WriteLine("Gets The Tower's data export off your emulator or Android phone for towerforge.net.");
+        Console.WriteLine("Gets The Tower's data export off your emulator, Android phone or iPhone backup for towerforge.net.");
         Console.WriteLine();
 
         var listener = new TcpListener(IPAddress.Loopback, port);
@@ -45,10 +48,17 @@ internal static class Program
 
         var emulators = Emulators.Find();
         var phones = Phones.Paired();
-        if (emulators.Count == 0 && phones.Count == 0)
+        var iphones = IPhoneBackups.Find();
+        if (emulators.Count == 0 && phones.Count == 0 && iphones.Count == 0)
         {
             Console.WriteLine("No Android emulator found yet. Supported: BlueStacks, MuMu, LDPlayer, MEmu, Nox,");
-            Console.WriteLine("or an Android phone over Wi-Fi: pair it from \"Get from emulator or phone\" on towerforge.net.");
+            Console.WriteLine("an Android phone over Wi-Fi, or an iPhone backed up to this PC: see \"Get from emulator or phone\" on towerforge.net.");
+        }
+        foreach (var b in iphones.Take(3))
+        {
+            var what = b.Encrypted ? "encrypted — Link can't read it yet"
+                : b.ExportPath != null ? "has your export" : "no export in it yet";
+            Console.WriteLine($"Found {IPhoneBackups.Describe(b)} ({what})");
         }
         if (phones.Count > 0)
         {

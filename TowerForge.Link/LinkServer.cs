@@ -169,6 +169,7 @@ internal sealed class LinkServer(int port, Action<string> log)
     private async Task<(string, byte[])> StatusAsync()
     {
         var emulators = Emulators.Find();
+        var backups = IPhoneBackups.Find();
         var tools = await PlatformTools.FindAsync();
         var paired = Phones.Paired();
         // Phones adb has connected (only asked once one is paired: that
@@ -216,6 +217,18 @@ internal sealed class LinkServer(int port, Action<string> log)
             foreach (var p in phones) w.WriteStringValue(p);
             w.WriteEndArray();
             w.WriteEndObject();
+            // iPhone backups on this PC (IPhoneBackups.cs), newest first.
+            w.WriteStartArray("iphoneBackups");
+            foreach (var b in backups.Take(5))
+            {
+                w.WriteStartObject();
+                if (b.LastBackup is DateTime d) w.WriteNumber("backedUp", new DateTimeOffset(d).ToUnixTimeSeconds());
+                w.WriteBoolean("encrypted", b.Encrypted);
+                w.WriteBoolean("hasExport", b.ExportPath != null);
+                if (b.ExportPath != null) w.WriteNumber("exportModified", b.ExportModified);
+                w.WriteEndObject();
+            }
+            w.WriteEndArray();
         });
     }
 

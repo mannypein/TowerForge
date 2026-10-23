@@ -15,7 +15,9 @@
 //      (the file-transfer channel: size and modified time, no shell).
 //   4. Copy the newest one out with `adb pull` into a temp file, read
 //      it, delete it.
-//  Nothing else on the device is read or changed.
+//  iPhones (IPhoneBackups.cs): the export is read out of the newest
+//  iPhone backup on this PC instead; the newest export of the two wins.
+//  Nothing else on the device or in the backup is read or changed.
 // ============================================================
 
 using System.Globalization;
@@ -43,6 +45,53 @@ internal static class Exporter
     // The newest export; with newerThan (unix seconds), an empty one (no
     // Data) when the file isn't newer than that — nothing is copied.
     public static async Task<ExportFile> ReadAsync(long? newerThan = null)
+    {
+        var backup = IPhoneBackups.NewestWithExport();
+        ExportFile? fromAdb = null;
+        ExportProblem? adbProblem = null;
+        try { fromAdb = await ReadFromAdbAsync(newerThan); }
+        catch (ExportProblem p) { adbProblem = p; }
+
+        if (fromAdb != null && (backup == null || fromAdb.ModifiedUnix >= backup.ExportModified)) return fromAdb;
+        if (backup != null) return ReadBackup(backup, newerThan);
+        // No export anywhere: say what's wrong with the iPhone backups when
+        // there are some and nothing else was found.
+        if (adbProblem?.Code == "no_emulator")
+        {
+            var backups = IPhoneBackups.Find();
+            if (backups.Count > 0)
+            {
+                throw backups.All(b => b.Encrypted)
+                    ? new ExportProblem("iphone_encrypted",
+                        "Your iPhone backup is encrypted, and TowerForge Link can't read encrypted backups yet. In the Apple "
+                        + "Devices app (or iTunes), untick \"Encrypt local backup\" and back up again — or use Import Game Data.")
+                    : new ExportProblem("iphone_no_export",
+                        "Your newest iPhone backup doesn't have the game's data export. In The Tower, export your data "
+                        + "(Settings → External Tools Export), then back up your iPhone again and try again.");
+            }
+        }
+        throw adbProblem ?? new ExportProblem("failed", "TowerForge Link couldn't find your export.");
+    }
+
+    private static ExportFile ReadBackup(IPhoneBackup backup, long? newerThan)
+    {
+        var source = IPhoneBackups.Describe(backup);
+        if (newerThan is long seen && backup.ExportModified <= seen) return new ExportFile([], backup.ExportModified, source, "iphone-backup");
+        byte[] data;
+        try { data = File.ReadAllBytes(backup.ExportPath!); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw new ExportProblem("copy_failed", "Found the export in your iPhone backup but couldn't read it. Wait for the backup to finish, then try again.");
+        }
+        if (!LooksLikeJson(data))
+        {
+            throw new ExportProblem("bad_file", "The export in your iPhone backup doesn't look right. Export your data again in the game, back up again, then try again.");
+        }
+        return new ExportFile(data, backup.ExportModified, source, "iphone-backup");
+    }
+
+    // Emulators and Android phones, through adb.
+    private static async Task<ExportFile> ReadFromAdbAsync(long? newerThan)
     {
         var emulators = Emulators.Find();
         var phoneAdb = Phones.Any() ? await PlatformTools.FindAsync() : null;

@@ -2,10 +2,11 @@
 //  TowerForge Companion — TowerForge Link setup
 //  Opened from "Get from emulator or phone" (its ⚙, or when the
 //  helper isn't running or reports a problem): getting the helper
-//  past Windows' warning, then either an emulator's one-time ADB
-//  setting or an Android phone over Wi-Fi — Google's adb, pairing
-//  with the code on the phone's Wireless debugging screen, and how
-//  Auto import keeps reading it (engine/linkClient.ts; Link 0.3+).
+//  past Windows' warning, then an emulator's one-time ADB setting, an
+//  Android phone over Wi-Fi (Google's adb, pairing with the code on
+//  the phone's Wireless debugging screen), or an iPhone backed up to
+//  the PC, which Link reads the export out of (engine/linkClient.ts;
+//  Link 0.3+).
 //  Checks what Link found every few seconds while open.
 // ============================================================
 
@@ -25,7 +26,9 @@ interface Props {
     onClose: () => void;
 }
 
-type Where = 'emulator' | 'phone';
+type Where = 'emulator' | 'phone' | 'iphone';
+
+const when = (unix: number) => new Date(unix * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 type Note = { ok: boolean; text: string } | null;
 
 // Link answered, but too old for phones (0.2 and before have no `phone`).
@@ -61,10 +64,12 @@ export default function LinkModal({ problem, busy, onRetry, onClose }: Props) {
         return () => window.removeEventListener('keydown', onKey);
     }, [onClose]);
 
-    // A paired phone opens on the phone steps.
-    const shown: Where = where ?? ((status?.phone?.paired ?? 0) > 0 ? 'phone' : 'emulator');
+    // A paired phone or an iPhone backup opens on its own steps.
+    const shown: Where = where ?? ((status?.phone?.paired ?? 0) > 0 ? 'phone'
+        : (status?.iphoneBackups?.length ?? 0) > 0 && !status?.emulators.some(e => e.running) ? 'iphone' : 'emulator');
     const running = !!status;
     const phone = status?.phone;
+    const backups = status?.iphoneBackups ?? [];
 
     const act = async (label: string, action: Parameters<typeof linkPhone>[0], params?: Record<string, string>) => {
         setWorking(label);
@@ -109,6 +114,7 @@ export default function LinkModal({ problem, busy, onRetry, onClose }: Props) {
                                 TowerForge Link {status.version} is running
                                 {status.emulators.length > 0 && <> · found {status.emulators.map(e => `${e.name}${e.running ? ' (running)' : ''}`).join(', ')}</>}
                                 {phone && phone.paired > 0 && <> · phone {phone.connected.length ? `connected: ${phone.connected.join(', ')}` : 'paired, not connected'}</>}
+                                {backups.length > 0 && <> · iPhone backup{backups[0].backedUp ? ` from ${when(backups[0].backedUp)}` : ''}</>}
                             </>}
                     </div>
 
@@ -154,9 +160,58 @@ export default function LinkModal({ problem, busy, onRetry, onClose }: Props) {
                         <button role="tab" aria-selected={shown === 'phone'} className={`lnk-tab ${shown === 'phone' ? 'on' : ''}`} onClick={() => setWhere('phone')}>
                             📱 Android phone
                         </button>
+                        <button role="tab" aria-selected={shown === 'iphone'} className={`lnk-tab ${shown === 'iphone' ? 'on' : ''}`} onClick={() => setWhere('iphone')}>
+                             🍎 iPhone
+                        </button>
                     </div>
 
-                    {shown === 'emulator' ? (
+                    {shown === 'iphone' ? (
+                        <section className="lnk-sec">
+                            <p className="lnk-sub lnk-first">
+                                iOS keeps the game&apos;s files to itself — no app or browser on the iPhone can open them — but
+                                a backup of the iPhone to this PC includes them. Link reads the export out of your newest backup.
+                            </p>
+                            <ol className="lnk-steps">
+                                <li>
+                                    Install Apple&apos;s <strong>Apple Devices</strong> app (Microsoft Store, Windows 10 or 11), or iTunes.
+                                </li>
+                                <li>Connect the iPhone with a cable, unlock it and tap <em>Trust</em>.</li>
+                                <li>In The Tower: Settings → External Tools Export, and export (or choose <em>Auto</em>).</li>
+                                <li>
+                                    In Apple Devices: <em>Back up all of the data on your iPhone to this computer</em> → <em>Back Up Now</em>.
+                                    <span className="lnk-sub">
+                                        Leave <em>Encrypt local backup</em> off — Link can&apos;t read encrypted backups yet (an
+                                        encrypted backup also keeps saved passwords and Health data; an unencrypted one leaves them
+                                        out). The first backup takes a while; later ones only add what changed.
+                                    </span>
+                                </li>
+                                <li>
+                                    Click <em>Try again</em>. With <em>⟳ Auto import</em> on, every new backup comes in by itself.
+                                    <span className="lnk-sub">
+                                        Tick <em>Show this iPhone when on Wi-Fi</em> (General) once, and you can back up without the cable.
+                                    </span>
+                                </li>
+                            </ol>
+                            {backups.length > 0 && (
+                                <ul className="lnk-backups">
+                                    {backups.map((b, i) => (
+                                        <li key={i}>
+                                            Backup{b.backedUp ? ` from ${when(b.backedUp)}` : ''}:{' '}
+                                            {b.encrypted ? <span className="lnk-warn">encrypted — can&apos;t be read yet</span>
+                                                : b.hasExport ? <span className="lnk-ok">✓ has your export{b.exportModified ? ` (${when(b.exportModified)})` : ''}</span>
+                                                : <span className="lnk-warn">no export in it — export in the game, then back up again</span>}
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                            <p className="lnk-sub">
+                                <strong>On a Mac:</strong> Link is Windows-only for now. If you play The Tower on the Mac itself,
+                                its export is in your Library: in Terminal, run{' '}
+                                <code>cp &quot;$(find ~/Library/Containers -name tool_export.json 2&gt;/dev/null | head -1)&quot; ~/Desktop/</code>{' '}
+                                to copy it to your Desktop, then use Import Game Data.
+                            </p>
+                        </section>
+                    ) : shown === 'emulator' ? (
                         <section className="lnk-sec">
                             <ol className="lnk-steps">
                                 <li>

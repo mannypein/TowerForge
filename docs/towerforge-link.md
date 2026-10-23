@@ -100,7 +100,10 @@ on BlueStacks: 204 for the same time, the file for an older one.
   home network (10.x, 172.16–31.x, 192.168.x, 169.254.x) and a 6-digit code;
   anything else is refused before adb runs. It can't run other adb commands
   for anyone.
-- The data goes emulator or phone → helper → browser. Nothing is uploaded.
+- iPhone backups (0.3) are only read, never changed: one file found by its
+  documented name, nothing else in the backup is opened.
+- The data goes emulator, phone or backup → helper → browser. Nothing is
+  uploaded.
 
 ## Emulators
 
@@ -191,40 +194,127 @@ Limits:
   5037; each restarts it on a version mismatch). With a phone paired Link
   uses Google's for emulators too, so it doesn't flip back and forth.
 
-## iPhone
+## iPhone (2026-10-23)
 
-Not possible today: iOS keeps the game's files inside its sandbox, and
-neither other apps, the Files app nor a computer can reach the export
-(owner, 2026-10-23). It would take the game itself sharing the file (a share
-sheet, or files visible in the Files app) — a request for Tech Tree Games.
+iOS keeps the game's files in its sandbox: no app on the iPhone, no browser
+and no Files app can open them, and the game has no share button for the
+export (owner, 2026-10-23). What does reach them:
+
+| Route | Status |
+|---|---|
+| **Backup to a Windows PC** — Link reads the export out of the newest iPhone backup | ✅ built (Link 0.3, `IPhoneBackups.cs`); checked on made-up backups, a real iPhone backup not yet |
+| Link starts the backup itself (libimobiledevice `idevicebackup2`) | next — one click, or automatic over Wi-Fi |
+| The game running on an Apple-silicon Mac — the export is on disk | instructions on the site (Terminal copy) |
+| Backup to a Mac (Finder) | same backup format; Link is Windows-only for now |
+| The iPhone alone | needs the game to expose the file (below) |
+
+**Backups.** A backup of the iPhone to a computer (Apple Devices app or
+iTunes: "Back up all of the data on your iPhone to this computer") includes
+the game's `Documents` folder — players already pull the save out of it
+("Applications/com.TechTreeGames.TheTower/Documents/playerInfo.dat" in
+backup viewers, [the-tower-unified-tools](https://github.com/SFleet89/the-tower-unified-tools)),
+and the game writes `tool_export.json` next to it (Unity's
+`persistentDataPath`).
+- Folders: `%USERPROFILE%\Apple\MobileSync\Backup` (Apple Devices app,
+  iTunes from the Microsoft Store) and `%APPDATA%\Apple Computer\MobileSync\Backup`
+  (iTunes from apple.com) — Apple's support page; one folder per device.
+- Layout (iOS 10+): each file is stored as `<first 2 of id>/<id>`, the id
+  being SHA-1 of `"<domain>-<relativePath>"`, here
+  `AppDomain-com.TechTreeGames.TheTower` + `Documents/tool_export.json` →
+  `86/86a2a853851a70370eaab58ebfa39a3ee733885b`. `Manifest.db` (SQLite)
+  maps them; Link computes the id instead (no SQLite in the exe), and also
+  tries `domain/path` and the old flat layout.
+- `Info.plist` (XML) gives "Device Name" and "Last Backup Date"; an
+  unencrypted backup's `Manifest.db` starts `SQLite format 3\0`, an
+  encrypted one doesn't.
+- **Encrypted backups** ("Encrypt local backup") can't be read yet: it takes
+  the backup password (PBKDF2 → keybag → per-file AES keys; open-source
+  readers exist, e.g. iOSbackup). The dialog says to leave encryption off and
+  what that means (encrypted backups also keep saved passwords and Health
+  data).
+- Hands-free: with "Show this iPhone when on Wi-Fi" the backup needs no
+  cable; iTunes syncs (and backs up) by itself when iTunes is open, the
+  iPhone is charging and both are on the same Wi-Fi (Bonjour on). Auto
+  import picks up each new backup.
+- The newest export wins between an emulator / Android phone and the
+  backups. `/status` lists the backups (`iphoneBackups`: when, encrypted,
+  has the export). `--backups <folder>` points Link at a test folder.
+
+Checked 2026-10-23 with made-up backups (an `Info.plist`, a
+`Manifest.db` header, a made-up export at the hashed path): `/status`
+listed it; `/export` returned exactly that file as "your iPhone backup from
+Oct 23, 13:05"; `?newerThan=` its time → 204; an encrypted one is reported
+encrypted and skipped; the site imported it through the dialog's Try again.
+**Not checked: a real iPhone backup** — the next step is one player backing
+up to a Windows PC with Link running.
+
+Lesson from that test: Link reads the newest export of all sources, and
+BlueStacks' Auto export kept writing the owner's real one — test with a
+made-up export dated ahead of it (or `?newerThan=`), never by importing
+whatever Link finds into the preview browser.
+
+**Link starting the backup** (next): libimobiledevice's `idevicebackup2`
+(LGPL-2.1, Windows builds in MSYS2) runs the device's backup service over
+USB or Wi-Fi sync, through Apple's Mobile Device Service from the Apple
+Devices app. Link could then offer "Back up and import" and keep an iPhone
+in step without opening Apple Devices.
+
+**The game on a Mac** (the iPad build on Apple silicon): its files are in
+`~/Library/Containers/<random id>/Data/Documents/` (fan toolkit above). The
+dialog gives a Terminal line that copies `tool_export.json` to the Desktop.
+
+**The iPhone alone** needs Tech Tree Games: either a "Share" button for the
+export (iOS share sheet), or two keys in the game's `Info.plist` —
+`UIFileSharingEnabled` and `LSSupportsOpeningDocumentsInPlace` = YES — which
+show the game's Documents folder in the Files app ("On My iPhone → The
+Tower"; a Unity developer confirmed both keys are needed). Then the site's
+Import Game Data could open the export in Safari straight from Files, and an
+iOS Shortcut ("When The Tower is closed") could even pass it along. (The
+keys would also expose `playerInfo.dat`; a share button exposes only the
+export.)
 
 ## Phone only, no PC: TowerForge Link for Android (planned)
 
 Most visitors are on phones (61%, 2026-10-16 → 10-23; only 6% of them
-imported, against 20% on PCs). For Android players without a PC the route
-is a small Android app — a web page alone can't open `Android/data`:
+imported, against 20% on PCs). For Android players without a PC: a small
+Android app that does on the phone what Link does on a PC — a web page alone
+can't open `Android/data`.
 
-- **Reading the file**: through **Shizuku** (free, on Google Play; started
-  once per phone restart with its own wireless-debugging pairing, on the
-  phone itself — no PC). With Shizuku's permission the app reads the export
-  as adb's shell user can. Without Shizuku, the app could do the
-  wireless-debugging pairing itself (as LADB does; libadb-android, Apache 2.0)
-  — more work, one app fewer for the player.
-- **Talking to the site**: a foreground service answering the same API as
-  this Link on `http://127.0.0.1:47821` (`/status`, `/export?newerThan=`).
-  Chrome on Android lets an https page fetch `localhost`, so towerforge.net
-  in the phone's browser would use the existing Get from emulator / Auto
-  import code; the site would show those buttons on phones when the app
-  answers.
-- **Shipping**: an APK from `towerforge.net/downloads` (players allow
-  "install unknown apps"), or Google Play (developer account, review,
-  privacy policy).
-- **Needs**: an Android phone to test on, the Android SDK and a JDK on the
-  build PC, a signing key — none were on the owner's PC on 2026-10-23.
+How it would work:
+1. **Reading the file — Shizuku.** Shizuku (free, on Google Play) runs a
+   service with adb's shell rights, started on the phone itself through
+   Wireless debugging (Android 11+; its own pairing notification, no PC).
+   The app binds a Shizuku *UserService* that reads
+   `/storage/emulated/0/Android/data/com.TechTreeGames.TheTower/files/tool_export.json`
+   (and its time) — adb's shell user can, which is why Link works.
+   After each phone restart the player opens Shizuku and taps Start.
+   Later, the app could do the wireless-debugging pairing itself (as LADB
+   does; libadb-android, Apache 2.0) and drop the Shizuku step.
+2. **Talking to the site — the same API as Link.** A foreground service
+   ("TowerForge Link is running" notification) answering
+   `http://127.0.0.1:47821/status` and `/export?newerThan=` with the same
+   origin and Host checks. Chrome on Android lets an https page fetch
+   `localhost` (it asks once, like on a PC).
+3. **The site on the phone.** The emulator/phone button and Auto import are
+   hidden on touch screens today; on a phone the site would ask
+   `127.0.0.1:47821/status` once and show them when the app answers. Auto
+   import already checks again the moment the page becomes visible, so
+   switching from the game to the browser brings the newest data in.
+4. **Shipping.** First an APK on `towerforge.net/downloads` (the phone asks
+   to allow installs from the browser); Google Play later (developer
+   account, review, a privacy policy page).
+
+Needs before building: the Android SDK command-line tools and a JDK on the
+build PC (a few GB; not there on 2026-10-23), a signing key kept outside the
+repo (backed up — updates need the same key), and an Android phone with The
+Tower for testing. Considered and ruled out: the Storage Access Framework
+(Android 11+ won't grant `Android/data`), "All files access" (still excludes
+`Android/data`), root.
 
 ## Later
 
 - Code signing (SmartScreen warning), e.g. Azure Trusted Signing.
-- The phone-only Android app above.
+- The phone-only Android app above; Link starting iPhone backups; reading
+  encrypted iPhone backups; a Mac build of Link.
 - A "Connect phone" button using WebUSB adb in Chrome / Edge, for phones on
   USB without installing anything.

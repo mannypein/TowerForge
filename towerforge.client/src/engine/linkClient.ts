@@ -2,10 +2,11 @@
 //  TowerForge Companion — TowerForge Link client
 //  Talks to TowerForge Link, the small Windows helper that reads the
 //  game's data export (tool_export.json) off an Android emulator with
-//  the emulator's own adb, or off an Android phone over Wi-Fi with
-//  Google's adb (Link 0.3+; TowerForge.Link/, docs/towerforge-link.md).
-//  The helper only listens on this PC; the file goes from the
-//  emulator or phone to this browser and is never uploaded.
+//  the emulator's own adb, off an Android phone over Wi-Fi with
+//  Google's adb, or out of an iPhone backup on the PC (Link 0.3+;
+//  TowerForge.Link/, docs/towerforge-link.md). The helper only listens
+//  on this PC; the file goes from there to this browser and is never
+//  uploaded.
 // ============================================================
 
 export const LINK_URL = 'http://localhost:47821';
@@ -72,8 +73,10 @@ export function exportAge(modified: number, now = Date.now()): string {
 export interface LinkStatus {
     version: string;
     emulators: { name: string; running: boolean; adbEnabled: boolean | null }[];
-    // Missing before Link 0.3 (no phones over Wi-Fi).
+    // Missing before Link 0.3 (no phones over Wi-Fi, no iPhone backups).
     phone?: { adbReady: boolean; adbVersion?: string; paired: number; connected: string[] };
+    // iPhone backups on the PC, newest first (unix seconds).
+    iphoneBackups?: { backedUp?: number; encrypted: boolean; hasExport: boolean; exportModified?: number }[];
 }
 
 // null: Link isn't running on this PC (or the browser blocked it).

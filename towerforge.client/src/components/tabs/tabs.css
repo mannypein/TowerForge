@@ -3612,6 +3612,26 @@
     color: var(--text-bright);
 }
 
+.lnk-backups {
+    margin: 0 0 10px;
+    padding-left: 18px;
+    font-size: 12px;
+}
+
+.lnk-warn {
+    color: var(--gold);
+}
+
+.lnk-sub code {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 1px 4px;
+    border-radius: 4px;
+    background: var(--bg4);
+    color: var(--text-bright);
+    overflow-wrap: anywhere;
+}
+
 .lnk-forget {
     margin-top: 6px;
     padding: 0;
