@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TowerForge Link</string>
+    <string name="channel_name">TowerForge Link</string>
+    <string name="channel_description">Shown while TowerForge Link is on.</string>
+    <string name="notification_title">TowerForge Link is on</string>
+    <string name="notification_text">towerforge.net in this phone\'s browser can read your game data export.</string>
+    <string name="stop">Stop</string>
+</resources>

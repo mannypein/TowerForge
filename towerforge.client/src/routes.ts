@@ -16,6 +16,7 @@ export const TAB_PATHS: Record<TabName, string> = {
     tiers: '/tiers',
     share: '/share',
     account: '/account',
+    importguide: '/import-guide',
     workshop: '/workshop',
     labs: '/labs',
     cards: '/cards',
@@ -49,6 +50,8 @@ const ALIASES: Record<string, TabName> = {
     '/runcoins': 'runcoins',
     '/runlength': 'runlength',
     '/creator-codes': 'creators',
+    '/import': 'importguide',
+    '/importguide': 'importguide',
 };
 
 // Paths the server uses for itself — a tab must never take one.

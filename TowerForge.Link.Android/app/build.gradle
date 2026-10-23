@@ -1,0 +1,60 @@
+// TowerForge Link for Android: reads The Tower's data export through
+// Shizuku and answers towerforge.net in this phone's browser on
+// http://127.0.0.1:47821 — the same API as the Windows Link.
+// Release builds are signed with a key kept outside the repo
+// (~/.towerforge/link-android-signing.properties); see build.ps1.
+
+plugins {
+    id 'com.android.application'
+}
+
+def signingFile = new File(System.getProperty('user.home'), '.towerforge/link-android-signing.properties')
+def signing = new Properties()
+if (signingFile.exists()) signingFile.withInputStream { signing.load(it) }
+
+android {
+    namespace 'net.towerforge.link'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'net.towerforge.link'
+        // Android 9+: Shizuku starts without a PC from Android 11 (Wireless debugging).
+        minSdk 28
+        targetSdk 35
+        versionCode 1
+        versionName '0.1.0'
+    }
+
+    signingConfigs {
+        release {
+            if (signing.storeFile) {
+                storeFile new File(signingFile.parentFile, signing.storeFile)
+                storePassword signing.storePassword
+                keyAlias signing.keyAlias
+                keyPassword signing.keyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signing.storeFile ? signingConfigs.release : null
+        }
+    }
+
+    buildFeatures {
+        aidl true
+        buildConfig true
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'dev.rikka.shizuku:api:13.1.5'
+    implementation 'dev.rikka.shizuku:provider:13.1.5'
+}

@@ -22,7 +22,7 @@ import AutoImport from './components/common/AutoImport';
 import ThemePicker from './components/common/ThemePicker';
 import DiscordLink from './components/common/DiscordLink';
 import WelcomeGuide from './components/common/WelcomeGuide';
-import { exportAge, linkExport } from './engine/linkClient';
+import { exportAge, linkExport, phoneLinkRemembered } from './engine/linkClient';
 import PerksTab from './components/tabs/PerksTab';
 import TiersTab from './components/tabs/TiersTab';
 import WorkshopTab from './components/tabs/WorkshopTab';
@@ -51,6 +51,7 @@ const WhatIfTab = lazy(() => import('./components/tabs/WhatIfTab'));
 const TournamentTab = lazy(() => import('./components/tabs/TournamentTab'));
 const TourneyHistoryTab = lazy(() => import('./components/tabs/TourneyHistoryTab'));
 const AiTab = lazy(() => import('./components/tabs/AiTab'));
+const ImportGuideTab = lazy(() => import('./components/tabs/ImportGuideTab'));
 
 // ── Tab Definitions ───────────────────────────────────────────
 // The tabs, grouped into sections so the menu fits a phone: the top row
@@ -72,6 +73,7 @@ const TAB_GROUPS: TabGroup[] = [
             { id: 'tiers', label: 'Tiers' },
             { id: 'share', label: 'Share' },
             { id: 'account', label: 'Account' },
+            { id: 'importguide', label: 'Import Guide' },
         ],
     },
     {
@@ -160,17 +162,22 @@ export default function App() {
         if (!shareCode) void useAccountStore.getState().init();
     }, [loadAll, shareCode]);   // both stable — runs once on mount
 
+    // A phone with TowerForge Link for Android shows the Link buttons.
+    useEffect(() => {
+        document.documentElement.classList.toggle('tf-phone-link', phoneLinkRemembered());
+    }, []);
+
     // The address follows the open tab. A path that named another tab is a
     // step in history; a home, unknown or differently spelled one is just
     // corrected. Umami counts each address as a page view (analytics.ts).
     useEffect(() => {
         if (shareCode) return;
         const path = TAB_PATHS[activeTab];
-        const { pathname, search } = window.location;
+        const { pathname, search, hash } = window.location;
         if (pathname !== path) {
             const shown = tabFromPath(pathname);
             if (shown !== null && shown !== activeTab) window.history.pushState(null, '', path);
-            else window.history.replaceState(null, '', path + search);
+            else window.history.replaceState(null, '', path + search + hash);
         }
         document.title = titleOf(activeTab);
     }, [activeTab, shareCode]);
@@ -371,6 +378,7 @@ export default function App() {
             case 'creators': return <CreatorCodesTab />;
             case 'share': return <ShareTab />;
             case 'account': return <AccountTab />;
+            case 'importguide': return <ImportGuideTab />;
             case 'ai': return hiddenTab ? null : <AiTab />;
             default: return null;
         }

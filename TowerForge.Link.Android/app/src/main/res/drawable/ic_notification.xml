@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The tower in one color, for the notification and themed icons. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="120"
+    android:viewportHeight="190">
+    <path
+        android:pathData="M38,22 L82,22 L88,34 L88,62 L32,62 L32,34 Z M12,34 L32,34 L32,48 L12,48 Z M44,62 L76,62 L78,76 L42,76 Z M42,76 L78,76 L96,150 L24,150 Z M24,150 L32,178 L48,178 L52,150 M68,150 L72,178 L88,178 L96,150"
+        android:strokeColor="#ffffff"
+        android:strokeWidth="10"
+        android:strokeLineJoin="round"
+        android:strokeLineCap="round" />
+</vector>

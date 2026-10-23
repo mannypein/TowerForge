@@ -11,6 +11,32 @@
 
 export const LINK_URL = 'http://localhost:47821';
 export const LINK_DOWNLOAD = '/downloads/TowerForgeLink.exe';
+export const LINK_DOWNLOAD_ANDROID = '/downloads/TowerForgeLink.apk';
+
+// A phone with TowerForge Link for Android: the app opens the site with
+// ?link=android, remembered per browser, so the Link buttons (hidden on
+// touch screens) show on that phone. Phones without the app never ask
+// for Link, so they never see the browser's "apps on this device" prompt.
+const PHONE_KEY = 'tc_link_phone';
+
+export function phoneLinkRemembered(): boolean {
+    try {
+        const url = new URL(window.location.href);
+        if (url.searchParams.get('link') === 'android') {
+            localStorage.setItem(PHONE_KEY, '1');
+            url.searchParams.delete('link');
+            window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+        }
+        return localStorage.getItem(PHONE_KEY) === '1';
+    } catch {
+        return false;
+    }
+}
+
+export function forgetPhoneLink(): void {
+    try { localStorage.removeItem(PHONE_KEY); } catch { /* not remembered anyway */ }
+    document.documentElement.classList.remove('tf-phone-link');
+}
 
 export type LinkResult =
     | { ok: true; text: string; modified: number | null; source: string }
@@ -77,6 +103,13 @@ export interface LinkStatus {
     phone?: { adbReady: boolean; adbVersion?: string; paired: number; connected: string[] };
     // iPhone backups on the PC, newest first (unix seconds).
     iphoneBackups?: { backedUp?: number; encrypted: boolean; hasExport: boolean; exportModified?: number }[];
+    // TowerForge Link for Android (platform 'android'): Shizuku and the export.
+    platform?: 'android';
+    android?: {
+        shizuku: 'ready' | 'not_installed' | 'not_running' | 'no_permission';
+        export?: 'found' | 'none' | 'no_game' | 'unreadable' | 'unknown';
+        exportModified?: number;
+    };
 }
 
 // null: Link isn't running on this PC (or the browser blocked it).

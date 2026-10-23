@@ -33,7 +33,7 @@ export type TabName =
     | 'profile' | 'perks' | 'tiers' | 'workshop'
     | 'labs' | 'cards' | 'uw' | 'puws' | 'relics'
     | 'bots' | 'modules' | 'guardian' | 'optimizer' | 'enemies' | 'runcoins' | 'runlength' | 'whatif' | 'tournament' | 'creators' | 'share' | 'account'
-    | 'ai' | 'tourneyhistory';
+    | 'ai' | 'tourneyhistory' | 'importguide';
 
 // ── Workshop Types ────────────────────────────────────────────
 export type WSCategory = 'attack' | 'defense' | 'utility';

@@ -3563,6 +3563,14 @@
     margin-left: 6px;
 }
 
+/* A step's button on its own line under the step (the phone steps). */
+.lnk-block {
+    display: flex;
+    width: fit-content;
+    margin: 6px 0 4px;
+    text-decoration: none;
+}
+
 .lnk-ok {
     color: var(--good);
     font-weight: 700;
@@ -3650,6 +3658,17 @@
     .lnk-btn,
     .wlc-steps > li > .lnk-btn.wlc-btn {
         display: none;
+    }
+}
+
+/* ...unless this phone has TowerForge Link for Android (engine/linkClient.ts). */
+@media (hover: none) and (pointer: coarse) {
+    html.tf-phone-link .lnk-btn {
+        display: inline-flex;
+    }
+
+    html.tf-phone-link .wlc-steps > li > .lnk-btn.wlc-btn {
+        display: flex;
     }
 }
 
@@ -4838,4 +4857,332 @@
 
 .tnh-more {
     margin-top: 10px;
+}
+
+/* Import Guide (Player → Import Guide): every way to get the game's
+   export in, step by step. */
+.igd {
+    max-width: 920px;
+    margin: 0 auto;
+    color: var(--text);
+    line-height: 1.55;
+}
+
+.igd-head {
+    scroll-margin-top: 12px;
+    margin-bottom: 18px;
+}
+
+    .igd-head h1 {
+        font-size: 28px;
+        font-weight: 800;
+        letter-spacing: 0.5px;
+        background: var(--grad);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        width: fit-content;
+    }
+
+    .igd-head p {
+        margin-top: 6px;
+        font-size: 15px;
+    }
+
+.igd-choose-title {
+    margin-bottom: 10px;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--text-bright);
+}
+
+.igd-choices {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 26px;
+}
+
+.igd-choice {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    column-gap: 10px;
+    align-items: center;
+    padding: 12px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    text-decoration: none;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+    .igd-choice:hover {
+        border-color: var(--accent);
+        box-shadow: var(--glow-sm);
+    }
+
+    .igd-choice strong {
+        font-size: 15px;
+        color: var(--accent);
+    }
+
+    .igd-choice span:last-child {
+        grid-column: 2;
+        font-size: 13px;
+        color: var(--text-dim);
+    }
+
+.igd-choice-icon {
+    grid-row: span 2;
+    font-size: 24px;
+}
+
+.igd-sec {
+    scroll-margin-top: 12px;
+    margin-bottom: 22px;
+    padding: 18px 20px;
+    background: linear-gradient(180deg, var(--panel-a), var(--panel-b));
+    border: 1px solid var(--panel-line);
+    border-radius: 12px;
+}
+
+    .igd-sec > h2 {
+        font-size: 21px;
+        font-weight: 800;
+        color: var(--text-bright);
+        line-height: 1.3;
+    }
+
+    .igd-sec p,
+    .igd-sec li {
+        font-size: 14px;
+    }
+
+    .igd-sec strong {
+        color: var(--text-bright);
+    }
+
+    .igd-sec a:not(.btn) {
+        color: var(--accent);
+    }
+
+    .igd-sec code {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        padding: 1px 5px;
+        border-radius: 4px;
+        background: var(--bg4);
+        color: var(--text-bright);
+        overflow-wrap: anywhere;
+    }
+
+    .igd-sec p + p {
+        margin-top: 8px;
+    }
+
+.igd-lead {
+    margin-top: 6px;
+    color: var(--text);
+}
+
+.igd-part {
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid var(--line-soft);
+}
+
+    .igd-part h3 {
+        margin-bottom: 8px;
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--accent);
+    }
+
+.igd-need {
+    margin-top: 12px;
+    padding: 10px 14px;
+    background: var(--bg3);
+    border-radius: 8px;
+    font-size: 14px;
+}
+
+    .igd-need ul {
+        margin: 4px 0 0 18px;
+    }
+
+.igd-steps {
+    list-style: none;
+    counter-reset: igd;
+    margin-top: 10px;
+}
+
+    .igd-steps > li {
+        position: relative;
+        counter-increment: igd;
+        padding-left: 36px;
+        margin-bottom: 12px;
+    }
+
+        .igd-steps > li::before {
+            content: counter(igd);
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 24px;
+            height: 24px;
+            display: grid;
+            place-items: center;
+            border: 2px solid var(--accent);
+            border-radius: 50%;
+            font-weight: 800;
+            font-size: 12px;
+            color: var(--accent);
+        }
+
+    .igd-steps ul {
+        margin: 4px 0 0 18px;
+    }
+
+.igd-list {
+    margin: 8px 0 0 18px;
+}
+
+    .igd-list > li {
+        margin-bottom: 6px;
+    }
+
+.igd-says {
+    color: var(--text-bright);
+    font-style: italic;
+}
+
+.igd-box {
+    margin-top: 12px;
+    padding: 10px 14px;
+    border-left: 3px solid var(--accent-2);
+    border-radius: 0 8px 8px 0;
+    background: var(--bg3);
+    font-size: 14px;
+}
+
+    .igd-box > strong {
+        display: block;
+        margin-bottom: 2px;
+    }
+
+.igd-tip {
+    border-left-color: var(--good);
+}
+
+.igd-warn {
+    border-left-color: var(--gold);
+}
+
+.igd-again {
+    border-left-color: var(--accent);
+}
+
+.igd-dl {
+    display: inline-flex;
+    margin: 4px 0 6px;
+    text-decoration: none;
+}
+
+.igd-code {
+    margin-top: 6px;
+    padding: 8px 10px;
+    background: var(--bg4);
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-bright);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    user-select: all;
+}
+
+.igd-table-wrap {
+    margin-top: 12px;
+}
+
+.igd-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+    .igd-table th,
+    .igd-table td {
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--line-soft);
+        text-align: left;
+        vertical-align: top;
+    }
+
+    .igd-table th {
+        color: var(--text-bright);
+        background: var(--bg3);
+    }
+
+    .igd-table td:first-child {
+        width: 42%;
+    }
+
+.igd-top {
+    display: block;
+    margin: 16px 0 0 auto;
+    padding: 4px 0;
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+    .igd-top:hover {
+        color: var(--accent);
+    }
+
+@media (max-width: 640px) {
+    .igd-choices {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .igd-sec {
+        padding: 14px;
+    }
+
+        .igd-sec > h2 {
+            font-size: 18px;
+        }
+
+    .igd-head h1 {
+        font-size: 24px;
+    }
+
+    /* The message table stacks: each message over what to do. */
+    .igd-table thead {
+        display: none;
+    }
+
+    .igd-table tr,
+    .igd-table td {
+        display: block;
+        width: auto;
+    }
+
+    .igd-table td:first-child {
+        width: auto;
+        padding-bottom: 2px;
+        border-bottom: none;
+    }
+
+    .igd-table td:last-child {
+        padding-top: 2px;
+        color: var(--text-dim);
+    }
 }

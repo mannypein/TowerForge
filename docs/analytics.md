@@ -15,7 +15,7 @@ server. Set up 2026-10-16 with Umami v3.4.0.
   that, tab views were sent by hand as `/<tab id>` (`/whatif`, `/runcoins`,
   `/uw`…), so older stats use those names; the old names still open their tabs.
 - **Events**: `Import game data` (and `(PDF)` / `(emulator)`) when a game
-  export imports; `Emulator link …` when Get from emulator or phone fails; `Link download` (the setup dialog's download) and `Link phone: adb / pair / connect / forget` (`… failed` when it didn't work, 2026-10-23);
+  export imports; `Emulator link …` when Get from emulator or phone fails; `Link download` (the setup dialog's download; `Link download (Android)` for the Android app there, and `Link download (guide)` / `Link download (Android, guide)` from the Import Guide, 2026-10-23) and `Link phone: adb / pair / connect / forget` (`… failed` when it didn't work, 2026-10-23);
   `Auto import on` / `off`; `Theme` with the theme picked (header picker,
   since 2026-10-22); `Open Discord` (the header's Discord link, since
   v1.26.1); `Copy creator code` and `Open creator link` on Creator Codes.

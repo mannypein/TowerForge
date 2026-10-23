@@ -91,6 +91,23 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
+# ── Step 2c: TowerForge Link for Android into the site's downloads ─
+# Signed with the key in %USERPROFILE%\.towerforge (never in the repo):
+# Android only installs an update signed with the same key, so a lost
+# key means players reinstall. Restore that folder from its backup.
+Write-Host "`n[2c/6] Building TowerForge Link for Android (downloads/TowerForgeLink.apk)..." -ForegroundColor Yellow
+if (-not (Test-Path (Join-Path $env:USERPROFILE '.towerforge\link-android-signing.properties'))) {
+    Write-Host "No Android signing key in $env:USERPROFILE\.towerforge - restore it from the backup (TowerForge.Link.Android\build.ps1)." -ForegroundColor Red
+    Undo-Version
+    exit 1
+}
+powershell -ExecutionPolicy Bypass -File TowerForge.Link.Android/build.ps1 -Out towerforge.client/dist/downloads/TowerForgeLink.apk
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path towerforge.client/dist/downloads/TowerForgeLink.apk)) {
+    Write-Host "TowerForge Link for Android build failed!" -ForegroundColor Red
+    Undo-Version
+    exit 1
+}
+
 # ── Step 3: Prepare staging dirs on VPS ─────────────────────
 Write-Host "`n[3/6] Preparing staging directories..." -ForegroundColor Yellow
 ssh $VPS_HOST "rm -rf $STAGING && mkdir -p $STAGING/client $STAGING/server"

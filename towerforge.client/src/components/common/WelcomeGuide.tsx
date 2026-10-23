@@ -7,6 +7,7 @@
 //  so its saved stats don't flash the guide.
 //  The game's export (29.1.3+): Settings → External Tools Export, saved
 //  as tool_export.json in the game's app folder (docs/towerforge-link.md).
+//  Each way in links to its part of the Import Guide.
 // ============================================================
 
 import { useState } from 'react';
@@ -16,6 +17,7 @@ import { useAccountStore } from '../../store/useAccountStore';
 import { TAB_PATHS } from '../../routes';
 import type { TabName } from '../../types/gameTypes';
 import DiscordLink from './DiscordLink';
+import { openGuide } from '../../guideNav';
 
 const KEY = 'tc_welcome';
 
@@ -54,6 +56,12 @@ export default function WelcomeGuide({ onImportFile, onEmulator, emulatorBusy }:
         e.preventDefault();
         setActiveTab(tab);
     };
+    const guide = (part: string) => (e: MouseEvent) => {
+        if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+        e.preventDefault();
+        openGuide(part);
+    };
+    const guideLink = (part: string, text: string) => <a href={`${TAB_PATHS.importguide}#${part}`} onClick={guide(part)}>{text}</a>;
 
     return (
         <section className="wlc" aria-labelledby="wlc-title">
@@ -88,21 +96,24 @@ export default function WelcomeGuide({ onImportFile, onEmulator, emulatorBusy }:
                     <span className="wlc-way">
                         <em>On a PC with an emulator, or an Android phone on the same Wi-Fi:</em> Get from emulator or
                         phone reads it for you (TowerForge Link, a one-time setup), and Auto import keeps the site up to
-                        date while you play.
+                        date while you play. {guideLink('emulator', 'How to set it up')}
                     </span>
                     <button className="btn btn-dim lnk-btn wlc-btn" onClick={onEmulator} disabled={emulatorBusy}>
                         🖥 Get from emulator or phone
                     </button>
                     <span className="wlc-way">
-                        <em>On an Android phone only:</em> the game keeps the file in its own app folder
-                        (<code>Android/data/com.TechTreeGames.TheTower/files</code>), which most apps can&apos;t open. If
-                        your file manager can, copy <code>tool_export.json</code> to Downloads and import it in the next
-                        step.
+                        <em>On an Android phone, no PC:</em> the game keeps the file in its own app folder, which other
+                        apps can&apos;t open. TowerForge Link for Android (with the free Shizuku app) brings it into the
+                        site on the phone — a one-time setup. {guideLink('android-phone', 'Step-by-step guide')}
                     </span>
                     <span className="wlc-way">
                         <em>iPhone:</em> iOS keeps the file to itself, but a backup of the iPhone to a Windows PC includes
-                        it — TowerForge Link reads it from there (Get from emulator or phone → iPhone, on the PC). On the
-                        iPhone alone it can&apos;t be imported yet.
+                        it — TowerForge Link reads it from there. On the iPhone alone it can&apos;t be imported
+                        yet. {guideLink('iphone', 'How it works')}
+                    </span>
+                    <span className="wlc-way">
+                        Stuck, or not sure which is you? The {guideLink('igd-top', 'Import Guide')} walks through every way,
+                        screen by screen.
                     </span>
                 </li>
                 <li>

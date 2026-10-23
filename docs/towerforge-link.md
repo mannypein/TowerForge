@@ -1,4 +1,4 @@
-# TowerForge Link — game data straight from an emulator or Android phone
+# TowerForge Link — game data straight from an emulator, Android phone or iPhone backup
 
 Players shouldn't have to hunt for `tool_export.json`. TowerForge Link is a
 small Windows helper (`TowerForge.Link/`, .NET 8, one self-contained exe)
@@ -129,7 +129,7 @@ BlueStacks notes (5.22):
 ## Building and shipping
 
 - `dotnet publish TowerForge.Link -c Release -o <folder>` → `TowerForgeLink.exe`
-  (~10.7 MB, trimmed, single file, no .NET install needed).
+  (~11.8 MB with Link 0.3, trimmed, single file, no .NET install needed).
 - `deploy.ps1` publishes it into `towerforge.client/dist/downloads/` after the
   site build, so it ships with every deploy.
 - Version: `<Version>` in `TowerForge.Link.csproj` (shown in its window and
@@ -273,48 +273,99 @@ iOS Shortcut ("When The Tower is closed") could even pass it along. (The
 keys would also expose `playerInfo.dat`; a share button exposes only the
 export.)
 
-## Phone only, no PC: TowerForge Link for Android (planned)
+## Phone only, no PC: TowerForge Link for Android (2026-10-23, app 0.1.0)
 
 Most visitors are on phones (61%, 2026-10-16 → 10-23; only 6% of them
-imported, against 20% on PCs). For Android players without a PC: a small
-Android app that does on the phone what Link does on a PC — a web page alone
-can't open `Android/data`.
+imported, against 20% on PCs). For Android players without a PC,
+`TowerForge.Link.Android/` (Java, no AndroidX, ~110 KB APK) does on the
+phone what Link does on a PC — a web page alone can't open `Android/data`.
+The player-facing steps, screen by screen, are the Import Guide tab
+(`/import-guide#android-phone`, `components/tabs/ImportGuideTab.tsx`).
 
-How it would work:
-1. **Reading the file — Shizuku.** Shizuku (free, on Google Play) runs a
-   service with adb's shell rights, started on the phone itself through
-   Wireless debugging (Android 11+; its own pairing notification, no PC).
-   The app binds a Shizuku *UserService* that reads
-   `/storage/emulated/0/Android/data/com.TechTreeGames.TheTower/files/tool_export.json`
-   (and its time) — adb's shell user can, which is why Link works.
-   After each phone restart the player opens Shizuku and taps Start.
-   Later, the app could do the wireless-debugging pairing itself (as LADB
-   does; libadb-android, Apache 2.0) and drop the Shizuku step.
-2. **Talking to the site — the same API as Link.** A foreground service
-   ("TowerForge Link is running" notification) answering
-   `http://127.0.0.1:47821/status` and `/export?newerThan=` with the same
-   origin and Host checks. Chrome on Android lets an https page fetch
-   `localhost` (it asks once, like on a PC).
-3. **The site on the phone.** The emulator/phone button and Auto import are
-   hidden on touch screens today; on a phone the site would ask
-   `127.0.0.1:47821/status` once and show them when the app answers. Auto
-   import already checks again the moment the page becomes visible, so
-   switching from the game to the browser brings the newest data in.
-4. **Shipping.** First an APK on `towerforge.net/downloads` (the phone asks
-   to allow installs from the browser); Google Play later (developer
+How it works:
+1. **Reading the file — Shizuku** (free, Google Play, `moe.shizuku.privileged.api`;
+   API `dev.rikka.shizuku:api`/`provider` 13.1.5). Shizuku runs a service
+   with adb's shell rights, started on the phone through Wireless debugging
+   (Android 11+; it pairs through its own notification, no PC). The app
+   binds a Shizuku *UserService* (`ExportReaderService`, running as the
+   shell user) through the AIDL `IExportReader`: `state()` (0 ok, 1 no game
+   folder, 2 no export, 3 unreadable), `modified()` and `open()`, which hands
+   back a read-only `ParcelFileDescriptor` of
+   `/storage/emulated/0/Android/data/com.TechTreeGames.TheTower/files/tool_export.json`.
+   `ShizukuReader` binds on the main thread and waits; a bind that never
+   answers is retried after 15 s. After each phone restart the player opens
+   Shizuku and taps Start (Wireless debugging needs Wi-Fi; no new pairing).
+2. **Talking to the site — the same API as Link.** `LinkService`, a
+   foreground service (type `specialUse`, notification "TowerForge Link is
+   on" with Stop), runs `LinkServer` on `127.0.0.1:47821`: `/status` and
+   `/export?newerThan=` with the same Origin allow list, Host check, CORS,
+   Private Network Access preflight and 204-when-not-newer as the Windows
+   Link. `/status` says `"platform":"android"` and
+   `"android":{"shizuku":"ready|not_installed|not_running|no_permission","export":"found|none|no_game|unreadable","exportModified":…}`;
+   `/export` errors are `shizuku_missing`, `shizuku_off`,
+   `shizuku_permission`, `no_game`, `no_export`, `copy_failed`, `bad_file`,
+   each with a plain message. `X-Export-Source` is "your phone".
+3. **The app's screen** (`MainActivity`, built in code, Synthwave colors) is
+   a five-step checklist that turns green as it goes: install Shizuku (Play
+   link) → start it (opens Shizuku) → Allow (Shizuku's own prompt, "Allow
+   all the time") → the export found (opens The Tower) → Start Link (asks
+   for notifications on Android 13+). Then **Open towerforge.net** opens
+   `https://towerforge.net/?link=android`.
+4. **The site on the phone.** The emulator/phone button and Auto import stay
+   hidden on touch screens unless the phone opened the site from the app
+   once: `?link=android` sets localStorage `tc_link_phone`
+   (`engine/linkClient.ts` `phoneLinkRemembered`), which adds
+   `html.tf-phone-link` and shows them. (Asking `127.0.0.1` on every phone
+   visit would make Chrome ask every phone visitor about local network
+   access, so the site doesn't.) The ⚙ setup shows the phone's steps and
+   what the app reports; "Don't show the Link buttons on this phone" forgets
+   it. A touchscreen PC whose Windows Link answers keeps the PC steps. Auto
+   import checks again the moment the page becomes visible, so switching
+   from the game to the browser brings the newest export in.
+5. **Shipping.** `deploy.ps1` builds the signed release APK into
+   `downloads/TowerForgeLink.apk` (step 2c) and stops if the signing key is
+   missing. nginx needs `ops/nginx/towerforge-types.conf` for the APK's type
+   (Debian's `mime.types` has no `apk`). Google Play later (developer
    account, review, a privacy policy page).
 
-Needs before building: the Android SDK command-line tools and a JDK on the
-build PC (a few GB; not there on 2026-10-23), a signing key kept outside the
-repo (backed up — updates need the same key), and an Android phone with The
-Tower for testing. Considered and ruled out: the Storage Access Framework
-(Android 11+ won't grant `Android/data`), "All files access" (still excludes
-`Android/data`), root.
+**Tested** (2026-10-23) on BlueStacks 5 (Android 9, x86_64) with Shizuku
+13.6.0 started through adb (`libshizuku.so`), debug and signed release
+builds: the checklist turned green step by step; through `adb forward`,
+`/status` answered `shizuku: ready, export: found`, another origin got 403,
+the preflight 204 with `Allow-Private-Network`, `?newerThan=` (future) 204,
+the full export 200 starting with `{`; with Shizuku stopped `/export` said
+`shizuku_off` (409), and after Start it re-bound by itself. Not yet tried on
+a real phone (Android 11+, Wireless debugging pairing, Doze) — owner to
+test. The site side was checked in the preview at 375 px with Link answers
+faked in the page.
+
+### Building the Android app
+
+- Toolchain (not in the repo, ~1.5 GB): `%LOCALAPPDATA%\TowerForgeBuild\`
+  — `jdk17` (Temurin 17), `android-sdk` (cmdline-tools as `latest`,
+  `platforms;android-35`, `build-tools;35.0.0`, `platform-tools`), `gradle`
+  (8.10.2). The new `sdkmanager.bat` splits arguments at `;`, so install
+  packages with `--package_file=<file>` (one per line).
+- `TowerForge.Link.Android\build.ps1` (Gradle wrapper, AGP 8.7.3,
+  compileSdk/targetSdk 35, minSdk 28): no flags → signed release APK;
+  `-Debug`; `-Out <file.apk>` copies it; `-NewKey` creates the signing key
+  once.
+- **Signing key:** `%USERPROFILE%\.towerforge\link-android.jks` and
+  `link-android-signing.properties` (created 2026-10-23; certificate
+  SHA-256 `e4c7e411…bd648f`). Never in the repo. Back the folder up:
+  Android installs an update only when it's signed with the same key.
+- Version: `versionCode` / `versionName` in `app/build.gradle` (shown in
+  `/status`).
+- Considered and ruled out: the Storage Access Framework (Android 11+ won't
+  grant `Android/data`), "All files access" (still excludes
+  `Android/data`), root. Later: the app doing the Wireless-debugging pairing
+  itself (as LADB does; libadb-android, Apache 2.0) to drop the Shizuku
+  step.
 
 ## Later
 
 - Code signing (SmartScreen warning), e.g. Azure Trusted Signing.
-- The phone-only Android app above; Link starting iPhone backups; reading
+- The Android app on Google Play; Link starting iPhone backups; reading
   encrypted iPhone backups; a Mac build of Link.
 - A "Connect phone" button using WebUSB adb in Chrome / Edge, for phones on
   USB without installing anything.

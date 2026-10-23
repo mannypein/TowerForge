@@ -4,7 +4,9 @@
 //  TowerForge Link while the page is open (engine/autoImport.ts for
 //  when; engine/linkClient.ts for Link). Off until the player turns it
 //  on; remembered per browser. Quiet: a short note when it imports, no
-//  pop-ups. Waits for the account to load first, so a signed-in
+//  pop-ups. Checks again the moment the page comes back into view, so on
+//  a phone (TowerForge Link for Android) switching from the game to the
+//  browser brings the newest export in. Waits for the account to load first, so a signed-in
 //  account's saved stats don't land on top of a fresh import.
 // ============================================================
 
@@ -54,7 +56,19 @@ export default function AutoImport({ onImport, onNeedsLink }: Props) {
         let stopped = false;
         let timer: ReturnType<typeof setTimeout> | undefined;
         let firstTry = true;
+        let busy = false;
         const tick = async () => {
+            if (busy) return;
+            busy = true;
+            clearTimeout(timer);
+            try {
+                await check();
+            } finally {
+                busy = false;
+                if (!stopped) timer = setTimeout(() => void tick(), AUTO_POLL_MS);
+            }
+        };
+        const check = async () => {
             if (document.visibilityState === 'visible') {
                 const s = load();
                 const now = Date.now();
@@ -88,10 +102,11 @@ export default function AutoImport({ onImport, onNeedsLink }: Props) {
                 }
                 firstTry = false;
             }
-            if (!stopped) timer = setTimeout(() => void tick(), AUTO_POLL_MS);
         };
+        const onShow = () => { if (document.visibilityState === 'visible') void tick(); };
+        document.addEventListener('visibilitychange', onShow);
         void tick();
-        return () => { stopped = true; clearTimeout(timer); };
+        return () => { stopped = true; clearTimeout(timer); document.removeEventListener('visibilitychange', onShow); };
     }, [on, accountReady]);
 
     // The note fades after a few seconds.

@@ -26,6 +26,7 @@ describe('tab addresses', () => {
         expect(tabFromPath('/whatif')).toBe('whatif');
         expect(tabFromPath('/runcoins')).toBe('runcoins');
         expect(tabFromPath('/creator-codes')).toBe('creators');
+        expect(tabFromPath('/import')).toBe('importguide');
         expect(tabFromPath('/nope')).toBeNull();
         expect(tabFromPath('/creators/extra')).toBeNull();
     });

@@ -1,0 +1,17 @@
+// TowerForge Link for Android — the phone-only import (docs/towerforge-link.md).
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+rootProject.name = 'TowerForgeLinkAndroid'
+include ':app'

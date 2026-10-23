@@ -6,17 +6,23 @@
 //  Android phone over Wi-Fi (Google's adb, pairing with the code on
 //  the phone's Wireless debugging screen), or an iPhone backed up to
 //  the PC, which Link reads the export out of (engine/linkClient.ts;
-//  Link 0.3+).
+//  Link 0.3+). On a phone it's TowerForge Link for Android instead:
+//  Shizuku, the app, and what the app reports (Shizuku, the export).
+//  Every step links to the full guide (the Import Guide tab).
 //  Checks what Link found every few seconds while open.
 // ============================================================
 
 import { useEffect, useState } from 'react';
-import type { FormEvent } from 'react';
-import { LINK_DOWNLOAD, linkPhone, linkStatus } from '../engine/linkClient';
+import type { FormEvent, ReactNode } from 'react';
+import { forgetPhoneLink, LINK_DOWNLOAD, LINK_DOWNLOAD_ANDROID, linkPhone, linkStatus } from '../engine/linkClient';
+import { TAB_PATHS } from '../routes';
+import { openGuide } from '../guideNav';
 import type { LinkAction, LinkStatus } from '../engine/linkClient';
 import { trackEvent } from '../analytics';
 
 const SOURCE = 'https://github.com/mannypein/TowerForge/tree/main/TowerForge.Link';
+const SHIZUKU = 'https://play.google.com/store/apps/details?id=moe.shizuku.privileged.api';
+const GUIDE = TAB_PATHS.importguide;
 const POLL_MS = 4000;
 
 interface Props {
@@ -32,7 +38,30 @@ const when = (unix: number) => new Date(unix * 1000).toLocaleString(undefined, {
 type Note = { ok: boolean; text: string } | null;
 
 // Link answered, but too old for phones (0.2 and before have no `phone`).
-const oldLink = (s: LinkStatus | null | undefined) => !!s && !s.phone;
+const oldLink = (s: LinkStatus | null | undefined) => !!s && !s.phone && s.platform !== 'android';
+
+// A phone or tablet: the Android app's steps instead of the PC's (unless
+// it's a touchscreen PC whose TowerForge Link answered).
+const touchDevice = () => window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+
+const SHIZUKU_SAYS: Record<NonNullable<LinkStatus['android']>['shizuku'], string> = {
+    ready: 'Shizuku is running and TowerForge Link may use it.',
+    not_installed: 'Shizuku isn’t installed — open TowerForge Link and follow step 1.',
+    not_running: 'Shizuku isn’t running (it stops when the phone restarts) — open Shizuku and tap Start.',
+    no_permission: 'TowerForge Link isn’t allowed in Shizuku yet — open TowerForge Link and tap Allow.',
+};
+
+// A plain click opens the Import Guide here, at that part; a modified one, a new tab.
+function GuideLink({ part, onClose, children }: { part: string; onClose: () => void; children: ReactNode }) {
+    return (
+        <a href={`${GUIDE}#${part}`} onClick={e => {
+            if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+            e.preventDefault();
+            onClose();
+            openGuide(part);
+        }}>{children}</a>
+    );
+}
 
 export default function LinkModal({ problem, busy, onRetry, onClose }: Props) {
     // undefined: not asked yet · null: Link isn't running.
@@ -70,6 +99,8 @@ export default function LinkModal({ problem, busy, onRetry, onClose }: Props) {
     const running = !!status;
     const phone = status?.phone;
     const backups = status?.iphoneBackups ?? [];
+    const onPhone = !(status && status.platform !== 'android') && touchDevice();
+    const app = status?.platform === 'android' ? status.android : undefined;
 
     const act = async (label: string, action: Parameters<typeof linkPhone>[0], params?: Record<string, string>) => {
         setWorking(label);
@@ -103,13 +134,27 @@ export default function LinkModal({ problem, busy, onRetry, onClose }: Props) {
                 <div className="lnk-body">
                     {problem && <p className="lnk-problem">{problem}</p>}
                     <p className="lnk-lead">
-                        TowerForge Link is a small Windows program that copies the game&apos;s data export from an emulator
-                        on this PC — or an Android phone on the same Wi-Fi — straight into this page. No hunting for the file.
+                        {onPhone
+                            ? <>TowerForge Link for Android brings the game&apos;s data export into this page on this phone — no
+                                hunting for the file. It needs two free apps, set up once.</>
+                            : <>TowerForge Link is a small Windows program that copies the game&apos;s data export from an emulator
+                                on this PC — or an Android phone on the same Wi-Fi, or an iPhone backup — straight into this page.
+                                No hunting for the file.</>}
+                    </p>
+                    <p className="lnk-sub lnk-first">
+                        <GuideLink onClose={onClose} part={onPhone ? 'android-phone' : 'emulator'}>📖 The full step-by-step guide</GuideLink>
+                        {' '}shows every screen and what to do when something goes wrong.
                     </p>
 
                     <div className={`lnk-status ${running ? 'on' : ''}`} role="status">
-                        {status === undefined ? 'Looking for TowerForge Link on this PC…'
-                            : !status ? 'TowerForge Link isn’t running on this PC yet — set it up below.'
+                        {status === undefined ? `Looking for TowerForge Link on this ${onPhone ? 'phone' : 'PC'}…`
+                            : !status ? `TowerForge Link isn’t running on this ${onPhone ? 'phone' : 'PC'} yet — set it up below.`
+                            : app ? <>
+                                TowerForge Link for Android {status.version} is running · {SHIZUKU_SAYS[app.shizuku]}
+                                {app.export === 'found' && app.exportModified ? ` Your export is from ${when(app.exportModified)}.` : ''}
+                                {app.export === 'none' ? ' The game hasn’t exported yet: Settings → External Tools Export.' : ''}
+                                {app.export === 'no_game' ? ' The Tower isn’t on this phone, or hasn’t been opened yet.' : ''}
+                            </>
                             : <>
                                 TowerForge Link {status.version} is running
                                 {status.emulators.length > 0 && <> · found {status.emulators.map(e => `${e.name}${e.running ? ' (running)' : ''}`).join(', ')}</>}
@@ -118,7 +163,48 @@ export default function LinkModal({ problem, busy, onRetry, onClose }: Props) {
                             </>}
                     </div>
 
-                    {!running && (
+                    {onPhone ? (
+                        <section className="lnk-sec">
+                            {!app && <>
+                                <h3>Set up TowerForge Link for Android (once)</h3>
+                                <ol className="lnk-steps">
+                                    <li>
+                                        <strong>Install Shizuku</strong> (free) and start it with <em>Start via Wireless debugging</em>.
+                                        <a className="btn btn-accent lnk-block" href={SHIZUKU} target="_blank" rel="noopener noreferrer">Shizuku on Google Play</a>
+                                        <span className="lnk-sub">
+                                            Shizuku lends TowerForge Link the access a computer would have — Android hides the
+                                            game&apos;s export from other apps. Starting it the first time takes a pairing code;
+                                            the <GuideLink onClose={onClose} part="android-phone">guide</GuideLink> shows every screen.
+                                        </span>
+                                    </li>
+                                    <li>
+                                        <strong>Install TowerForge Link for Android:</strong>
+                                        <a className="btn btn-gold lnk-block" href={LINK_DOWNLOAD_ANDROID} download onClick={() => trackEvent('Link download (Android)')}>
+                                            ⬇ Download the app
+                                        </a>
+                                        <span className="lnk-sub">
+                                            Open the downloaded file and tap <em>Install</em>. Android asks to let your browser install
+                                            apps the first time (Settings → <em>Allow from this source</em>), and Google Play Protect may
+                                            say it doesn&apos;t know the app: tap <em>More details → Install anyway</em>.
+                                        </span>
+                                    </li>
+                                    <li>
+                                        <strong>Open TowerForge Link</strong> and do its five steps; then tap <em>Open towerforge.net</em> in it.
+                                    </li>
+                                </ol>
+                            </>}
+                            {app && app.shizuku === 'ready' && app.export === 'found' && (
+                                <p className="lnk-done">All set — tap <em>Try again</em>, or turn on <em>⟳ Auto import</em>.</p>
+                            )}
+                            <p className="lnk-sub">
+                                <strong>iPhone:</strong> iOS keeps the game&apos;s files to itself, so an iPhone needs a Windows PC: back
+                                it up there and TowerForge Link reads the export from the backup (<GuideLink onClose={onClose} part="iphone">guide</GuideLink>).
+                            </p>
+                            <button className="lnk-forget" onClick={() => { forgetPhoneLink(); onClose(); }}>
+                                Don&apos;t show the Link buttons on this phone
+                            </button>
+                        </section>
+                    ) : !running && (
                         <section className="lnk-sec">
                             <h3>Set up TowerForge Link (once)</h3>
                             <ol className="lnk-steps">
@@ -126,7 +212,7 @@ export default function LinkModal({ problem, busy, onRetry, onClose }: Props) {
                                     <a className="btn btn-gold" href={LINK_DOWNLOAD} download onClick={() => trackEvent('Link download')}>
                                         ⬇ Download TowerForge Link
                                     </a>
-                                    <span className="lnk-sub">Windows 10 or 11, 11 MB, nothing to install.</span>
+                                    <span className="lnk-sub">Windows 10 or 11, 12 MB, nothing to install.</span>
                                 </li>
                                 <li>
                                     Run it. Windows will probably say <em>“Windows protected your PC”</em>: click <em>More info</em>,
@@ -153,7 +239,7 @@ export default function LinkModal({ problem, busy, onRetry, onClose }: Props) {
                         </p>
                     )}
 
-                    <div className="lnk-tabs" role="tablist">
+                    {!onPhone && <div className="lnk-tabs" role="tablist">
                         <button role="tab" aria-selected={shown === 'emulator'} className={`lnk-tab ${shown === 'emulator' ? 'on' : ''}`} onClick={() => setWhere('emulator')}>
                             🖥 Emulator on this PC
                         </button>
@@ -163,9 +249,9 @@ export default function LinkModal({ problem, busy, onRetry, onClose }: Props) {
                         <button role="tab" aria-selected={shown === 'iphone'} className={`lnk-tab ${shown === 'iphone' ? 'on' : ''}`} onClick={() => setWhere('iphone')}>
                              🍎 iPhone
                         </button>
-                    </div>
+                    </div>}
 
-                    {shown === 'iphone' ? (
+                    {onPhone ? null : shown === 'iphone' ? (
                         <section className="lnk-sec">
                             <p className="lnk-sub lnk-first">
                                 iOS keeps the game&apos;s files to itself — no app or browser on the iPhone can open them — but
@@ -230,8 +316,9 @@ export default function LinkModal({ problem, busy, onRetry, onClose }: Props) {
                         <section className="lnk-sec">
                             <p className="lnk-sub lnk-first">
                                 For Android 11 or newer, with the phone and this PC on the same Wi-Fi. Link reads the export over
-                                the phone&apos;s Wireless debugging — the same way it reads an emulator. iPhones don&apos;t let
-                                other apps or computers reach the game&apos;s export, so they can&apos;t be read yet.
+                                the phone&apos;s Wireless debugging — the same way it reads an emulator. <strong>No PC while you
+                                play?</strong> TowerForge Link for Android does it on the phone itself:{' '}
+                                <GuideLink onClose={onClose} part="android-phone">see the guide</GuideLink>.
                             </p>
                             <ol className="lnk-steps">
                                 <li>
@@ -252,7 +339,7 @@ export default function LinkModal({ problem, busy, onRetry, onClose }: Props) {
                                                 onClick={() => void act('adb', 'adb')}>
                                                 {working === 'adb' ? '⏳ Downloading…' : '⬇ Get Google’s adb'}
                                             </button>
-                                            <span className="lnk-sub">About 7 MB, straight from Google (Android SDK Platform-Tools), kept in Link&apos;s folder.</span>
+                                            <span className="lnk-sub">About 8 MB, straight from Google (Android SDK Platform-Tools), kept in Link&apos;s folder.</span>
                                         </>
                                     )}
                                 </li>
