@@ -12,6 +12,7 @@ each deploy shipped; the site said v1.0.0 until then. Times are US Eastern.
 
 | Version | Deployed | What changed |
 |---|---|---|
+| 1.26.2 | 2026-10-23 08:25 | Fixes in Ask AI (preview): upgrade questions about tournaments are scored on your tournament runs; a budget you name ("about to get 1500 stones") gets a plan that fits it; gains read in waves instead of a compounded percentage. Optimizer: assist efficiency rows read in % ("14% → 70%"), and an assist's Enemy Health Level Skip substat counts as skip in waves. |
 | 1.26.1 | 2026-10-22 16:05 | **Join our Discord**: a Discord button in the header (the TowerForge server). Phones: the header's buttons keep their labels on one line. |
 | 1.26.0 | 2026-10-22 15:35 | **Themes**: a 🎨 Theme button in the header with eight color themes (Synthwave, Neon Mint, Ember, Acid, Crimson, Ultraviolet, Stealth, Royal Gold), remembered per browser; Modules, Bots and share cards follow the theme. Glowing logo, tabs and buttons. **Easier to read**: clearer fonts (Exo 2, JetBrains Mono for numbers), nothing tiny, brighter secondary text. Phones: the sections sit in two rows; long table lines wrap. |
 | 1.25.0 | 2026-10-22 13:20 | **Modules** like the game's screen: your module currencies (Reroll Shards and each type's shards, imported) and **Inventory / Assist** tabs — Assist shows each assist slot's tier, Main and Substat efficiency (stones and lab), and what the next upgrades cost. Shared module cards show each assist's tier and efficiencies. |
