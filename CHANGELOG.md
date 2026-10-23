@@ -12,6 +12,7 @@ each deploy shipped; the site said v1.0.0 until then. Times are US Eastern.
 
 | Version | Deployed | What changed |
 |---|---|---|
+| 1.27.0 | 2026-10-23 12:25 | **Welcome guide** on the home page for new visitors: what TowerForge does and how to get your game data in (Settings → External Tools Export, then Get from emulator or Import Game Data). **Link previews**: a towerforge.net link shows a card in Discord, Reddit and X; a sitemap and robots.txt for search engines. Profile's tier list goes to T24. |
 | 1.26.2 | 2026-10-23 08:25 | Fixes in Ask AI (preview): upgrade questions about tournaments are scored on your tournament runs; a budget you name ("about to get 1500 stones") gets a plan that fits it; gains read in waves instead of a compounded percentage. Optimizer: assist efficiency rows read in % ("14% → 70%"), and an assist's Enemy Health Level Skip substat counts as skip in waves. |
 | 1.26.1 | 2026-10-22 16:05 | **Join our Discord**: a Discord button in the header (the TowerForge server). Phones: the header's buttons keep their labels on one line. |
 | 1.26.0 | 2026-10-22 15:35 | **Themes**: a 🎨 Theme button in the header with eight color themes (Synthwave, Neon Mint, Ember, Acid, Crimson, Ultraviolet, Stealth, Royal Gold), remembered per browser; Modules, Bots and share cards follow the theme. Glowing logo, tabs and buttons. **Easier to read**: clearer fonts (Exo 2, JetBrains Mono for numbers), nothing tiny, brighter secondary text. Phones: the sections sit in two rows; long table lines wrap. |
