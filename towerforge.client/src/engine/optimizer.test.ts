@@ -247,6 +247,25 @@ describe('Glass Cannon workshop and labs', () => {
         expect(skip()!.skipPoints).toBeUndefined();
     });
 
+    // An assist module's substats work at Substat Efficiency, Enemy Health
+    // Level Skip among them: each 1% of efficiency adds 1% of the substat.
+    it('counts Enemy Health Level Skip from an assist module\'s substat (waves)', () => {
+        const snap = calibrated(s => {
+            s.edpsMode = 'waves';
+            s.skipWorth = 0.6;
+            s.moduleState.library = [{ id: 'gen', name: 'Made-up Generator', type: 'generator', rarity: 'A',
+                subs: [{ effect: 'Enemy HP Level Skip', rar: 'Ancestral', val: '8%' }] }];
+            const none = { main: '', assist: '' };
+            s.moduleState.loadouts = [{ id: 'l', name: 'farm', slots: { cannon: none, armor: none, generator: { main: '', assist: 'gen' }, core: none } }];
+            s.moduleState.assistData = { generator: { rarity: 'Epic', multEff: 1, subEff: 14 } };
+            s.modBonuses = readActiveModuleBonuses(s.moduleState, s.perkData, s.labData, s.cardData, s.modBonuses.run);
+        });
+        const step = buildCandidates(snap, 'assist').find(c => c.label === 'Generator Assist — Substat Eff')!;
+        // 14% → 15% of 8%: +0.08 points, at 0.6 a point.
+        expect(step.skipPoints).toBeCloseTo(0.08, 9);
+        expect(step.scorePct).toBeCloseTo((Math.exp(0.6 * 0.08) - 1) * 100, 6);
+    });
+
     it('counts enemy health labs by how often that enemy ends a run (waves)', () => {
         const lab = (killers: OptimizerSnapshot['killers'], name: string) => buildCandidates(calibrated(s => {
             s.edpsMode = 'waves';
@@ -280,6 +299,14 @@ describe('Glass Cannon workshop and labs', () => {
         ]);
         expect(rows[0].scorePct).toBeCloseTo((1.01 * 1.02 - 1) * 100, 9);
         expect(rows[0].subLabel).toBe('Lv 0 → 20');
+    });
+
+    it('reads merged assist efficiency steps in %', () => {
+        const step = (from: number) => ({
+            category: 'assist' as const, label: 'Generator Assist — Substat Eff', subLabel: '', fromLv: from, toLv: from + 1,
+            cost: 54, costType: 'stones' as const, scorePct: 1, scorePerCost: 1 / 54,
+        });
+        expect(mergeRepeats([step(14), step(15)])[0].subLabel).toBe('14% → 16%');
     });
 
     it('reads a path in blocks, one row per stat in each', () => {

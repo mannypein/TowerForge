@@ -25,6 +25,7 @@ import {
     accountSummary, bestUpgrades, levelsOf, runsReport, tierOutlook, tournamentOutlook, whatIfChanges,
 } from './aiTools';
 import type { AiAccount, AiChangeAsk, AiCurrency, AiRunKind, AiTourneySettings, ToolResult } from './aiTools';
+import { budgetIn } from './aiTools';
 import { TAB_PATHS } from '../routes';
 import { notesText, searchNotes } from './aiKnowledge';
 
@@ -108,6 +109,7 @@ interface Route {
     search: string;
     runs: AiRunKind;
     tier: number;
+    budget: number;
 }
 
 const ROUTE_SCHEMA = JSON.stringify({
@@ -127,13 +129,14 @@ const ROUTE_SCHEMA = JSON.stringify({
         search: { type: 'string' },
         runs: { type: 'string', enum: ['any', 'campaign', 'tournament'] },
         tier: { type: 'integer' },
+        budget: { type: 'number' },
     },
-    required: ['tool', 'currency', 'goal', 'changes', 'search', 'runs', 'tier'],
+    required: ['tool', 'currency', 'goal', 'changes', 'search', 'runs', 'tier', 'budget'],
 });
 
 const ROUTE_PROMPT = `You pick the data that answers a player's question about their account in the mobile game The Tower (idle tower defense). Reply with JSON only.
 tool:
-- "upgrades": what to upgrade or spend on next. currency: stones (UWs, UW+, card mastery, assist modules), coins (workshop, enhancements), research (labs), shards (module slots), medals (bots), gems (card slots), bits (Guardian chips), or any. goal: waves, damage, coins, survival, or default.
+- "upgrades": what to upgrade or spend on next. currency: stones (UWs, UW+, card mastery, assist modules), coins (workshop, enhancements), research (labs), shards (module slots), medals (bots), gems (card slots), bits (Guardian chips), or any. goal: waves, damage, coins, survival, or default. runs: tournament when they ask about tournaments, campaign for farming or tiers, else any. budget: how much of that currency they say they have or are about to get (1500 for "I'm about to get 1500 stones"), else 0.
 - "what_if": what specific upgrades would do (waves, damage, coins, cost). changes: each upgrade in the player's words and the level: "max", "+N" (N more levels) or a level number.
 - "levels": the player's current level of specific upgrades. search: the upgrade names.
 - "runs": the player's past runs: waves, what killed them, coins, damage by source (which UW or weapon did the damage), campaign against tournaments. runs: campaign, tournament or any.
@@ -143,33 +146,38 @@ tool:
 - "none": greetings, or questions the account overview answers (tier, waves, what they own).
 currency is what they want to spend; "any" when they name more than one (coins and stones) or none.
 goal is "coins" whenever they want more coins, "waves" to push further, "survival" to survive longer.
-Unused fields: currency "any", goal "default", changes [], search "", runs "any", tier 0.
+Unused fields: currency "any", goal "default", changes [], search "", runs "any", tier 0, budget 0.
 Examples:
-"what should I spend my stones on" → {"tool":"upgrades","currency":"stones","goal":"default","changes":[],"search":"","runs":"any","tier":0}
-"cheapest way to get more coins with coins and stones" → {"tool":"upgrades","currency":"any","goal":"coins","changes":[],"search":"","runs":"any","tier":0}
-"how many waves would maxing CL and CF+ get me" → {"tool":"what_if","currency":"any","goal":"default","changes":[{"upgrade":"CL","level":"max"},{"upgrade":"CF+","level":"max"}],"search":"","runs":"any","tier":0}
-"is 10 more levels of the damage lab worth it" → {"tool":"what_if","currency":"any","goal":"default","changes":[{"upgrade":"damage lab","level":"+10"}],"search":"","runs":"any","tier":0}
-"why is my chain lightning weak in tournaments" → {"tool":"runs","currency":"any","goal":"default","changes":[],"search":"","runs":"tournament","tier":0}
-"how far would I get farming T19" → {"tool":"tier","currency":"any","goal":"default","changes":[],"search":"","runs":"any","tier":19}
-"how does Fast's Ultimate work" → {"tool":"guide","currency":"any","goal":"default","changes":[],"search":"Fast's Ultimate","runs":"any","tier":0}`;
+"what should I spend my stones on" → {"tool":"upgrades","currency":"stones","goal":"default","changes":[],"search":"","runs":"any","tier":0,"budget":0}
+"I'm about to get 1500 stones, how do I do better in tournaments" → {"tool":"upgrades","currency":"stones","goal":"waves","changes":[],"search":"","runs":"tournament","tier":0,"budget":1500}
+"cheapest way to get more coins with coins and stones" → {"tool":"upgrades","currency":"any","goal":"coins","changes":[],"search":"","runs":"any","tier":0,"budget":0}
+"how many waves would maxing CL and CF+ get me" → {"tool":"what_if","currency":"any","goal":"default","changes":[{"upgrade":"CL","level":"max"},{"upgrade":"CF+","level":"max"}],"search":"","runs":"any","tier":0,"budget":0}
+"is 10 more levels of the damage lab worth it" → {"tool":"what_if","currency":"any","goal":"default","changes":[{"upgrade":"damage lab","level":"+10"}],"search":"","runs":"any","tier":0,"budget":0}
+"why is my chain lightning weak in tournaments" → {"tool":"runs","currency":"any","goal":"default","changes":[],"search":"","runs":"tournament","tier":0,"budget":0}
+"how far would I get farming T19" → {"tool":"tier","currency":"any","goal":"default","changes":[],"search":"","runs":"any","tier":19,"budget":0}
+"how does Fast's Ultimate work" → {"tool":"guide","currency":"any","goal":"default","changes":[],"search":"Fast's Ultimate","runs":"any","tier":0,"budget":0}`;
+
 
 // When the model's JSON can't be read: the same choice from keywords.
 function guessRoute(q: string): Route {
     const l = q.toLowerCase();
-    const base: Route = { tool: 'none', currency: 'any', goal: 'default', changes: [], search: '', runs: 'any', tier: 0 };
+    const base: Route = { tool: 'none', currency: 'any', goal: 'default', changes: [], search: '', runs: 'any', tier: 0, budget: budgetIn(q) };
+    const spend = /upgrade|spend|next|should i|priorit|\bbuy\b|best (way|use|course)/.test(l);
     const tier = /\bt(?:ier)?\s?(\d{1,2})\b/.exec(l);
     if (tier && /farm|get to|make it|how far|move up|push/.test(l)) return { ...base, tool: 'tier', tier: Number(tier[1]) };
     if (/\bruns?\b|history|damage (by|from)|killed/.test(l)) return { ...base, tool: 'runs', runs: /tourn/.test(l) ? 'tournament' : 'any' };
-    if (/tourn|tourney|bracket|battle condition/.test(l)) return { ...base, tool: 'tournament' };
-    if (/what if|would .*(max|level)|\bmax(ing)?\b/.test(l)) return { ...base, tool: 'what_if', changes: [{ upgrade: q, level: 'max' }] };
-    if (/upgrade|spend|next|should i|priorit/.test(l)) {
-        const currency = (['stones', 'coins', 'research', 'shards', 'medals', 'gems', 'bits'] as const)
-            .find(c => l.includes(c.replace(/s$/, ''))) ?? 'any';
-        return { ...base, tool: 'upgrades', currency };
+    if (/tourn|tourney|bracket|battle condition/.test(l)) {
+        if (spend) return { ...base, tool: 'upgrades', currency: currencyIn(l), goal: 'waves', runs: 'tournament' };
+        return { ...base, tool: 'tournament' };
     }
+    if (/what if|would .*(max|level)|\bmax(ing)?\b/.test(l)) return { ...base, tool: 'what_if', changes: [{ upgrade: q, level: 'max' }] };
+    if (spend) return { ...base, tool: 'upgrades', currency: currencyIn(l) };
     if (/how (does|do|is)|what (is|does)|why/.test(l)) return { ...base, tool: 'guide', search: q };
     return base;
 }
+
+const currencyIn = (l: string): AiCurrency => (['stones', 'coins', 'research', 'shards', 'medals', 'gems', 'bits'] as const)
+    .find(c => l.includes(c.replace(/s$/, ''))) ?? 'any';
 
 // Qwen3 starts every reply with its (here empty) <think></think>.
 function readRoute(raw: string, q: string): Route & { guessed?: boolean } {
@@ -181,6 +189,8 @@ function readRoute(raw: string, q: string): Route & { guessed?: boolean } {
             tool: r.tool, currency: r.currency ?? 'any', goal: r.goal ?? 'default',
             changes: Array.isArray(r.changes) ? r.changes.filter(c => c?.upgrade) : [], search: r.search ?? '',
             runs: r.runs ?? 'any', tier: Number(r.tier) || 0,
+            // The amount in the question itself wins: small models drop or round it.
+            budget: budgetIn(q) || Math.max(0, Number(r.budget) || 0),
         };
     } catch {
         return { ...guessRoute(q), guessed: true };
@@ -189,7 +199,7 @@ function readRoute(raw: string, q: string): Route & { guessed?: boolean } {
 
 const routeText = (r: Route & { guessed?: boolean }) => [
     r.tool,
-    r.tool === 'upgrades' && `${r.currency}${r.goal !== 'default' ? `, goal ${r.goal}` : ''}`,
+    r.tool === 'upgrades' && `${r.currency}${r.goal !== 'default' ? `, goal ${r.goal}` : ''}${r.runs !== 'any' ? `, ${r.runs} runs` : ''}${r.budget ? `, budget ${r.budget.toLocaleString()}` : ''}`,
     r.tool === 'what_if' && r.changes.map(c => `${c.upgrade} → ${c.level}`).join('; '),
     (r.tool === 'levels' || r.tool === 'guide') && r.search && `"${r.search}"`,
     r.tool === 'runs' && r.runs,
@@ -202,7 +212,8 @@ function lookUp(route: Route, question: string, ctx: AiContext): ToolResult[] {
     const { account } = ctx;
     switch (route.tool) {
         case 'upgrades':
-            return [bestUpgrades(account, route.currency, route.goal === 'default' ? ctx.goal : route.goal)];
+            return [bestUpgrades(account, route.currency, route.goal === 'default' ? ctx.goal : route.goal,
+                { budget: route.budget, runs: route.runs, tourney: ctx.tourney })];
         case 'what_if': {
             const asks = route.changes.length ? route.changes : [{ upgrade: question, level: 'max' }];
             // Each on its own when there are several (to compare), then together.
@@ -237,7 +248,7 @@ const PAGE_LINKS = ([
 
 const ANSWER_PROMPT = `You are TowerForge's assistant for the mobile idle tower defense game The Tower (by Tech Tree Games). You answer the player's questions about their own account from the data below, which TowerForge worked out from their game data.
 Rules:
-- Only use numbers that are in the data, copied exactly. When the data has a "Headline:" line, start from it. Never make up levels, costs, waves or percentages. If the data doesn't answer the question, say so and name the TowerForge page that does (Optimizer, What If, Tournament, Run Length, Coins per Run, Enemy Stats).
+- Only use numbers that are in the data, copied exactly. When the data has a "Headline:" line, start from it. When it has a "Plan for" list, answer with that plan in its order: those buys fit what the player has to spend, so never suggest a buy outside it as something they can afford. Gains given in waves stay in waves. Never make up levels, costs, waves or percentages. If the data doesn't answer the question, say so and name the TowerForge page that does (Optimizer, What If, Tournament, Run Length, Coins per Run, Enemy Stats).
 - Use the game's own words: stones, Ultimate Weapons (UWs), UW+, labs, workshop, enhancements, cards, modules, bots, Bot+, Guardian, tiers, waves.
 - Be brief and direct: answer first in a sentence or two, then a few short bullet points if they help.
 - If the data says an upgrade couldn't be found, or doesn't have the answer, say so plainly and don't guess.

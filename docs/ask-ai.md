@@ -24,7 +24,8 @@ me?"). Started 2026-10-21 as a preview only the owner's account sees.
   prebuilt 4,096 to 8,192 tokens.
 - **Two steps per question**, because a small model can't do the game's math:
   1. *Route*: the model answers in JSON (held to a schema by WebLLM's
-     grammar) which data to look at — `upgrades` (a currency, a goal),
+     grammar) which data to look at — `upgrades` (a currency, a goal, which
+     runs to score on and a budget),
      `what_if` (upgrades in the player's words and a level), `levels`,
      `runs` (campaign, tournament or any), `tier` (a tier number),
      `tournament`, `guide` (keywords) or `none`. Qwen3 starts every reply
@@ -109,6 +110,41 @@ What went wrong, and what changed:
 - "PS" was read as "Power Stones". The site now says stones, like the game.
 - It read levels like "Damage 13/32" as damage; the prompt says they're
   levels.
+
+## "1500 stones for tournaments" (2026-10-23)
+
+"I am about to get 1500 stones, what is my best course of action to improve
+my tournament progress?" got Generator Assist Substat Eff "Lv 14 → 70"
+(+12,349%, 7.64K stones) as "the best use of your 1500 stones". Three things
+were wrong, none of them the Optimizer's ranking itself:
+
+- **Campaign scoring for a tournament question.** The upgrades tool always
+  used the run chosen on the Optimizer page. On the owner's campaign runs
+  (around W9,000) a point of Enemy Health Level Skip is worth e^0.54 in
+  damage, and the Generator assist's Enemy HP Level Skip substat (8% at
+  Substat Eff) makes that slot the top stone pick (+0.08 skip points per 1%).
+  On tournament runs (around W100) a point is worth e^0.055 and the picks
+  are Cannon and Core assist instead. Now the router fills `runs` for
+  upgrades too ("tournament" when they ask about tournaments): the picks are
+  scored on the newest tournament run, its league's conditions and the
+  Tournament page's build (`scoredOn` in `aiTools.ts`), and the data says
+  which runs it used.
+- **The budget was ignored.** The router now fills `budget` (the amount
+  they have or will have; the number in the question wins over the model's,
+  `budgetIn`). With a budget the tool gives "Plan for N stones": the
+  Optimizer's path cut where the stones run out, each upgrade's levels as
+  one row, the total and the next buy after it. The prompt says to answer
+  with that plan.
+- **A compounded percentage.** Back-to-back levels merge into one row, and
+  56 steps of +6.6% compound to +12,349% — true in the "damage toward
+  waves" scale, meaningless to read. Pushing waves with Run Length, the rows
+  now give waves, like the Optimizer page (`pathRunGains`). Merged assist
+  rows read "14% → 70%", not "Lv 14 → 70".
+
+Checked on the owner's export: 1,500 stones for tournaments = Cannon Assist
+Substat Eff 23% → 31%, Core Assist Substat Eff 32% → 39%, Cannon Assist Mult
+Eff 49% → 53% (1,488 stones, about +5.7 tournament waves); for campaign
+pushing, Generator Assist Substat Eff 14% → 32% (1,431 stones).
 
 ## Download size
 

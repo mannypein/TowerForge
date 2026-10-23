@@ -401,6 +401,14 @@ Death Ray for runs that end to enemies they can touch.
   - An assist module's main effect counts as 1 + (×value − 1) × efficiency
     (multiplicative since v27.1). Hard caps still apply (98% defense, 90% CF
     slow, 150s wall rebuild, 7s shockwave, 37s ILM cooldown).
+  - Its substats count at Substat Efficiency (value × eff%). A Generator
+    assist with Enemy HP Level Skip adds 1% of that substat per 1% of
+    efficiency (8% Ancestral → +0.08 skip points), and since 2026-10-23 the
+    step carries those points (`skipPoints`) so its waves count them as
+    skip, like the workshop's Enemy HP Level Skip. Skip is worth far more on
+    long campaign runs than in tournaments (owner's account: e^0.54 a point
+    at W9,000, e^0.055 at W100), so this slot leads the stone path for
+    campaign pushing and drops out for tournaments.
 - **Primary modules** run at 100%. The labs added in the latest update
   (unlocked T23 W500, one per type, +1%/level, 30 levels) take them to 130%:
   1 + (×value − 1) × (1 + lab%). Site names `Primary-<Type> Mult`; their game

@@ -17,14 +17,14 @@
 import type { AppState, BuildType, League, OptCandidate, OptCategory, OptCurrency } from '../types/gameTypes';
 import type { AccountState, GoalModels } from '../engine/accountModels';
 import { applyGoal, chosenReport, runModels, snapshotFromState } from '../engine/accountModels';
-import { mergeRepeats, simulateCategoryPath, simulateMedalPath, simulateStonePath } from '../engine/optimizer';
+import { groupPath, mergeRepeats, simulateCategoryPath, simulateMedalPath, simulateStonePath } from '../engine/optimizer';
 import { changeCost, upgradeTargets, whatIf } from '../engine/whatIf';
 import type { Change, Costs, UpgradeTarget } from '../engine/whatIf';
-import { buildTournamentModel, heatOf, newestTournament } from '../engine/tournamentModel';
+import { buildTournamentModel, heatOf, newestTournament, withTournamentBuild } from '../engine/tournamentModel';
 import { leagueMoves, leagueStats, placed } from '../engine/tourneyHistory';
 import type { Ticks } from '../engine/tournamentModel';
-import { buildRunLengthModel, deathWave, killedBy } from '../engine/runLength';
-import { extraDamage, runKey } from '../engine/battleReport';
+import { buildRunLengthModel, deathWave, killedBy, pathRunGains } from '../engine/runLength';
+import { activeBattleReport, extraDamage, runKey } from '../engine/battleReport';
 import type { BattleReport } from '../engine/battleReport';
 import { defaultBattleIndex } from '../engine/gameExport';
 import { formatGameNumber } from '../engine/gameNumbers';
@@ -169,33 +169,126 @@ function costText(c: OptCandidate): string {
     return c.cost > 0 ? `${num(c.cost)} ${unit}` : 'free';
 }
 
-export function bestUpgrades(s: AiAccount, currency: AiCurrency, goalWanted?: string): ToolResult {
+// An amount of a currency in the player's words: "1500 stones", "1.5k stones", "10T coins".
+const SUFFIX: Record<string, number> = { k: 1e3, m: 1e6, b: 1e9, t: 1e12, q: 1e15 };
+export function budgetIn(q: string): number {
+    const m = /(\d[\d,]*(?:\.\d+)?)\s*([kmbtq])?\s*(?:more\s+)?(stones?|coins?|medals?|gems?|shards?|bits?)\b/i.exec(q);
+    if (!m) return 0;
+    // The game's q is quadrillion and Q quintillion.
+    const n = Number(m[1].replace(/,/g, '')) * (m[2] === 'Q' ? 1e18 : m[2] ? SUFFIX[m[2].toLowerCase()] : 1);
+    return Number.isFinite(n) ? n : 0;
+}
+
+// What the player asked for beyond the currency.
+export interface UpgradeAsk {
+    // What they have or will have to spend, in the asked currency ("I'm
+    // about to get 1500 stones"); 0 or missing: none named.
+    budget?: number;
+    // "tournament": scored on tournament runs (the newest one, its league's
+    // battle conditions) with the Tournament page's build; "campaign": on a
+    // campaign run; "any": the run chosen on the Optimizer page.
+    runs?: AiRunKind;
+    tourney?: AiTourneySettings;
+}
+
+// The account the picks are scored on, and a line saying which runs.
+function scoredOn(s: AiAccount, ask: UpgradeAsk): { account: AiAccount; note: string } {
+    const chosen = activeBattleReport(s.battleReportText, s.importedBattles, s.battleReportChoice);
+    if (ask.runs === 'tournament') {
+        const idx = newestTournament(s);
+        if (idx < 0) return { account: s, note: 'There are no tournament runs saved yet, so these are scored on the run chosen on the Optimizer page.' };
+        const t = ask.tourney;
+        const account: AiAccount = { ...s, ...withTournamentBuild(s, t?.preset, t?.loadout), battleReportText: '', battleReportChoice: idx };
+        return { account, note: `Scored for tournaments: on your tournament runs (newest: W${s.importedBattles[idx].wave.toLocaleString()}), with the tournament build set on the Tournament page.` };
+    }
+    if (ask.runs === 'campaign' && chosen?.tournament) {
+        const idx = defaultBattleIndex(s.importedBattles);
+        if (idx >= 0 && !s.importedBattles[idx].tournament) {
+            return { account: { ...s, battleReportText: '', battleReportChoice: idx }, note: `Scored on your campaign runs (T${s.importedBattles[idx].tier}).` };
+        }
+    }
+    return { account: s, note: chosen ? `Scored on ${chosen.tournament ? 'your tournament runs' : `your campaign runs (T${chosen.tier})`}, the run chosen on the Optimizer page.` : '' };
+}
+
+// Waves each row adds, like the Optimizer page: Run Length on the scored
+// runs. `inOrder`: the rows are one path (each on top of the ones before);
+// otherwise each row on its own.
+function rowWaves(rows: OptCandidate[], models: GoalModels, inOrder: boolean): number[] {
+    const run = models.run!;
+    const gains = (r: OptCandidate[]) => pathRunGains(run, r.map(c => c.scorePct), undefined, r.map(c => c.skipPoints ?? 0), models.worth);
+    return inOrder ? gains(rows).map(g => g.waves) : rows.map(c => gains([c])[0].waves);
+}
+
+const amountText = (cur: OptCurrency, v: number) => (cur === 'coins' ? num(v) : Math.round(v).toLocaleString());
+
+const wavesText = (w: number) => `${w >= 0 ? '+' : '−'}${Math.abs(w) >= 10 ? Math.round(Math.abs(w)) : Math.abs(w).toFixed(1)} waves`;
+
+export function bestUpgrades(s: AiAccount, currency: AiCurrency, goalWanted?: string, ask: UpgradeAsk = {}): ToolResult {
     const build = buildOf(s);
     const goal = goalFor(build, goalWanted);
-    const snap = snapshotFromState(s);
-    applyGoal(snap, goal, build, chosenReport(s), runModels(s));
+    const { account, note } = scoredOn(s, ask);
+    const snap = snapshotFromState(account);
+    const models = runModels(account);
+    applyGoal(snap, goal, build, chosenReport(account), models);
+    // Pushing waves with Run Length: gains read in waves, like the Optimizer page.
+    const inWaves = goal === 'waves' && !!models.run;
     const wanted: OptCurrency[] = currency === 'any' ? ['stones', 'coins', 'research'] : [currency];
     const metric = { damage: 'damage', waves: 'push (damage toward waves)', coins: 'coins per hour', survival: 'survival', blend: 'coins and push' }[goal];
-    const parts: string[] = [`Goal: ${GOAL_LABELS[goal]}. Each pick's gain is in ${metric}, in the order the Optimizer would buy them.`];
+    const budget = ask.budget && ask.budget > 0 ? ask.budget : null;
+    const parts: string[] = [`Goal: ${GOAL_LABELS[goal]}. ${inWaves ? 'Each pick shows the waves it adds' : `Each pick's gain is in ${metric}`}, in the order the Optimizer would buy them.`];
+    if (note) parts.push(note);
     let stones: OptCandidate[] | null = null;
     for (const cur of wanted) {
-        let path: OptCandidate[] = [];
-        // Back-to-back levels of one stat read as one row ("3% → 9%").
-        if (cur === 'stones') path = mergeRepeats(stones = simulateStonePath(60, snap));
+        // The stone path is one path in buy order; the others are lists.
+        let raw: OptCandidate[] = [];
+        const inOrder = cur === 'stones';
+        if (cur === 'stones') raw = stones = simulateStonePath(budget ? 150 : 60, snap);
         else if (cur === 'medals') {
             stones ??= simulateStonePath(40, snap);
-            path = simulateMedalPath(PICKS, snap, stones, s.currencies?.stones ?? 0, simulateCategoryPath('modules', 20, snap));
+            raw = simulateMedalPath(PICKS, snap, stones, s.currencies?.stones ?? 0, simulateCategoryPath('modules', 20, snap));
         } else {
-            for (const cat of CURRENCY_CATS[cur]) path.push(...simulateCategoryPath(cat, 30, snap));
-            path.sort((a, b) => b.scorePerCost - a.scorePerCost);
+            for (const cat of CURRENCY_CATS[cur]) raw.push(...simulateCategoryPath(cat, 30, snap));
+            raw.sort((a, b) => b.scorePerCost - a.scorePerCost);
         }
-        if (path[0]) parts.push(`Headline: the best next ${CURRENCY_NAMES[cur].split(' (')[0]} buy is ${path[0].label} ${path[0].subLabel}${costText(path[0]) ? ` for ${costText(path[0])}` : ''} (${pct(path[0].scorePct)}).`);
-        const have = held(s, cur);
+        const name = CURRENCY_NAMES[cur].split(' (')[0];
+        const gainText = (rows: OptCandidate[], waves: number[] | null, i: number) =>
+            waves ? wavesText(waves[i]) : pct(rows[i].scorePct);
+
+        // A budget: the path cut where it runs out (costs must be known).
+        if (budget && raw.some(c => c.cost > 0 && c.costKnown !== false)) {
+            let spent = 0;
+            const fits: OptCandidate[] = [];
+            for (const c of raw) {
+                if (c.costKnown === false || spent + c.cost > budget) break;
+                spent += c.cost;
+                fits.push(c);
+            }
+            // Each upgrade's levels in the plan read as one row ("23% → 29%"),
+            // even when the path takes turns between two upgrades.
+            const plan = inOrder ? groupPath(fits, fits.length) : fits;
+            const waves = inWaves && plan.length ? rowWaves(plan, models, inOrder) : null;
+            const next = raw[fits.length];
+            if (!plan.length) {
+                parts.push(`Plan for ${amountText(cur, budget)} ${name}: nothing fits — the best next ${name} buy, ${next.label} ${next.subLabel}, costs ${costText(next)}.`);
+            } else {
+                parts.push(`Plan for ${amountText(cur, budget)} ${name} (the Optimizer's path, cut where the ${name} run out${inOrder ? '; each upgrade\'s levels together' : ''}):\n`
+                    + plan.map((c, i) => `${i + 1}. ${c.label} ${c.subLabel} — ${gainText(plan, waves, i)}, ${costText(c)}`).join('\n'));
+                const total = waves ? wavesText(waves.reduce((a, w) => a + w, 0)) : null;
+                parts.push(`Headline: with ${amountText(cur, budget)} ${name}, buy ${plan.map(c => `${c.label} ${c.subLabel}`).join('; ')} — ${amountText(cur, spent)} ${name} in all${total ? `, about ${total}` : ''}.`
+                    + (next ? ` The next buy after that is ${next.label} ${next.subLabel} for ${costText(next)}.` : ''));
+            }
+            continue;
+        }
+
+        const path = inOrder ? mergeRepeats(raw) : raw;
         const picks = path.slice(0, PICKS);
+        const waves = inWaves && picks.length ? rowWaves(picks, models, inOrder) : null;
+        if (picks[0]) parts.push(`Headline: the best next ${name} buy is ${picks[0].label} ${picks[0].subLabel}${costText(picks[0]) ? ` for ${costText(picks[0])}` : ''} (${gainText(picks, waves, 0)}).`);
+        const have = held(s, cur);
         const rows = picks.map((c, i) => {
             const cost = costText(c);
             const afford = have !== null && c.cost > 0 && c.costKnown !== false ? (c.cost <= have ? ' (you have enough now)' : ' (more than you have)') : '';
-            return `${i + 1}. ${c.label} ${c.subLabel} — ${pct(c.scorePct)}${cost ? `, ${cost}` : ''}${afford}`;
+            return `${i + 1}. ${c.label} ${c.subLabel} — ${gainText(picks, waves, i)}${cost ? `, ${cost}` : ''}${afford}`;
         });
         parts.push(`Next ${CURRENCY_NAMES[cur]}:\n${rows.length ? rows.join('\n') : 'nothing left worth buying'}`);
         // Costs compared by the site: small models misread K, M, B, T, q, Q…
@@ -205,7 +298,8 @@ export function bestUpgrades(s: AiAccount, currency: AiCurrency, goalWanted?: st
             parts.push(`Cheapest first: ${cheap.map(c => `${c.label} ${c.subLabel} (${costText(c)})`).join('; ')}.`);
         }
     }
-    return { title: `Optimizer — ${wanted.map(c => CURRENCY_NAMES[c].split(' (')[0]).join(', ')}`, text: parts.join('\n') };
+    const scope = [ask.runs === 'tournament' && 'tournaments', budget && `${amountText(wanted[0], budget)} to spend`].filter(Boolean).join(', ');
+    return { title: `Optimizer — ${wanted.map(c => CURRENCY_NAMES[c].split(' (')[0]).join(', ')}${scope ? ` (${scope})` : ''}`, text: parts.join('\n') };
 }
 
 // ── Finding upgrades named in words ───────────────────────────

@@ -570,6 +570,7 @@ export function buildCandidates(
                     costType: 'stones',
                     scorePct: delta,
                     scorePerCost: delta / Math.max(1, cost),
+                    skipPoints: addedSkip(snap, after),
                 });
             }
 
@@ -598,6 +599,7 @@ export function buildCandidates(
                     costType: 'stones',
                     scorePct: delta,
                     scorePerCost: delta / Math.max(1, cost),
+                    skipPoints: addedSkip(snap, after),
                 });
             }
 
@@ -632,6 +634,7 @@ export function buildCandidates(
                     costType: 'stones',
                     scorePct: delta,
                     scorePerCost: delta / Math.max(1, unlockCost),
+                    skipPoints: addedSkip(snap, after),
                 });
             }
 
@@ -663,6 +666,7 @@ export function buildCandidates(
                     costType: 'stones',
                     scorePct: delta,
                     scorePerCost: delta / Math.max(1, upgradeCost),
+                    skipPoints: addedSkip(snap, after),
                 });
             }
         }
@@ -1080,7 +1084,10 @@ function mergeInto(row: OptCandidate, c: OptCandidate) {
     row.toLv = c.toLv;
     row.subLabel = row.ref?.[0] === 'trade'
         ? `Trades ${row.fromLv + 1}–${c.toLv} this event`
-        : `Lv ${row.fromLv} → ${c.toLv}`;
+        // Assist efficiencies are percentages, not levels.
+        : row.category === 'assist' && / Eff$/.test(row.label)
+            ? `${row.fromLv}% → ${c.toLv}%`
+            : `Lv ${row.fromLv} → ${c.toLv}`;
     row.cost += c.cost;
     row.scorePct = ((1 + row.scorePct / 100) * (1 + c.scorePct / 100) - 1) * 100;
     if (row.hours !== undefined && c.hours !== undefined) row.hours += c.hours;

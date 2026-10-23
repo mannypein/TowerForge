@@ -10,7 +10,7 @@ import { upgradeTargets } from '../engine/whatIf';
 import { UWS } from '../constants/gameData';
 import { battle, makeExport } from '../test/makeExport';
 import {
-    accountSummary, bestUpgrades, findTargets, levelFor, levelsOf, runsReport, tierOutlook, whatIfChanges, wordsOf,
+    accountSummary, bestUpgrades, budgetIn, findTargets, levelFor, levelsOf, runsReport, tierOutlook, whatIfChanges, wordsOf,
 } from './aiTools';
 import type { AiAccount } from './aiTools';
 import { searchNotes } from './aiKnowledge';
@@ -125,6 +125,59 @@ describe('runs and other tiers', () => {
         const a = account();
         const r = bestUpgrades({ ...a, currencies: { ...a.currencies, stones: 50 } }, 'stones');
         expect(r.text).toMatch(/\((you have enough now|more than you have)\)/);
+    });
+
+    it('shows waves, not a compounded percentage, when pushing waves', () => {
+        const r = bestUpgrades(account(), 'stones', 'waves');
+        expect(r.text).toMatch(/Next stones:\n1\. .* — [+−][\d.]+ waves/);
+        expect(r.text).not.toMatch(/Next stones:\n1\. .* — [+−][\d.]+%/);
+    });
+});
+
+describe('a budget named in the question', () => {
+    it('reads the amount', () => {
+        expect(budgetIn('I am about to get 1500 stones, what should I buy')).toBe(1500);
+        expect(budgetIn('I have 1,500 stones')).toBe(1500);
+        expect(budgetIn('with 1.5k stones')).toBe(1500);
+        expect(budgetIn('10T coins to spend')).toBe(1e13);
+        expect(budgetIn('2q coins')).toBe(2e15);
+        expect(budgetIn('2Q coins')).toBe(2e18);
+        expect(budgetIn('what should I buy next')).toBe(0);
+    });
+
+    it('cuts the Optimizer\'s stone path where the stones run out', () => {
+        const r = bestUpgrades(account(), 'stones', 'waves', { budget: 1500 });
+        expect(r.title).toBe('Optimizer — stones (1,500 to spend)');
+        const plan = /Plan for 1,500 stones .*:\n((?:\d+\. .*\n?)+)/.exec(r.text);
+        expect(plan).not.toBeNull();
+        const costs = [...plan![1].matchAll(/, ([\d.,]+K?) stones$/gm)].map(m => (m[1].endsWith('K') ? parseFloat(m[1]) * 1000 : Number(m[1].replace(/,/g, ''))));
+        expect(costs.length).toBeGreaterThan(0);
+        expect(costs.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(1500 + 10 * costs.length);   // K rounding
+        const spent = Number(/— ([\d,]+) stones in all/.exec(r.text)![1].replace(/,/g, ''));
+        expect(spent).toBeLessThanOrEqual(1500);
+        expect(r.text).toMatch(/stones in all, about [+−][\d.]+ waves\./);
+    });
+
+    it('says when nothing fits', () => {
+        const r = bestUpgrades(account(), 'stones', 'waves', { budget: 1 });
+        expect(r.text).toMatch(/Plan for 1 stones: nothing fits — the best next stones buy, .*, costs /);
+    });
+});
+
+describe('upgrades for tournaments', () => {
+    it('scores on the tournament runs when asked', () => {
+        const a = account();
+        const tourney = parseGameExport(makeExport({
+            BattleHistory: [battle({ BattleDate: '2026-10-20T12:00:00Z', Wave: 300, KilledBy: 9, IsTournament: true, DamageDealt: 1000, OrbDamage: 600, ChainLightningDamage: 400 })],
+        })).battles;
+        const r = bestUpgrades({ ...a, importedBattles: [...a.importedBattles, ...tourney] }, 'stones', 'waves', { runs: 'tournament' });
+        expect(r.title).toBe('Optimizer — stones (tournaments)');
+        expect(r.text).toContain('Scored for tournaments: on your tournament runs (newest: W300)');
+    });
+
+    it('says so when there are no tournament runs', () => {
+        const r = bestUpgrades(account(), 'stones', 'waves', { runs: 'tournament' });
+        expect(r.text).toContain('There are no tournament runs saved yet');
     });
 });
 
