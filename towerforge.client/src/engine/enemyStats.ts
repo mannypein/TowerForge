@@ -17,6 +17,7 @@
 // ============================================================
 
 import type { LabData } from '../types/gameTypes';
+import { MAX_TIER } from '../constants/gameData';
 
 export type EnemyType =
     | 'Basic' | 'Fast' | 'Tank' | 'Ranged' | 'Boss' | 'Protector'
@@ -81,7 +82,7 @@ const HP_EXP_CAP = 0.5099999904632568;
 const DMG_EXP_ADDON = [0.0020000000949949026, 0.004000000189989805, 0.019999999552965164, 0.04600000008940697, 0.0729999989271164];
 const DMG_EXP_CAP = 0.10199999809265137;
 
-const clampTier = (t: number) => Math.min(24, Math.max(1, Math.round(t)));
+const clampTier = (t: number) => Math.min(MAX_TIER, Math.max(1, Math.round(t)));
 const bracket = (level: number, d: number) => Math.floor(Math.max(1, Math.floor(level)) / d);
 
 function stepExponent(level: number, d: Step[1]): number {

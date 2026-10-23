@@ -15,7 +15,7 @@
 // ============================================================
 
 import type { BattleField, BattleReport } from './battleReport';
-import { WS_STATS, WS_ENH, UWS, LABS, RELICS } from '../constants/gameData';
+import { MAX_TIER, WS_STATS, WS_ENH, UWS, LABS, RELICS } from '../constants/gameData';
 import {
     GAME_CARDS, MASTERY_LAB_START, MASTERY_LAB_CARDS, CARD_PRESET_SLOTS, GAME_PERKS, GAME_LABS, GAME_LAB_GROUPS,
     GAME_MODULES, GAME_MODULE_RARITY, GAME_MODULE_EFFECT_RUNS, MODULE_EFFECT_SLOT_UNLOCK, isUniqueModule,
@@ -567,7 +567,7 @@ export function parseGameExport(raw: Raw): GameImport {
         dataVersion: num(raw.DataVersion),
         currencies,
         tierWaves,
-        highestTier: Math.max(playedTier, Math.min(24, completedTier + 1)),
+        highestTier: Math.max(playedTier, Math.min(MAX_TIER, completedTier + 1)),
         completedTier,
         userName: typeof raw.UserName === 'string' ? raw.UserName : '',
         battles: arr(raw.BattleHistory).filter(isObj).map(battleToReport),

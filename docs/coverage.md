@@ -1,6 +1,6 @@
 # What the site models — and what's missing
 
-The whole game, system by system, against what TowerForge models (2026-10-18).
+The whole game, system by system, against what TowerForge models (written 2026-10-18; rows updated as systems are added, last reviewed 2026-10-23).
 ✅ modeled · ◐ partly · ✗ not yet. "Calibrated" means the player's own battle
 reports set the baseline, so even unmodeled effects are already in it; only
 *changing* them isn't valued. Details of each model: [optimizer.md](optimizer.md),

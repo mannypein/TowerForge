@@ -3481,9 +3481,11 @@
     margin-top: 12px;
 }
 
-/* Emulators run on PCs; hide the button on phones and tablets. */
+/* Emulators run on PCs; hide the button on phones and tablets (the
+   welcome guide's too, which sets its own display). */
 @media (hover: none) and (pointer: coarse) {
-    .lnk-btn {
+    .lnk-btn,
+    .wlc-steps > li > .lnk-btn.wlc-btn {
         display: none;
     }
 }
@@ -3498,6 +3500,216 @@
     border-color: var(--gold);
     color: var(--gold);
 }
+
+/* Welcome guide (home page, first visit): what the site does and how to
+   get the game's data in. */
+.wlc {
+    background:
+        radial-gradient(70% 120% at 0% 0%, var(--accent-glow), transparent 60%),
+        radial-gradient(60% 120% at 100% 0%, var(--accent-2-glow), transparent 60%),
+        var(--bg2);
+    border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+    border-radius: 12px;
+    box-shadow: 0 0 24px var(--accent-glow);
+    padding: 18px 20px;
+    margin-bottom: 16px;
+}
+
+.wlc-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.wlc-title {
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    color: var(--text-bright);
+}
+
+    .wlc-title span {
+        background: var(--grad);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+    }
+
+.wlc-lead {
+    margin-top: 6px;
+    max-width: 760px;
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--text);
+}
+
+.wlc-hide {
+    flex-shrink: 0;
+}
+
+.wlc-tools {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin: 16px 0 18px;
+}
+
+@media (max-width: 900px) {
+    .wlc-tools {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 520px) {
+    .wlc {
+        padding: 14px;
+    }
+
+    .wlc-title {
+        font-size: 20px;
+    }
+
+    .wlc-tools {
+        gap: 8px;
+    }
+
+    .wlc-tool {
+        padding: 10px;
+    }
+
+        .wlc-tool strong {
+            font-size: 14px;
+        }
+
+        .wlc-tool span {
+            font-size: 12px;
+        }
+}
+
+.wlc-tool {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    text-decoration: none;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+    .wlc-tool:hover {
+        border-color: var(--accent);
+        box-shadow: var(--glow-sm);
+    }
+
+    .wlc-tool strong {
+        font-size: 15px;
+        color: var(--accent);
+    }
+
+    .wlc-tool span {
+        font-size: 13px;
+        line-height: 1.4;
+        color: var(--text-dim);
+    }
+
+.wlc-sub {
+    margin-bottom: 10px;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--text-bright);
+}
+
+.wlc-steps {
+    list-style: none;
+    counter-reset: wlc;
+}
+
+    .wlc-steps > li {
+        position: relative;
+        counter-increment: wlc;
+        padding-left: 40px;
+        margin-bottom: 14px;
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--text);
+    }
+
+        .wlc-steps > li::before {
+            content: counter(wlc);
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 26px;
+            height: 26px;
+            display: grid;
+            place-items: center;
+            border: 2px solid var(--accent);
+            border-radius: 50%;
+            font-weight: 800;
+            font-size: 13px;
+            color: var(--accent);
+            box-shadow: var(--glow-sm);
+        }
+
+        .wlc-steps > li strong {
+            color: var(--text-bright);
+        }
+
+    .wlc-steps code {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        padding: 1px 5px;
+        border-radius: 4px;
+        background: var(--bg4);
+        color: var(--text-bright);
+        overflow-wrap: anywhere;
+    }
+
+.wlc-way {
+    display: block;
+    margin-top: 6px;
+}
+
+    .wlc-way em {
+        font-style: normal;
+        font-weight: 600;
+        color: var(--text-bright);
+    }
+
+.wlc-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    cursor: pointer;
+}
+
+.wlc-steps > li > .wlc-btn {
+    display: flex;
+    width: fit-content;
+}
+
+.wlc-foot {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--line-soft);
+}
+
+    .wlc-foot p {
+        flex: 1 1 320px;
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--text-dim);
+    }
 
 /* Discord link (header): Discord's own blurple in every theme, so it
    reads as Discord. */

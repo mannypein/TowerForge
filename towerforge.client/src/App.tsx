@@ -23,6 +23,7 @@ import LinkModal from './components/LinkModal';
 import AutoImport from './components/common/AutoImport';
 import ThemePicker from './components/common/ThemePicker';
 import DiscordLink from './components/common/DiscordLink';
+import WelcomeGuide from './components/common/WelcomeGuide';
 import { exportAge, linkExport } from './engine/linkClient';
 import PerksTab from './components/tabs/PerksTab';
 import TiersTab from './components/tabs/TiersTab';
@@ -386,7 +387,12 @@ export default function App() {
     // ── Active tab renderer ──────────────────────────────────────
     function renderTab() {
         switch (activeTab) {
-            case 'profile': return <ProfileTab />;
+            case 'profile': return (
+                <>
+                    <WelcomeGuide onImportFile={handleImport} onEmulator={() => void getFromEmulator()} emulatorBusy={linkBusy} />
+                    <ProfileTab />
+                </>
+            );
             case 'perks': return <PerksTab />;
             case 'tiers': return <TiersTab />;
             case 'workshop': return <WorkshopTab />;

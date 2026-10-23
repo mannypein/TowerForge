@@ -6,6 +6,10 @@
 
 import type { UWAbbr, ModuleRarity, ModuleType } from '../types/gameTypes';
 
+// ── Tiers ─────────────────────────────────────────────────────
+// The highest tier: TheTowerSDK's enemy tables run to T24.
+export const MAX_TIER = 24;
+
 // ── Workshop Stats ────────────────────────────────────────────
 // [statName, maxLevel]
 export const WS_STATS: Record<string, [string, number][]> = {

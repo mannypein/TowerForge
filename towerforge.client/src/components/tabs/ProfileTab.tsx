@@ -5,7 +5,7 @@
 
 import { useGameStore } from '../../store/useGameStore';
 import type { BuildType, League } from '../../types/gameTypes';
-import { presetLabel } from '../../constants/gameData';
+import { MAX_TIER, presetLabel } from '../../constants/gameData';
 import './tabs.css';
 
 export default function ProfileTab() {
@@ -143,7 +143,7 @@ export default function ProfileTab() {
                                 }}
                             >
                                 <option value="">—</option>
-                                {Array.from({ length: 21 }, (_, i) => i + 1).map(t => (
+                                {Array.from({ length: MAX_TIER }, (_, i) => i + 1).map(t => (
                                     <option key={t} value={t}>T{t}</option>
                                 ))}
                             </select>

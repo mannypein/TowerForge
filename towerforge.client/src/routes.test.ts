@@ -1,9 +1,10 @@
 // Tab addresses: every tab has its own path, every path opens its tab,
-// and no tab takes a path the server uses itself.
+// no tab takes a path the server uses itself, and the sitemap lists them.
 
 import { describe, expect, it } from 'vitest';
 import { RESERVED_PATHS, TAB_PATHS, tabFromPath } from './routes';
 import type { TabName } from './types/gameTypes';
+import sitemap from '../public/sitemap.xml?raw';
 
 describe('tab addresses', () => {
     const entries = Object.entries(TAB_PATHS) as [TabName, string][];
@@ -33,5 +34,12 @@ describe('tab addresses', () => {
         for (const [, path] of entries) {
             expect(RESERVED_PATHS.some(r => path === r || path.startsWith(`${r}/`))).toBe(false);
         }
+    });
+
+    // Search engines get every tab but the personal ones and previews.
+    it('are all in the sitemap, except Share, Account and preview tabs', () => {
+        const listed = [...sitemap.matchAll(/<loc>https:\/\/towerforge\.net(\/[^<]*)<\/loc>/g)].map(m => m[1]);
+        const wanted = entries.filter(([tab]) => !['share', 'account', 'ai'].includes(tab)).map(([, p]) => p);
+        expect(listed).toEqual(wanted);
     });
 });

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Every tab's address except Share, Account and preview tabs; routes.test.ts keeps it in step with routes.ts. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://towerforge.net/</loc></url>
+  <url><loc>https://towerforge.net/tiers</loc></url>
+  <url><loc>https://towerforge.net/workshop</loc></url>
+  <url><loc>https://towerforge.net/labs</loc></url>
+  <url><loc>https://towerforge.net/cards</loc></url>
+  <url><loc>https://towerforge.net/perks</loc></url>
+  <url><loc>https://towerforge.net/ultimate-weapons</loc></url>
+  <url><loc>https://towerforge.net/permanent-uws</loc></url>
+  <url><loc>https://towerforge.net/modules</loc></url>
+  <url><loc>https://towerforge.net/bots</loc></url>
+  <url><loc>https://towerforge.net/guardian</loc></url>
+  <url><loc>https://towerforge.net/relics</loc></url>
+  <url><loc>https://towerforge.net/optimizer</loc></url>
+  <url><loc>https://towerforge.net/what-if</loc></url>
+  <url><loc>https://towerforge.net/tournament</loc></url>
+  <url><loc>https://towerforge.net/tournament-history</loc></url>
+  <url><loc>https://towerforge.net/enemy-stats</loc></url>
+  <url><loc>https://towerforge.net/coins-per-run</loc></url>
+  <url><loc>https://towerforge.net/run-length</loc></url>
+  <url><loc>https://towerforge.net/creators</loc></url>
+</urlset>

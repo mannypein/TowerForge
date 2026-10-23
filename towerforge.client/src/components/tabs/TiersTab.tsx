@@ -5,6 +5,7 @@
 
 import { useGameStore } from '../../store/useGameStore';
 import NumericInput from '../common/NumericInput';
+import { MAX_TIER } from '../../constants/gameData';
 
 export default function TiersTab() {
     const profile = useGameStore(s => s.profile);
@@ -40,7 +41,7 @@ export default function TiersTab() {
                                 }}
                             >
                                 <option value="">—</option>
-                                {Array.from({ length: 24 }, (_, i) => i + 1).map(t => (
+                                {Array.from({ length: MAX_TIER }, (_, i) => i + 1).map(t => (
                                     <option key={t} value={t}>T{t}</option>
                                 ))}
                             </select>

@@ -36,6 +36,7 @@ Run from `towerforge.client/` unless noted.
 | Import game icons (repo root) | `powershell -ExecutionPolicy Bypass -File import-icons.ps1` — trims, centers and resizes PNGs from `Desktop\Tower-Forge-Assets` |
 | Creator profile pictures | `npm run creator-avatars` — downloads each YouTube-linked creator's picture into `src/assets/creators/`; run after adding a YouTube link to `creatorCodes.ts` (a test fails until you do) |
 | Cost tables | `npm run upgrade-costs -- <unpacked thetowersdk package>` — rewrites `workshopCosts.ts`, `labCosts.ts` and `moduleCosts.ts` (steps in the script header) |
+| Link preview image | `powershell -ExecutionPolicy Bypass -File scripts\og-image.ps1` — redraws `public/og-image.png`, the card Discord/Reddit/X show for a towerforge.net link (index.html's `og:` tags). `public/robots.txt` and `public/sitemap.xml` sit beside it (`routes.test.ts` keeps the sitemap in step with `routes.ts`) |
 | Relic catalog | `npm run relic-catalog -- <unpacked thetowersdk package>` — rewrites `relicCatalog.ts` (each export relic slot's relic and bonus); rerun when the game adds relics |
 | TowerForge Link exe (repo root) | `dotnet publish TowerForge.Link -c Release -o <folder>` — one self-contained `TowerForgeLink.exe` (unsigned for now) |
 

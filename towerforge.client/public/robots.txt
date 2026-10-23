@@ -1,0 +1,8 @@
+# towerforge.net: every page may be indexed. Not the API, the analytics,
+# or share links (a player's stats snapshot, ?share=CODE).
+User-agent: *
+Disallow: /api/
+Disallow: /analytics/
+Disallow: /*?share=
+
+Sitemap: https://towerforge.net/sitemap.xml
