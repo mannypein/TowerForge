@@ -434,18 +434,6 @@
         box-shadow: 0 0 10px color-mix(in srgb, var(--gold) 45%, transparent);
     }
 
-.btn-cloud {
-    background: var(--accent-2-glow);
-    border-color: var(--accent-2);
-    color: color-mix(in srgb, var(--accent-2) 70%, white);
-}
-
-    .btn-cloud:hover {
-        background: var(--accent-2);
-        color: #fff;
-        box-shadow: 0 0 10px color-mix(in srgb, var(--accent-2) 45%, transparent);
-    }
-
 .btn-dim {
     background: transparent;
     border-color: var(--border);

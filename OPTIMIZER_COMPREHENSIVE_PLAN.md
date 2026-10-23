@@ -160,7 +160,7 @@
   - [ ] Slot detection working
   - [ ] multEff/subEff scaling correct
   - [ ] Stone cost = curPct×3, capped at 70%
-  - [ ] Loaded assist data from cloud save (when ready)
+  - [ ] Loaded assist data from the game's data export
 
 ### Coin Upgrades (Row 2) — Calibration Needed
 
@@ -197,7 +197,7 @@
   - [ ] Cannon/Armor/Generator/Core curves separate
 
 - [ ] **Module Selection**
-  - [ ] Library loaded from cloud save
+  - [ ] Library loaded from the game's data export
   - [ ] Equipped modules identified
   - [ ] Loadouts handled correctly
 
@@ -260,7 +260,7 @@ After each fix, re-score the same tier:
 ### **Phase 4: Polish (optional)**
 1. Implement non-GC builds (eHP/Hybrid/Farming) if resources allow
 2. Expand Row 2 UI (reveal Workshop/Labs/Cards panels)
-3. Module panel (if useful post-cloud-save)
+3. Module panel (if useful once modules import)
 
 ---
 

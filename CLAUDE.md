@@ -40,19 +40,17 @@ Run from `towerforge.client/` unless noted.
 | Relic catalog | `npm run relic-catalog -- <unpacked thetowersdk package>` — rewrites `relicCatalog.ts` (each export relic slot's relic and bonus); rerun when the game adds relics |
 | TowerForge Link exe (repo root) | `dotnet publish TowerForge.Link -c Release -o <folder>` — one self-contained `TowerForgeLink.exe` (unsigned for now) |
 
-`npx eslint src` shows older `no-explicit-any` errors in LoginModal, moduleDefinitions,
-saveParser, towerAuth and gameTypes (`CloudSaveData`). Lint the files you change instead.
+`npx eslint src` shows older `no-explicit-any` errors in moduleDefinitions. Lint the files you change instead.
 
 ## Rules
 
 - **Commit and push every finished change to GitHub without asking** (owner's standing request): once a change works and the tests pass, commit it with a clear message and push to `main`. Scan the staged files first (see the next rule).
 - **Ask before you deploy** to towerforge.net. Approval covers one deploy, not later ones.
 - **This repo is public.** Never commit secrets or a player's personal data. Scan staged files before every push.
-  - The game's Firebase web key is only in `towerforge.client/.env.local` (`VITE_TOWER_FIREBASE_KEY`, template in `.env.example`). A fresh clone needs it before deploying, or cloud-save login won't work.
   - Commits use the owner's GitHub noreply address (already set in this repo's git config).
 - **Never ship or commit a real game export.** Don't copy one into `public/`, tests, fixtures or docs. Tests build a made-up export with `src/test/makeExport.ts`.
 - **Before deploying:** check `towerforge.client/public/` for `__test_export*` files and personal data.
-- Don't run the Save Tool's login or pull scripts, and don't create accounts on the production site.
+- **Never sign in to players' game accounts or pull game cloud saves.** The site's old "Cloud Pull" was removed for good (2026-10-23, owner's decision): game data comes only from the game's own export. Don't run the Save Tool's login or pull scripts, and don't create accounts on the production site.
 - **Game data only goes in when it's confirmed.** Map an export index only after checking it against a real account (or in-game screenshots), and note how in `docs/game-export-format.md`. Anything unconfirmed keeps what the player entered. Wiki values are a starting point; the in-game screen wins.
 - When a formula is checked against an in-game number, add that number as a test anchor (see `src/engine/calculations.test.ts`).
 - **Write down what you verify.** Game mechanics checked against the wiki or the game go in `docs/ultimate-weapons.md` / `docs/optimizer.md` / `docs/run-simulation.md` (with the source), so they don't have to be looked up again. Say when something is the code's assumption rather than verified.

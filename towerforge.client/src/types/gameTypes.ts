@@ -354,12 +354,6 @@ export interface OptAlt {
     scorePct: number;
 }
 
-// ── Cloud Save ────────────────────────────────────────────────
-export interface CloudSaveData {
-    rawSave: Record<string, any>;     // raw JSON from Firestore (all 725 fields)
-    pulledAt: string;                 // ISO timestamp when last pulled
-}
-
 // ── Full App State (root shape for the store) ─────────────────
 export interface AppState {
     activeTab: TabName;
@@ -381,7 +375,6 @@ export interface AppState {
     currencies: Currencies;
     importedBattles: BattleReport[];   // BattleHistory from the last game data import
     battleReportChoice: number;        // which report calibrates the optimizer: -1 = pasted, else importedBattles index
-    cloudSaveData: CloudSaveData | null;  // cloud save if pulled, null otherwise
     guardianData: GuardianData;
     labsRunning: LabRunning[];    // labs being researched at the last import (29.1.3+ exports)
     tourneyLog: TourneyLog;       // each tournament run's battle conditions, as the player ticked them

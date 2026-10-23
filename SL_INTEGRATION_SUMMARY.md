@@ -53,7 +53,7 @@ Marked item #2 as COMPLETE:
 
 ### Data Flow
 ```
-User's Cloud Save
+Your game data (Import Game Data)
     ↓
 UW Data: SL.sv[0]=15, SL.sv[1]=40, SL.sv[2]=3
     ↓

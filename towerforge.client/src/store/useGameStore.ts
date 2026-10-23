@@ -33,7 +33,7 @@ import type {
     SlotLevels,
     AssistEntry,
     TabName,
-    CloudSaveData, GuardianData, LabRunning, TourneyLog, TourneyLogEntry, TourneyRecord,
+    GuardianData, LabRunning, TourneyLog, TourneyLogEntry, TourneyRecord,
 } from '../types/gameTypes';
 import { mergeBattles } from '../engine/battleReport';
 import { mergeTourneyRecords } from '../engine/tourneyHistory';
@@ -85,7 +85,6 @@ const KEYS = {
     importedBattles: 'tc_imported_battles',
     battleReportChoice: 'tc_battle_choice',
     modules: 'tc_modules',
-    cloudSaveData: 'tc_cloud_save',
     guardian: 'tc_guardian',
     labsRunning: 'tc_labs_running',
     tourneyLog: 'tc_tourney_log',
@@ -280,7 +279,7 @@ interface GameStore extends AppState {
 
     // ── Currencies & game data import ────────────────────────────
     setCurrency: (key: keyof Currencies, value: number) => void;
-    applyGameImport: (imp: GameImport, raw: Record<string, unknown>) => void;
+    applyGameImport: (imp: GameImport) => void;
 
     // ── Guardian ─────────────────────────────────────────────────
     setGuardianData: (patch: Partial<GuardianData>) => void;
@@ -297,11 +296,6 @@ interface GameStore extends AppState {
     importData: (json: string) => boolean;
     // Wipes every saved stat from this device (used when signing out).
     resetAll: () => void;
-
-    // ── Cloud Save ────────────────────────────────────────────────
-    storeCloudSave: (rawSave: Record<string, unknown>) => void;
-    getCloudSaveData: () => CloudSaveData | null;
-    clearCloudSave: () => void;
 }
 
 // Migrates old [string, string] slot tuples to { main, assist }
@@ -349,7 +343,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
     currencies: { ...DEFAULT_CURRENCIES },
     importedBattles: [],
     battleReportChoice: -1,
-    cloudSaveData: null,
     guardianData: defaultGuardianData(),
     labsRunning: [],
     tourneyLog: {},
@@ -365,6 +358,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     // ── Load All ──────────────────────────────────────────────────
     loadAll: () => {
+        // Imports kept a second copy of the whole game file here until
+        // 2026-10-23 (nothing read it): free the space.
+        try { localStorage.removeItem('tc_cloud_save'); } catch { /* storage blocked */ }
         const profile = loadKey<Profile>(KEYS.profile, defaultProfile);
         const tierWaves = loadKey<TierWaves>(KEYS.tiers, {});
         const wsData = loadKey<WSPreset[]>(KEYS.workshop, Array.from({ length: 5 }, defaultWSPreset));
@@ -381,7 +377,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
         const importedBattles = loadKey<BattleReport[]>(KEYS.importedBattles, []);
         const battleReportChoice = loadKey<number>(KEYS.battleReportChoice, -1);
         const moduleState = migrateModuleState(loadKey<ModuleState>(KEYS.modules, defaultModuleState));
-        const cloudSaveData = loadKey<CloudSaveData | null>(KEYS.cloudSaveData, null);
         const guardianData = { ...defaultGuardianData(), ...loadKey<Partial<GuardianData>>(KEYS.guardian, {}) };
         const labsRunning = loadKey<LabRunning[]>(KEYS.labsRunning, []);
         const tourneyLog = loadKey<TourneyLog>(KEYS.tourneyLog, {});
@@ -391,7 +386,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         set({
             profile, tierWaves, wsData, enhData,
             labData, cardData, uwData, relicData,
-            perkData, botData, botLoadouts, moduleState, battleReportText, currencies, importedBattles, battleReportChoice, cloudSaveData,
+            perkData, botData, botLoadouts, moduleState, battleReportText, currencies, importedBattles, battleReportChoice,
             guardianData, labsRunning, tourneyLog, tourneyRecords, vaultLevels,
         });
     },
@@ -421,9 +416,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
         saveKey(KEYS.currencies, currencies);
     },
 
-    // Applies the parts of the game's export we can read with confidence
-    // and keeps the whole file (cloudSaveData) for later re-parsing.
-    applyGameImport: (imp, raw) => {
+    // Applies the parts of the game's export we can read with confidence.
+    applyGameImport: (imp) => {
         const s = get();
         const tierWaves = { ...s.tierWaves, ...imp.tierWaves };
         const profile: Profile = {
@@ -525,7 +519,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
         saveKey(KEYS.perks, perkData);
         saveKey(KEYS.labs, labData);
         saveKey(KEYS.modules, moduleState);
-        s.storeCloudSave(raw);
     },
 
     // ── Profile ───────────────────────────────────────────────────
@@ -867,7 +860,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
             currencies: { ...DEFAULT_CURRENCIES },
             importedBattles: [],
             battleReportChoice: -1,
-            cloudSaveData: null,
             guardianData: defaultGuardianData(),
             labsRunning: [],
             tourneyLog: {},
@@ -962,22 +954,5 @@ export const useGameStore = create<GameStore>((set, get) => ({
         } catch {
             return false;
         }
-    },
-
-    // ── Cloud Save ────────────────────────────────────────────────
-    storeCloudSave: (rawSave) => {
-        const cloudSaveData: CloudSaveData = {
-            rawSave,
-            pulledAt: new Date().toISOString(),
-        };
-        set({ cloudSaveData });
-        saveKey(KEYS.cloudSaveData, cloudSaveData);
-    },
-
-    getCloudSaveData: () => get().cloudSaveData,
-
-    clearCloudSave: () => {
-        set({ cloudSaveData: null });
-        localStorage.removeItem(KEYS.cloudSaveData);
     },
 }));

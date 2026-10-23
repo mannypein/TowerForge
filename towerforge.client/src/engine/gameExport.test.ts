@@ -415,7 +415,7 @@ describe('29.1.3 exports (ExportVersion 1)', () => {
         expect(b.plusUnlocked['Amplify Bot'][0]).toBe(false);              // Bot+ only counts where the bot is
         expect(b.loadouts[0]).toEqual(['Golden Bot']);
         expect(b.loadouts[1]).toEqual(['Thunder Bot', 'Amplify Bot']);
-        useGameStore.getState().applyGameImport(imp, {});
+        useGameStore.getState().applyGameImport(imp);
         const gcFarm = botsForPreset(useGameStore.getState().botData, 0);
         expect(gcFarm['Thunder Bot'].owned).toBe(false);
         expect(gcFarm['Golden Bot'].owned).toBe(true);
@@ -427,7 +427,7 @@ describe('29.1.3 exports (ExportVersion 1)', () => {
         const st = useGameStore.getState();
         st.applyGameImport(parseGameExport(makeExport({
             ...noBots, GoldenBotPresets: [row([30, 20, 15, 19]), off], GlobalPresets: [{ BotsIndex: 0 }, { BotsIndex: 1 }],
-        })), {});
+        })));
         useGameStore.getState().setBotOwned('Golden Bot', true, 1);
         useGameStore.getState().setBotMedal('Golden Bot', 1, 0, 5);
         const bots = useGameStore.getState().botData;
@@ -512,7 +512,7 @@ describe('29.1.3 exports (ExportVersion 1)', () => {
     it('imports the relic totals over what was typed in', () => {
         useGameStore.getState().setRelic('rDmg', 99);
         const raw = makeExport({ RelicsUnlocked: [0, 0, 2] });
-        useGameStore.getState().applyGameImport(parseGameExport(raw), raw);
+        useGameStore.getState().applyGameImport(parseGameExport(raw));
         expect(useGameStore.getState().relicData.rDmg).toBe(3);
     });
 
@@ -585,7 +585,7 @@ describe('29.1.3 exports (ExportVersion 1)', () => {
             ],
             GlobalPresets: [{ BotsIndex: 0 }, { BotsIndex: 1 }],
         });
-        useGameStore.getState().applyGameImport(parseGameExport(raw), raw);
+        useGameStore.getState().applyGameImport(parseGameExport(raw));
         const s = useGameStore.getState();
         const p0 = botsForPreset(s.botData, 0);
         const p1 = botsForPreset(s.botData, 1);

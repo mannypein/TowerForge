@@ -9,7 +9,6 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { useGameStore } from './store/useGameStore';
 import type { TabName } from './types/gameTypes';
-import { parseCloudSave } from './engine/saveParser';
 import { isGameExport, parseGameExport, SUPPORTED_EXPORT_VERSION } from './engine/gameExport';
 import { trackEvent } from './analytics';
 import { TAB_PATHS, tabFromPath } from './routes';
@@ -18,7 +17,6 @@ import CurrencyBar from './components/common/CurrencyBar';
 
 // ── Tab Components (stubs for now — filled in one by one) ────
 import ProfileTab from './components/tabs/ProfileTab';
-import LoginModal from './components/LoginModal';
 import LinkModal from './components/LinkModal';
 import AutoImport from './components/common/AutoImport';
 import ThemePicker from './components/common/ThemePicker';
@@ -129,7 +127,6 @@ const titleOf = (tab: TabName) => (tab === 'profile'
 const plainClick = (e: React.MouseEvent) => e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
 
 export default function App() {
-    const [showLoginModal, setShowLoginModal] = useState(false);
     const [pdfBusy, setPdfBusy] = useState(false);
     // "Get from emulator": TowerForge Link's setup dialog (with its message, if it answered).
     const [linkBusy, setLinkBusy] = useState(false);
@@ -149,7 +146,6 @@ export default function App() {
     const labData = useGameStore(s => s.labData);
     const applyGameImport = useGameStore(s => s.applyGameImport);
     const importData = useGameStore(s => s.importData);
-    const storeCloudSave = useGameStore(s => s.storeCloudSave);
 
     const accountUsername = useAccountStore(s => s.username);
     const accountStatus = useAccountStore(s => s.status);
@@ -287,7 +283,7 @@ export default function App() {
     function importJson(json: unknown, text: string, source: 'json' | 'pdf' | 'link', note?: string) {
         if (isGameExport(json)) {
             const imp = parseGameExport(json);
-            applyGameImport(imp, json);
+            applyGameImport(imp);
             trackEvent(source === 'pdf' ? 'Import game data (PDF)' : source === 'link' ? 'Import game data (emulator)' : 'Import game data');
             const lines = [
                 '✓ Imported from your game data:',
@@ -335,45 +331,6 @@ export default function App() {
         }
 
         if (!importData(text)) alert('Import failed — this isn’t a game data export or a TowerForge backup.');
-    }
-
-    // ── Cloud save pull handler ──────────────────────────────────
-    function handleCloudSavePull(rawSave: Record<string, unknown>) {
-        try {
-            // Parse raw Firestore JSON → TowerForge structures
-            const parsed = parseCloudSave(rawSave);
-
-            // Format as exportData() shape for importData()
-            const importPayload = JSON.stringify({
-                version: 2,
-                exportedAt: new Date().toISOString(),
-                profile: parsed.profile,
-                perkData: parsed.perkData,
-                tierWaves: parsed.tierWaves,
-                wsData: parsed.wsData,
-                enhData: parsed.enhData,
-                labData: parsed.labData,
-                cardData: parsed.cardData,
-                uwData: parsed.uwData,
-                relicData: parsed.relicData,
-                botData: parsed.botData,
-                moduleState: parsed.moduleState,
-            });
-
-            // Use importData to update store and persist
-            const ok = importData(importPayload);
-            if (!ok) {
-                throw new Error('Failed to import parsed data');
-            }
-
-            // Also store the raw save
-            storeCloudSave(rawSave);
-
-            alert('✓ Cloud save loaded! All tabs updated automatically.');
-        } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            alert(`✗ Failed to parse cloud save: ${msg}`);
-        }
     }
 
     if (shareCode) return <SharedView code={shareCode} />;
@@ -438,10 +395,6 @@ export default function App() {
                 <div className="header-actions">
                     <DiscordLink />
                     <ThemePicker />
-                    {/* TODO: Re-enable cloud save button after testing */}
-                    {/* <button className="btn btn-cloud" onClick={() => setShowLoginModal(true)}>
-                        ☁ Cloud Pull
-                    </button> */}
                     <button
                         className="btn btn-dim lnk-btn"
                         onClick={() => void getFromEmulator()}
@@ -451,7 +404,7 @@ export default function App() {
                         🖥 Get from emulator
                     </button>
                     <AutoImport
-                        onImport={raw => applyGameImport(parseGameExport(raw), raw)}
+                        onImport={raw => applyGameImport(parseGameExport(raw))}
                         onNeedsLink={() => setLinkModal({ problem: null })}
                     />
                     <label className="btn btn-gold" style={{ cursor: 'pointer' }} title="Import the data export from The Tower (tool_export.json)">
@@ -543,13 +496,6 @@ export default function App() {
                 />
             )}
 
-            {/* ── Login Modal ── */}
-            {showLoginModal && (
-                <LoginModal
-                    onClose={() => setShowLoginModal(false)}
-                    onSuccess={handleCloudSavePull}
-                />
-            )}
 
         </div>
     );
