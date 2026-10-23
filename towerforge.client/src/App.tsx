@@ -128,7 +128,7 @@ const plainClick = (e: React.MouseEvent) => e.button === 0 && !e.metaKey && !e.c
 
 export default function App() {
     const [pdfBusy, setPdfBusy] = useState(false);
-    // "Get from emulator": TowerForge Link's setup dialog (with its message, if it answered).
+    // "Get from emulator or phone": TowerForge Link's setup dialog (with its message, if it answered).
     const [linkBusy, setLinkBusy] = useState(false);
     const [linkModal, setLinkModal] = useState<{ problem: string | null } | null>(null);
     // The tab last opened in each section, so going back to a section returns to it.
@@ -395,14 +395,24 @@ export default function App() {
                 <div className="header-actions">
                     <DiscordLink />
                     <ThemePicker />
-                    <button
-                        className="btn btn-dim lnk-btn"
-                        onClick={() => void getFromEmulator()}
-                        disabled={linkBusy}
-                        title="Copy the game's data export straight from BlueStacks or another emulator on this PC"
-                    >
-                        🖥 Get from emulator
-                    </button>
+                    <span className="lnk-pair">
+                        <button
+                            className="btn btn-dim lnk-btn"
+                            onClick={() => void getFromEmulator()}
+                            disabled={linkBusy}
+                            title="Copy the game's data export straight from an emulator on this PC, or an Android phone on the same Wi-Fi (TowerForge Link)"
+                        >
+                            🖥 Get from emulator or phone
+                        </button>
+                        <button
+                            className="btn btn-dim lnk-btn lnk-gear"
+                            onClick={() => setLinkModal({ problem: null })}
+                            title="Set up TowerForge Link: emulators and Android phones"
+                            aria-label="Set up TowerForge Link"
+                        >
+                            ⚙
+                        </button>
+                    </span>
                     <AutoImport
                         onImport={raw => applyGameImport(parseGameExport(raw))}
                         onNeedsLink={() => setLinkModal({ problem: null })}

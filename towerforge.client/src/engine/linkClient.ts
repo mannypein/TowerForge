@@ -2,9 +2,10 @@
 //  TowerForge Companion — TowerForge Link client
 //  Talks to TowerForge Link, the small Windows helper that reads the
 //  game's data export (tool_export.json) off an Android emulator with
-//  the emulator's own adb (TowerForge.Link/, docs/towerforge-link.md).
+//  the emulator's own adb, or off an Android phone over Wi-Fi with
+//  Google's adb (Link 0.3+; TowerForge.Link/, docs/towerforge-link.md).
 //  The helper only listens on this PC; the file goes from the
-//  emulator to this browser and is never uploaded.
+//  emulator or phone to this browser and is never uploaded.
 // ============================================================
 
 export const LINK_URL = 'http://localhost:47821';
@@ -19,10 +20,10 @@ export type LinkResult =
 // Chrome and Edge ask once before a site may reach apps on this PC
 // (Local Network Access); naming the target lets them ask. Other
 // browsers ignore the option.
-function linkFetch(path: string, timeoutMs: number): Promise<Response> {
+function linkFetch(path: string, timeoutMs: number, method: 'GET' | 'POST' = 'GET'): Promise<Response> {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-    const init = { signal: ctrl.signal, cache: 'no-store', targetAddressSpace: 'loopback' } as RequestInit;
+    const init = { method, signal: ctrl.signal, cache: 'no-store', targetAddressSpace: 'loopback' } as RequestInit;
     return fetch(`${LINK_URL}${path}`, init).finally(() => clearTimeout(timer));
 }
 
@@ -65,4 +66,52 @@ export function exportAge(modified: number, now = Date.now()): string {
     if (mins < 60) return unit(mins, 'minute');
     if (mins < 60 * 24) return unit(Math.floor(mins / 60), 'hour');
     return unit(Math.floor(mins / (60 * 24)), 'day');
+}
+
+// ── What Link found, and Android phones (Link 0.3+) ────────────
+export interface LinkStatus {
+    version: string;
+    emulators: { name: string; running: boolean; adbEnabled: boolean | null }[];
+    // Missing before Link 0.3 (no phones over Wi-Fi).
+    phone?: { adbReady: boolean; adbVersion?: string; paired: number; connected: string[] };
+}
+
+// null: Link isn't running on this PC (or the browser blocked it).
+export async function linkStatus(): Promise<LinkStatus | null> {
+    try {
+        const res = await linkFetch('/status', 15_000);
+        return res.ok ? await res.json() as LinkStatus : null;
+    } catch {
+        return null;
+    }
+}
+
+export type LinkAction =
+    | { ok: true; message: string }
+    | { ok: false; reason: 'unreachable' }
+    | { ok: false; reason: 'problem'; code: string; message: string };
+
+// adb: download Google's adb · pair: address + 6-digit code from the
+// phone's pairing screen · connect: the address on Wireless debugging's
+// main screen · forget: the phones paired through Link.
+export async function linkPhone(
+    action: 'adb' | 'pair' | 'connect' | 'forget', params: Record<string, string> = {},
+): Promise<LinkAction> {
+    const query = new URLSearchParams(params).toString();
+    let res: Response;
+    try {
+        res = await linkFetch(`/phone/${action}${query ? `?${query}` : ''}`, 180_000, 'POST');
+    } catch {
+        return { ok: false, reason: 'unreachable' };
+    }
+    const old = { ok: false, reason: 'problem', code: 'old_link', message: 'This TowerForge Link is too old for phones: download the new one, close the old window and run the new one.' } as const;
+    try {
+        const body = await res.json() as { message?: string; error?: string };
+        if (res.ok) return { ok: true, message: body.message ?? 'Done.' };
+        // Link 0.2 and older only answer GET.
+        if (body.error === 'method') return old;
+        return { ok: false, reason: 'problem', code: body.error ?? 'failed', message: body.message ?? 'TowerForge Link couldn’t do that.' };
+    } catch {
+        return old;
+    }
 }

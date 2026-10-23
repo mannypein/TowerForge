@@ -86,16 +86,18 @@ export default function WelcomeGuide({ onImportFile, onEmulator, emulatorBusy }:
                 <li>
                     <strong>Bring the file here.</strong>
                     <span className="wlc-way">
-                        <em>On a PC with BlueStacks or another emulator:</em> Get from emulator reads it for you
-                        (TowerForge Link, a one-time setup), and Auto import keeps the site up to date while you play.
+                        <em>On a PC with an emulator, or an Android phone on the same Wi-Fi:</em> Get from emulator or
+                        phone reads it for you (TowerForge Link, a one-time setup), and Auto import keeps the site up to
+                        date while you play.
                     </span>
                     <button className="btn btn-dim lnk-btn wlc-btn" onClick={onEmulator} disabled={emulatorBusy}>
-                        🖥 Get from emulator
+                        🖥 Get from emulator or phone
                     </button>
                     <span className="wlc-way">
-                        <em>On a phone:</em> the game keeps the file in its own app folder, which newer Android versions
-                        hide from most apps. If you can copy <code>tool_export.json</code> (or a PDF of it) to this
-                        device, import it in the next step.
+                        <em>On an Android phone only:</em> the game keeps the file in its own app folder
+                        (<code>Android/data/com.TechTreeGames.TheTower/files</code>), which most apps can&apos;t open. If
+                        your file manager can, copy <code>tool_export.json</code> to Downloads and import it in the next
+                        step. <em>iPhone:</em> iOS doesn&apos;t let other apps reach the file, so it can&apos;t be imported yet.
                     </span>
                 </li>
                 <li>

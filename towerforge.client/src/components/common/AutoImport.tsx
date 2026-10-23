@@ -113,7 +113,7 @@ export default function AutoImport({ onImport, onNeedsLink }: Props) {
     const warn = on && !!status && !status.startsWith('Up to date');
     const title = on
         ? `Auto import is on: the site reads your newest game data from the emulator while it's open. ${status}`
-        : 'Read your game data by itself whenever the game exports it. In the game: Settings → External Tools Export → Auto. Needs TowerForge Link running.';
+        : 'Read your game data by itself whenever the game exports it, from an emulator on this PC or an Android phone on the same Wi-Fi. In the game: Settings → External Tools Export → Auto. Needs TowerForge Link running.';
 
     return (
         <>

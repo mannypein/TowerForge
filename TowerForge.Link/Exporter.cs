@@ -5,9 +5,12 @@
 //  persistentDataPath; TheTowerSDK save/access/path). Phones on
 //  Android 11+ hide that folder from other apps and the browser, but
 //  adb can read it. Steps:
-//   1. Pick an adb: the running emulator's own (no version clash with
-//      the adb it runs itself), else Android's platform-tools.
-//   2. Connect to each running emulator's adb port.
+//   1. Pick an adb: with a phone paired over Wi-Fi, Google's (only it
+//      can reach phones that way — Phones.cs); else the running
+//      emulator's own (no version clash with the adb it runs itself),
+//      else Android's platform-tools.
+//   2. Connect to each running emulator's adb port, and to paired
+//      phones adb can see on the Wi-Fi.
 //   3. For every device adb lists, look for the file with `adb ls`
 //      (the file-transfer channel: size and modified time, no shell).
 //   4. Copy the newest one out with `adb pull` into a temp file, read
@@ -42,27 +45,35 @@ internal static class Exporter
     public static async Task<ExportFile> ReadAsync(long? newerThan = null)
     {
         var emulators = Emulators.Find();
-        if (emulators.Count == 0)
+        var phoneAdb = Phones.Any() ? await PlatformTools.FindAsync() : null;
+        if (emulators.Count == 0 && phoneAdb == null)
         {
             throw new ExportProblem("no_emulator",
                 "No Android emulator found on this PC. TowerForge Link works with BlueStacks (and MuMu, LDPlayer, "
-                + "MEmu or Nox), or a phone on USB with Android's platform-tools installed.");
+                + "MEmu or Nox), or an Android phone over Wi-Fi — pair it from \"Get from emulator or phone\" on towerforge.net.");
         }
 
         var running = emulators.Where(e => e.Running && e.Ports.Length > 0).ToList();
         var pick = running.FirstOrDefault()
             ?? emulators.FirstOrDefault(e => e.Name == "Android platform-tools")
-            ?? emulators[0];
-        var adb = new Adb(pick.AdbPath);
+            ?? emulators.FirstOrDefault();
+        var adb = new Adb(phoneAdb?.Path ?? pick!.AdbPath);
         await adb.StartServerAsync();
         foreach (var e in running.Count > 0 ? running : emulators)
         {
             foreach (var port in e.Ports) await adb.RunAsync(Quick, "connect", $"127.0.0.1:{port}");
         }
+        if (phoneAdb != null) await Phones.ConnectAsync(adb);
 
         var devices = await ListDevicesAsync(adb);
         if (devices.Count == 0)
         {
+            if (phoneAdb != null && running.Count == 0)
+            {
+                throw new ExportProblem("phone_offline",
+                    "Your phone isn't connected. On the phone, turn on Wireless debugging (Settings → Developer options), "
+                    + "on the same Wi-Fi as this PC, then try again. No need to pair again.");
+            }
             throw new ExportProblem("not_running", running.Count == 0
                 ? "Your emulator isn't running. Start it (with The Tower installed), then try again."
                 : $"{running[0].Name} is running but didn't answer. Wait for it to finish starting, then try again.");
@@ -191,6 +202,7 @@ internal static class Exporter
     // Which emulator a serial belongs to: by its adb port (emulator-N listens on N + 1).
     private static string SourceName(string serial, List<EmulatorInfo> emulators)
     {
+        if (Phones.IsPhoneSerial(serial)) return "your phone";
         int port = 0;
         if (serial.StartsWith("emulator-") && int.TryParse(serial["emulator-".Length..], out var console)) port = console + 1;
         else if (serial.Contains(':') && int.TryParse(serial[(serial.LastIndexOf(':') + 1)..], out var p)) port = p;

@@ -2,11 +2,16 @@
 //  TowerForge Link — the link the website talks to
 //  A tiny HTTP server on this PC only (127.0.0.1). towerforge.net,
 //  open in a browser on the same PC, calls
-//    GET http://localhost:47821/status   what the helper found
-//    GET http://localhost:47821/export   the game's export file
-//        ?newerThan=<unix seconds>         only if it's newer: 204 (no body)
-//                                          when it isn't — the site's auto
-//                                          import asks this every 30 s
+//    GET  /status                 what the helper found (emulators, phones)
+//    GET  /export                 the game's export file
+//         ?newerThan=<unix s>     only if it's newer: 204 (no body) when it
+//                                 isn't — the site's auto import asks this
+//                                 every 30 s
+//  Android phones over Wi-Fi (Phones.cs), when the player asks on the site:
+//    POST /phone/adb              download Google's adb (PlatformTools.cs)
+//    POST /phone/pair?address=192.168.1.23:37415&code=123456
+//    POST /phone/connect?address=192.168.1.23:41235
+//    POST /phone/forget           forget the phones paired through Link
 //  Safety:
 //   • listens on the loopback address only — nothing outside this PC
 //     can reach it;
@@ -14,8 +19,10 @@
 //     only — the browser blocks every other site from reading it;
 //   • checks the Host header, so a site that points its own name at
 //     127.0.0.1 (DNS rebinding) gets nothing;
-//   • does one thing: read that one file. No other adb command can be
-//     sent through it.
+//   • reads that one file and nothing else; the phone actions only pair
+//     or connect with an address on a home network (10.x, 172.16–31.x,
+//     192.168.x) and a 6-digit code. No other adb command can be sent
+//     through it.
 //  Chrome and Edge ask once before a site may talk to apps on the PC;
 //  the preflight answers Private Network Access's header too.
 // ============================================================
@@ -123,16 +130,21 @@ internal sealed class LinkServer(int port, Action<string> log)
 
         if (req.Method == "OPTIONS")
         {
-            cors["Access-Control-Allow-Methods"] = "GET, OPTIONS";
+            cors["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS";
             cors["Access-Control-Allow-Headers"] = req.Headers.TryGetValue("Access-Control-Request-Headers", out var h) ? h : "*";
             cors["Access-Control-Allow-Private-Network"] = "true";
             cors["Access-Control-Max-Age"] = "600";
             await WriteAsync(stream, 204, null, cors);
             return;
         }
+        if (req.Method == "POST")
+        {
+            await PhoneAsync(stream, cors, req);
+            return;
+        }
         if (req.Method != "GET")
         {
-            await WriteAsync(stream, 405, Error("method", "Use GET."), cors);
+            await WriteAsync(stream, 405, Error("method", "Use GET or POST."), cors);
             return;
         }
 
@@ -140,10 +152,10 @@ internal sealed class LinkServer(int port, Action<string> log)
         {
             case "/":
                 await WriteAsync(stream, 200, ("text/plain; charset=utf-8",
-                    Encoding.UTF8.GetBytes("TowerForge Link is running. Use \"Get from emulator\" on towerforge.net.")), cors);
+                    Encoding.UTF8.GetBytes("TowerForge Link is running. Use \"Get from emulator or phone\" on towerforge.net.")), cors);
                 return;
             case "/status":
-                await WriteAsync(stream, 200, Status(), cors);
+                await WriteAsync(stream, 200, await StatusAsync(), cors);
                 return;
             case "/export":
                 await ExportAsync(stream, cors, NewerThan(req.Query));
@@ -154,22 +166,135 @@ internal sealed class LinkServer(int port, Action<string> log)
         }
     }
 
-    private static (string, byte[]) Status() => Json(w =>
+    private async Task<(string, byte[])> StatusAsync()
     {
-        w.WriteString("app", "TowerForge Link");
-        w.WriteString("version", Program.Version);
-        w.WriteStartArray("emulators");
-        foreach (var e in Emulators.Find())
+        var emulators = Emulators.Find();
+        var tools = await PlatformTools.FindAsync();
+        var paired = Phones.Paired();
+        // Phones adb has connected (only asked once one is paired: that
+        // starts Google's adb server).
+        var phones = new List<string>();
+        if (tools != null && paired.Count > 0)
         {
-            w.WriteStartObject();
-            w.WriteString("name", e.Name);
-            w.WriteBoolean("running", e.Running);
-            if (e.AdbEnabled is bool on) w.WriteBoolean("adbEnabled", on);
-            else w.WriteNull("adbEnabled");
-            w.WriteEndObject();
+            await _oneAtATime.WaitAsync();
+            try
+            {
+                var adb = new Adb(tools.Path);
+                await adb.StartServerAsync();
+                await Phones.ConnectAsync(adb);
+                var r = await adb.RunAsync(TimeSpan.FromSeconds(8), "devices", "-l");
+                foreach (var line in r.Out.Split('\n').Skip(1))
+                {
+                    var parts = line.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
+                    if (parts.Length < 2 || parts[1] != "device" || !Phones.IsPhoneSerial(parts[0])) continue;
+                    var model = parts.FirstOrDefault(p => p.StartsWith("model:", StringComparison.Ordinal));
+                    phones.Add(model != null ? model["model:".Length..].Replace('_', ' ') : "Android phone");
+                }
+            }
+            finally { _oneAtATime.Release(); }
         }
-        w.WriteEndArray();
-    });
+        return Json(w =>
+        {
+            w.WriteString("app", "TowerForge Link");
+            w.WriteString("version", Program.Version);
+            w.WriteStartArray("emulators");
+            foreach (var e in emulators)
+            {
+                w.WriteStartObject();
+                w.WriteString("name", e.Name);
+                w.WriteBoolean("running", e.Running);
+                if (e.AdbEnabled is bool on) w.WriteBoolean("adbEnabled", on);
+                else w.WriteNull("adbEnabled");
+                w.WriteEndObject();
+            }
+            w.WriteEndArray();
+            w.WriteStartObject("phone");
+            w.WriteBoolean("adbReady", tools != null);
+            if (tools != null) w.WriteString("adbVersion", tools.Version.ToString());
+            w.WriteNumber("paired", paired.Count);
+            w.WriteStartArray("connected");
+            foreach (var p in phones) w.WriteStringValue(p);
+            w.WriteEndArray();
+            w.WriteEndObject();
+        });
+    }
+
+    // Query value by name ("" when absent).
+    private static string QueryValue(string query, string name)
+    {
+        foreach (var part in query.Split('&'))
+        {
+            var kv = part.Split('=', 2);
+            if (kv.Length == 2 && kv[0] == name) return Uri.UnescapeDataString(kv[1].Replace('+', ' '));
+        }
+        return "";
+    }
+
+    // The phone actions: one at a time, and never alongside an export read.
+    private async Task PhoneAsync(NetworkStream stream, Dictionary<string, string> cors, Request req)
+    {
+        await _oneAtATime.WaitAsync();
+        try
+        {
+            string message;
+            switch (req.Path)
+            {
+                case "/phone/adb":
+                    var got = await PlatformTools.DownloadAsync(log);
+                    message = $"Google's adb {got.Version} is ready.";
+                    break;
+                case "/phone/pair":
+                {
+                    var address = Phones.CleanAddress(QueryValue(req.Query, "address"));
+                    var code = QueryValue(req.Query, "code");
+                    if (address == null) throw new ExportProblem("bad_address", BadAddress);
+                    if (!Phones.IsCode(code)) throw new ExportProblem("bad_code", "The pairing code is the 6 digits under \"Wi-Fi pairing code\" on the phone.");
+                    message = await Phones.PairAsync(await PhoneAdbAsync(), address, code, log);
+                    break;
+                }
+                case "/phone/connect":
+                {
+                    var address = Phones.CleanAddress(QueryValue(req.Query, "address"));
+                    if (address == null) throw new ExportProblem("bad_address", BadAddress);
+                    message = await Phones.ConnectAddressAsync(await PhoneAdbAsync(), address, log);
+                    break;
+                }
+                case "/phone/forget":
+                    var tools = await PlatformTools.FindAsync();
+                    await Phones.ForgetAsync(tools == null ? null : new Adb(tools.Path));
+                    log("Forgot the phones paired through TowerForge Link.");
+                    message = "Forgotten. To use a phone again, pair it again.";
+                    break;
+                default:
+                    await WriteAsync(stream, 404, Error("not_found", "Nothing here."), cors);
+                    return;
+            }
+            await WriteAsync(stream, 200, Json(w => { w.WriteBoolean("ok", true); w.WriteString("message", message); }), cors);
+        }
+        catch (ExportProblem p)
+        {
+            await WriteAsync(stream, 409, Error(p.Code, p.Message), cors);
+        }
+        catch (Exception ex)
+        {
+            log($"Something went wrong: {ex.Message}");
+            await WriteAsync(stream, 500, Error("failed", "TowerForge Link hit an error: " + ex.Message), cors);
+        }
+        finally
+        {
+            _oneAtATime.Release();
+        }
+    }
+
+    private const string BadAddress =
+        "Type the address the phone shows, like 192.168.1.23:37415 (numbers, a colon, then the port).";
+
+    private static async Task<Adb> PhoneAdbAsync()
+    {
+        var tools = await PlatformTools.FindAsync()
+            ?? throw new ExportProblem("adb_missing", "Phones need Google's adb first: click \"Get Google's adb\".");
+        return new Adb(tools.Path);
+    }
 
     // newerThan=<unix seconds> from the query (null when absent or not a number).
     private static long? NewerThan(string query)
