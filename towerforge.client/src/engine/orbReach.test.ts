@@ -10,7 +10,7 @@ import type { OptimizerSnapshot } from './optimizer';
 import { runMix } from './battleConditions';
 import { parseGameExport } from './gameExport';
 import { battle, makeExport } from '../test/makeExport';
-import { orbStats } from './orbs';
+import { deathRayRate, orbStats } from './orbs';
 import { orbReachRatio } from './ehp';
 import type { EhpCalibration, EhpInputs } from './ehp';
 import { WS_STATS } from '../constants/gameData';
@@ -126,5 +126,34 @@ describe('how often orbs pass an enemy', () => {
         expect(orbReachRatio({ orbRate: 20 } as EhpInputs, ehpCal)).toBeCloseTo(reach(2 * lam0) / reach(lam0), 10);
         expect(orbReachRatio({ orbRate: 10 } as EhpInputs, ehpCal)).toBeCloseTo(1, 10);
         expect(orbReachRatio({ orbRate: 20 } as EhpInputs, { ...ehpCal, orbKills: 0 })).toBe(1);   // no orb kills in the run
+    });
+});
+
+// Death Ray: beam time (the card) × (1 + the Double Death Ray chance).
+describe('Death Ray’s beams', () => {
+    const drSnap = (stars: number, lab: number) => ({
+        presetIdx: 0, labData: { 'Double Death Ray': lab },
+        cardData: { data: stars ? { 'Death Ray': { s: stars } } : {}, slots: 1, presets: { 0: stars ? ['Death Ray'] : [] } },
+    }) as unknown as OptimizerSnapshot;
+
+    it('reads the beam time and the second beam’s chance', () => {
+        expect(deathRayRate(drSnap(7, 30))).toBeCloseTo(4.9 * 1.3, 10);    // wiki: 4.9 s at 7★, 30% at lab 30
+        expect(deathRayRate(drSnap(1, 0))).toBeCloseTo(2.3, 10);
+        expect(deathRayRate(drSnap(0, 30))).toBe(0);                       // card not equipped
+    });
+
+    it('more beam time touches run-ending enemies like more time among them', () => {
+        const c = { ...calib(0, 0.5), anchor: { ttt: 10, orbRate: 0, deathRayRate: 3 } as EdpsParts };
+        const moreBeam = reachLog(snap({ Ranged: 1 }), c, { ttt: 10, orbRate: 0, deathRayRate: 6 } as EdpsParts);
+        const moreTime = reachLog(snap({ Ranged: 1 }), c, { ttt: 20, orbRate: 0, deathRayRate: 3 } as EdpsParts);
+        expect(moreBeam).toBeCloseTo(moreTime, 10);
+        expect(moreBeam).toBeGreaterThan(0);
+    });
+
+    it('keeps more enemies off an eHP tower, with the orbs', () => {
+        const cal = { orbKills: 0.5, deathRayKills: 0.1, touchable: 1, anchor: { orbRate: 10, deathRayRate: 3 } } as unknown as EhpCalibration;
+        const l0 = touchesOf(0.5, 1) + touchesOf(0.1, 1);
+        const l = touchesOf(0.5, 1) + 2 * touchesOf(0.1, 1);
+        expect(orbReachRatio({ orbRate: 10, deathRayRate: 6 } as EhpInputs, cal)).toBeCloseTo(Math.exp(-l) / Math.exp(-l0), 10);
     });
 });

@@ -34,7 +34,7 @@ import type { BattleReport } from './battleReport';
 import { readActiveModuleBonuses } from './modBonuses';
 import { attackSkipSources, healthSkipChance, healthSkipSources } from './levelSkip';
 import { readEhpInputs } from './ehp';
-import { orbStats } from './orbs';
+import { deathRayRate, orbStats } from './orbs';
 import { cellsPerRun } from './cells';
 import { activeChips, bountyExtra, damageMeterFactor, fetchRate, summonExtra, withChipLevel } from './guardian';
 import { calcDamageMeter, echoingShotBullets } from './towerDamage';
@@ -349,6 +349,7 @@ function buildChain(
     add({ group: 'Enemies in range', label: 'Orbs', before: o0.orbs + o0.extraOrbs, after: o1.orbs + o1.extraOrbs, kind: 'count' });
     add({ group: 'Enemies in range', label: 'Orb speed (rotations a minute)', before: o0.speed, after: o1.speed, kind: 'count' });
     add({ group: 'Enemies in range', label: 'Orb size', before: o0.size, after: o1.size, kind: 'times' });
+    add({ group: 'Enemies in range', label: 'Death Ray beam time × (1 + Double Death Ray chance)', before: deathRayRate(base), after: deathRayRate(after), kind: 'count' });
 
     const ctx = (s: OptimizerSnapshot) => buildDamageContext(s.presetIdx, s.wsData, s.labData, s.cardData, s.relicData,
         s.enhData, cond(s).modBonuses, s.moduleState, s.botData);

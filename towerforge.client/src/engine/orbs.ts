@@ -67,6 +67,17 @@ export function orbStats(snap: OrbSnap): OrbStats {
     return { orbs, speed, size, extraOrbs, extraSpeed, rate: size * (orbs * speed + extraOrbs * extraSpeed) };
 }
 
+// Death Ray, which also destroys what it touches (wiki Death Ray, read
+// 2026-10-23): the card's value is how long the beam lasts (2.3–4.9 s by
+// stars), and the Double Death Ray lab gives a 1% chance a level (30) of a
+// second beam opposite the first. Touches follow duration × (1 + that
+// chance). Its mastery isn't counted — the wiki doesn't say what it does.
+export function deathRayRate(snap: Pick<OptimizerSnapshot, 'presetIdx' | 'cardData' | 'labData'>): number {
+    const card = activeCard(snap.cardData, snap.presetIdx, 'Death Ray');
+    if (!card) return 0;
+    return cardValue('Death Ray', card.stars) * (1 + 0.01 * (snap.labData['Double Death Ray'] ?? 0));
+}
+
 // Touches now ÷ at a calibration whose rate was `anchorRate` (1 without orbs).
 export const orbRateRatio = (snap: OrbSnap, anchorRate: number) =>
     (anchorRate > 0 ? orbStats(snap).rate / anchorRate : 1);

@@ -69,7 +69,7 @@ import type { BattleReport } from './battleReport';
 import type { OptimizerSnapshot } from './optimizer';
 import { runMix } from './battleConditions';
 import { botStatValue, touchesOf } from './edps';
-import { orbStats } from './orbs';
+import { deathRayRate, orbStats } from './orbs';
 
 // Seconds of sustained pressure the score weighs healing over.
 export const SUSTAIN_WINDOW_S = 60;
@@ -111,6 +111,7 @@ export interface EhpInputs {
     thorns: number;          // fraction of the attacker's max health per hit
     damageTaken: number;     // share of enemy damage that still lands after module effects (0–1)
     orbRate?: number;        // orbs × speed × size (engine/orbs.ts)
+    deathRayRate?: number;   // beam time × (1 + Double Death Ray chance)
     flameReduction?: number; // Flame Bot's Damage Reduction at its level (0 when not owned)
     chainThunderCap?: number; // Chain Thunder lab: 3% a level, at most 90%
 }
@@ -125,6 +126,7 @@ export interface EhpCalibration {
     // Orbs in the run: share of all enemies they destroyed, and the share
     // they can touch (not bosses, elites, fleets).
     orbKills?: number;
+    deathRayKills?: number;
     touchable?: number;
     // Flame Bot and Chain Thunder: the share of the hits each covers
     // (the run's cut ÷ what the upgrade gave), and CL's share of the damage.
@@ -343,7 +345,8 @@ export function readEhpInputs(snap: OptimizerSnapshot): EhpInputs {
 
     return {
         parts, health, maxRecovery, armorMainMissing, wallPool, defAbs, defPct, defPctUncapped, cfReduction, regen, wallRegen,
-        pkgChance, pkgAmount, thorns, damageTaken, orbRate: orbStats(snap).rate, flameReduction, chainThunderCap,
+        pkgChance, pkgAmount, thorns, damageTaken, orbRate: orbStats(snap).rate, deathRayRate: deathRayRate(snap),
+        flameReduction, chainThunderCap,
     };
 }
 
@@ -404,6 +407,7 @@ export function buildEhpCalibration(snap: OptimizerSnapshot, report: BattleRepor
         waveSec,
         otherHealPerSec: (healed('Lifesteal') + healed('HealthFromDeathWaveThisRound')) / report.gameTimeSec,
         orbKills: mix.orbKills,
+        deathRayKills: mix.deathRayKills,
         touchable: mix.touchable,
         flameCover: (anchor.flameReduction ?? 0) > 0 ? Math.min(1, cuts.flame / anchor.flameReduction!) : 0,
         chainThunderCover: thunderNow > 0 ? Math.min(1, cuts.chainThunder / thunderNow) : 0,
@@ -414,14 +418,18 @@ export function buildEhpCalibration(snap: OptimizerSnapshot, report: BattleRepor
 // Enemies that reach the tower, now ÷ at the calibration run, as orbs
 // destroy more or fewer of the ones they can touch (1 = no change).
 export function orbReachRatio(x: EhpInputs, calib: EhpCalibration): number {
-    const kills = calib.orbKills ?? 0;
     const touchable = calib.touchable ?? 1;
-    const rate0 = calib.anchor.orbRate ?? 0;
-    if (kills <= 0 || touchable <= 0 || rate0 <= 0) return 1;
-    const lambda0 = touchesOf(kills, touchable);
-    const lambda = lambda0 * (x.orbRate ?? 0) / rate0;
+    if (touchable <= 0) return 1;
+    // Orbs' and Death Ray's touches, each scaled by its own rate.
+    const part = (kills: number | undefined, now: number | undefined, then: number | undefined) => {
+        const l0 = (kills ?? 0) > 0 && (then ?? 0) > 0 ? touchesOf(kills!, touchable) : 0;
+        return { l0, l: l0 > 0 ? l0 * (now ?? 0) / then! : 0 };
+    };
+    const orb = part(calib.orbKills, x.orbRate, calib.anchor.orbRate);
+    const ray = part(calib.deathRayKills, x.deathRayRate, calib.anchor.deathRayRate);
+    if (orb.l0 + ray.l0 <= 0) return 1;
     const reach = (l: number) => (1 - touchable) + touchable * Math.exp(-l);
-    return reach(lambda) / reach(lambda0);
+    return reach(orb.l + ray.l) / reach(orb.l0 + ray.l0);
 }
 
 // ── Score ─────────────────────────────────────────────────────

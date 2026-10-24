@@ -334,7 +334,10 @@ Death Ray for runs that end to enemies they can touch.
 - **eHP (2026-10-23):** the same touches decide how many enemies reach an
   eHP tower: reaching = (1 − touchable) + touchable·e^−λ, and survival ×
   reaching then ÷ reaching now (`ehp.orbReachRatio`).
-- **Not counted yet:** Death Ray's own upgrades, per-type speed (tanks spend
+- **Death Ray (2026-10-23):** its touches follow beam time (the card: 2.3–4.9 s
+  by stars) × (1 + the Double Death Ray lab's 1% a level of a second beam,
+  wiki Death Ray). Its mastery isn't counted.
+- **Not counted yet:** per-type speed (tanks spend
   longer among the orbs than fast enemies), Sentry Protocol's mini orbs.
 
 ## Paths
