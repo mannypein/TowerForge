@@ -161,7 +161,7 @@ export const UNIQUE_EFFECT_MODEL: Record<string, { counted: string; how: string 
     'Space Displacer': { counted: 'eDPS', how: 'Turns land mines into Inner Land Mines — land mine chance × kills per second.' },
     'Sharp Fortitude': { counted: 'eHP', how: 'Multiplies wall health and wall regen.' },
     'Orbital Augment': { counted: 'Not counted', how: 'Electrons deal a % of enemy health, which doesn’t scale with tower damage.' },
-    'Sentry Protocol': { counted: 'Not counted', how: 'Orbs aren’t modeled.' },
+    'Sentry Protocol': { counted: 'Not counted', how: 'It stops the orbs and makes them fire mini orbs instead, which isn’t modeled.' },
     // Generator
     'Singularity Harness': { counted: 'Coins', how: 'Adds Golden Bot range (Flame Bot damage isn’t modeled).' },
     'Galaxy Compressor': { counted: 'eDPS · Coins', how: 'Each recovery package cuts every UW cooldown but Poison Swamp — package rate from your battle report.' },

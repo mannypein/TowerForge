@@ -34,6 +34,7 @@ import type { BattleReport } from './battleReport';
 import { readActiveModuleBonuses } from './modBonuses';
 import { attackSkipSources, healthSkipChance, healthSkipSources } from './levelSkip';
 import { readEhpInputs } from './ehp';
+import { orbStats } from './orbs';
 import { activeChips, bountyExtra, damageMeterFactor, fetchRate, summonExtra, withChipLevel } from './guardian';
 import { calcDamageMeter, echoingShotBullets } from './towerDamage';
 import { CHIPS, statBits } from '../constants/guardianData';
@@ -341,6 +342,11 @@ function buildChain(
     add({ group: 'Enemies in range', label: 'Slow (Chrono Field + Slow Aura)', before: t0.cappedSlowPct, after: t1.cappedSlowPct, kind: 'percent' });
     add({ group: 'Enemies in range', label: 'Chrono Loop (CF+) extra path', before: t0.cfPathMult, after: t1.cfPathMult, kind: 'times' });
     add({ group: 'Enemies in range', label: 'Time each enemy is in range', before: t0.ttt, after: t1.ttt, kind: 'seconds' });
+    // Orbs passing an enemy: orbs × rotations a minute × size (engine/orbs.ts).
+    const [o0, o1] = [orbStats(base), orbStats(after)];
+    add({ group: 'Enemies in range', label: 'Orbs', before: o0.orbs + o0.extraOrbs, after: o1.orbs + o1.extraOrbs, kind: 'count' });
+    add({ group: 'Enemies in range', label: 'Orb speed (rotations a minute)', before: o0.speed, after: o1.speed, kind: 'count' });
+    add({ group: 'Enemies in range', label: 'Orb size', before: o0.size, after: o1.size, kind: 'times' });
 
     const ctx = (s: OptimizerSnapshot) => buildDamageContext(s.presetIdx, s.wsData, s.labData, s.cardData, s.relicData,
         s.enhData, cond(s).modBonuses, s.moduleState, s.botData);

@@ -18,6 +18,13 @@
 //  Thorns kill attackers, which cuts incoming damage — weighted by the
 //  share of kills thorns actually makes (from the Battle Report).
 //
+//  Orbs destroy most enemies they touch before those reach the tower
+//  (2026-10-23): the run's orb kills give the touches an enemy they can
+//  touch expects (λ = −ln(1 − kills ÷ touchable), as in edps.ts), λ grows
+//  with orbs × speed × size (engine/orbs.ts), and the enemies that reach
+//  the tower — (1 − touchable) + touchable·e^−λ — hit it, so fewer of them
+//  is that much more survival. The code's model.
+//
 //  Module unique effects that cut the damage the tower takes (Harmony
 //  Conductor, Negative Mass Projector, Primordial Collapse) divide
 //  both eHP and eRegen by the share of damage that still lands.
@@ -48,6 +55,9 @@ import {
 } from './moduleEffects';
 import type { BattleReport } from './battleReport';
 import type { OptimizerSnapshot } from './optimizer';
+import { runMix } from './battleConditions';
+import { touchesOf } from './edps';
+import { orbStats } from './orbs';
 
 // Seconds of sustained pressure the score weighs healing over.
 export const SUSTAIN_WINDOW_S = 60;
@@ -88,6 +98,7 @@ export interface EhpInputs {
     pkgAmount: number;       // fraction of max health healed per package
     thorns: number;          // fraction of the attacker's max health per hit
     damageTaken: number;     // share of enemy damage that still lands after module effects (0–1)
+    orbRate?: number;        // orbs × speed × size (engine/orbs.ts)
 }
 
 export interface EhpCalibration {
@@ -97,6 +108,10 @@ export interface EhpCalibration {
     packagesPerSec: number;  // observed package rate at the anchor
     waveSec: number;
     otherHealPerSec?: number; // lifesteal + Death Wave healing per second in the run
+    // Orbs in the run: share of all enemies they destroyed, and the share
+    // they can touch (not bosses, elites, fleets).
+    orbKills?: number;
+    touchable?: number;
 }
 
 export interface EhpBreakdown {
@@ -302,7 +317,10 @@ export function readEhpInputs(snap: OptimizerSnapshot): EhpInputs {
         `enemies in a Black Hole deal ${uniq(mb, 'Primordial Collapse')}% less × ${(mb.run.bhShare * 100).toFixed(0)}% of kills inside holes`);
     const damageTaken = parts.damageTaken.reduce((p, f) => p * f.value, 1);
 
-    return { parts, health, maxRecovery, armorMainMissing, wallPool, defAbs, defPct, defPctUncapped, cfReduction, regen, wallRegen, pkgChance, pkgAmount, thorns, damageTaken };
+    return {
+        parts, health, maxRecovery, armorMainMissing, wallPool, defAbs, defPct, defPctUncapped, cfReduction, regen, wallRegen,
+        pkgChance, pkgAmount, thorns, damageTaken, orbRate: orbStats(snap).rate,
+    };
 }
 
 // ── Calibration ───────────────────────────────────────────────
@@ -320,6 +338,7 @@ export function buildEhpCalibration(snap: OptimizerSnapshot, report: BattleRepor
     const waveSec = report.wave > 0 ? report.gameTimeSec / report.wave : DEFAULT_WAVE_S;
     const raw = report.raw ?? {};
     const healed = (key: string) => (typeof raw[key] === 'number' ? (raw[key] as number) : 0);
+    const mix = runMix(report);
     return {
         source: 'report',
         anchor,
@@ -327,7 +346,22 @@ export function buildEhpCalibration(snap: OptimizerSnapshot, report: BattleRepor
         packagesPerSec: report.recoveryPackages > 0 ? report.recoveryPackages / report.gameTimeSec : anchor.pkgChance / waveSec,
         waveSec,
         otherHealPerSec: (healed('Lifesteal') + healed('HealthFromDeathWaveThisRound')) / report.gameTimeSec,
+        orbKills: mix.orbKills,
+        touchable: mix.touchable,
     };
+}
+
+// Enemies that reach the tower, now ÷ at the calibration run, as orbs
+// destroy more or fewer of the ones they can touch (1 = no change).
+export function orbReachRatio(x: EhpInputs, calib: EhpCalibration): number {
+    const kills = calib.orbKills ?? 0;
+    const touchable = calib.touchable ?? 1;
+    const rate0 = calib.anchor.orbRate ?? 0;
+    if (kills <= 0 || touchable <= 0 || rate0 <= 0) return 1;
+    const lambda0 = touchesOf(kills, touchable);
+    const lambda = lambda0 * (x.orbRate ?? 0) / rate0;
+    const reach = (l: number) => (1 - touchable) + touchable * Math.exp(-l);
+    return reach(lambda) / reach(lambda0);
 }
 
 // ── Score ─────────────────────────────────────────────────────
@@ -356,5 +390,7 @@ export function ehpScore(snap: OptimizerSnapshot, calib: EhpCalibration): number
     const thornsFactor = a.thorns > 0
         ? (1 - calib.thornsShare) + calib.thornsShare * (x.thorns / a.thorns)
         : 1 + calib.thornsShare * x.thorns;
-    return before > 0 ? (after / before) * thornsFactor : thornsFactor;
+    // Fewer enemies past the orbs: fewer hits on the tower.
+    const orbFactor = 1 / Math.max(0.01, orbReachRatio(x, calib));
+    return (before > 0 ? after / before : 1) * thornsFactor * orbFactor;
 }

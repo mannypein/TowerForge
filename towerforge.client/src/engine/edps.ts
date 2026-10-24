@@ -70,6 +70,7 @@ import {
 } from './uwdps';
 import { calcDamageMeter, calcCoreUWDamageMult, echoingShotBullets } from './towerDamage';
 import { attackRate, damageMeterFactor } from './guardian';
+import { orbStats } from './orbs';
 import { armorKeep, crowdFactor, fastUltimateTime, runMix } from './battleConditions';
 import type { RunMix } from './battleConditions';
 import { HEALTH_MULT } from './enemyStats';
@@ -118,13 +119,14 @@ export interface EdpsParts {
     ttt: number;       // seconds an enemy spends in range (time to tower)
     shotRate: number;  // enemy hits per second (Chain Lightning's chances to proc)
     hitsPerShot: number;   // hits per projectile (Bounce Shot)
+    orbRate: number;   // orbs × speed × size (engine/orbs.ts): how often orbs pass an enemy
 }
 
 export interface EdpsCalibration {
     anchor: EdpsParts;
     // Share of the run's total damage, after taking Smite and Consume out of
     // Chain Lightning and Black Hole. `fixed` = orbs, thorns and the rest.
-    shares: Omit<EdpsParts, 'smite' | 'clChance' | 'clQty' | 'consume' | 'ttt' | 'shotRate' | 'attack' | 'hitsPerShot'>
+    shares: Omit<EdpsParts, 'smite' | 'clChance' | 'clQty' | 'consume' | 'ttt' | 'shotRate' | 'attack' | 'hitsPerShot' | 'orbRate'>
         & { guardian: number; fixed: number };
     clReach: number;      // share of enemies Chain Lightning hits (Smite)
     smiteProcs: number;   // Smite procs per enemy reached, at the anchor (≤ 100)
@@ -231,6 +233,7 @@ export function edpsParts(snap: OptimizerSnapshot, ttt?: number): EdpsParts {
         ttt: refTTT,
         shotRate: ctx.hitRate,
         hitsPerShot: ctx.projectiles.bounce,
+        orbRate: orbStats(snap).rate,
     };
 }
 
@@ -302,8 +305,9 @@ export function buildEdpsCalibration(snap: OptimizerSnapshot, report: BattleRepo
 // touch), and growing with the time each enemy is in range (Chrono Field,
 // CF+, Slow Aura … — longer among the orbs and in Death Ray's path). Orb /
 // Death Ray Resistance makes a touch take x% of health instead of all of
-// it: λ × x. Tank's Ultimate makes tanks immune. The code's model, not
-// checked against runs yet; orb count and orb speed aren't counted.
+// it: λ × x. Tank's Ultimate makes tanks immune. Orbs' touches also grow
+// with how often orbs pass an enemy — orbs × speed × size (engine/orbs.ts,
+// 2026-10-23). The code's model, not checked against runs yet.
 const TOUCHABLE: EnemyType[] = ['Basic', 'Fast', 'Tank', 'Ranged'];
 const MAX_REACH = 0.95;   // λ ≤ 3: a run's last few % aren't a measurement
 
@@ -332,7 +336,8 @@ function touches(snap: OptimizerSnapshot, calib: EdpsCalibration, x: EdpsParts):
     const c = snap.conditions;
     const fast = fastUltimateTime(c?.fastUltimate, snap.killers) / fastUltimateTime(calib.fastUltimate, snap.killers);
     const t = timeRatio(x, calib.anchor) * fast;
-    const orb = orb0 * t * (calib.orbTouch > 0 ? touchOf(c?.orbLeftPct) / calib.orbTouch : 1);
+    const passes = calib.anchor.orbRate > 0 ? x.orbRate / calib.anchor.orbRate : 1;
+    const orb = orb0 * t * passes * (calib.orbTouch > 0 ? touchOf(c?.orbLeftPct) / calib.orbTouch : 1);
     const dr = dr0 * t * (calib.deathRayTouch > 0 ? touchOf(c?.deathRayLeftPct) / calib.deathRayTouch : 1);
     return { run: orb0 + dr0, more: orb - orb0 + dr - dr0 };
 }

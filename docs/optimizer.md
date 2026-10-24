@@ -310,10 +310,23 @@ Death Ray for runs that end to enemies they can touch.
   5 → 8 +149 (+50), 5 → 14 +428 (+136: orbs stop 71% → 94% of what they
   can touch, time in range 13.2 s → 30.2 s); CL max +520; both +1,002.
   CF+ hasn't been upgraded since, so the jump isn't checked yet.
-- **Not counted yet:** orb count and orb speed (five sources for the count —
-  workshop, perk, Ancestral Armor sub-effect, assist, vault — and the SDK's
-  speed formula is unverified), Death Ray's own upgrades, per-type speed
-  (tanks spend longer among the orbs than fast enemies).
+- **Orb count, speed and size (2026-10-23, `engine/orbs.ts`):** λ also
+  grows with how often orbs pass an enemy, orbs × rotations a minute × Orb
+  Size. Wiki Orbs page (read 2026-10-23): Orb Speed 0.4 + 0.15 a workshop
+  level (0.55 at 1 … 6.10 at 38, rotations a minute), the Orb Speed lab +0.1
+  a level (+2.0 at 20), the Orb Speed relic × (1 + its %), an armor's Orb
+  Speed substat added; Orbs +1 a workshop level (4), the orb perk +1 a pick
+  (2), an armor's Orbs substat; Orb Size enhancement ×1 + 0.01 a level (×3);
+  the Extra Orb card one more orb at the workshop speed + its value, Extra
+  Extra Orbs +1/+2 at −5% speed a level. The code's assumptions: the orb
+  perk counts as taken (it isn't on the Perks tab yet), size and the extra
+  orbs count like workshop orbs, the Vault's +2 orbs isn't counted (its save
+  id isn't mapped).
+- **eHP (2026-10-23):** the same touches decide how many enemies reach an
+  eHP tower: reaching = (1 − touchable) + touchable·e^−λ, and survival ×
+  reaching then ÷ reaching now (`ehp.orbReachRatio`).
+- **Not counted yet:** Death Ray's own upgrades, per-type speed (tanks spend
+  longer among the orbs than fast enemies), Sentry Protocol's mini orbs.
 
 ## Paths
 
