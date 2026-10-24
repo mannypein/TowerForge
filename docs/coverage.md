@@ -13,7 +13,7 @@ reports set the baseline, so even unmodeled effects are already in it; only
 |---|---|---|
 | Tower damage, attack speed, crit, super crit, Damage/Meter, range | ✅ | towerDamage.ts; workshop, labs, cards, masteries, enhancements, relics, modules. Damage/Meter on tower shots since 2026-10-19 (1 + DPM × distance, shots at half the range on average — the code's assumption); before that it only fed Spotlight+ |
 | Multishot, Bounce Shot, Rapid Fire | ✅ | Averages (2026-10-18); give Chain Lightning, tower shots and Smite more hits |
-| Rend Armor | ◐ | In the tower-shots share; Rend chance/mult upgrades aren't modeled on their own |
+| Rend Armor | ◐ | In the tower-shots share; Rend chance/mult upgrades aren't modeled on their own. Not worth it yet: on the site's saved runs (2026-10-23, 278 runs past W1000) Rend dealt a median 0.02% of Glass Cannon damage (most 0.4%), tower shots under 1.5% — its upgrades wouldn't move a ranking. Wiki: chance 0.1% a level (30%), +0.001× a stack (0.3×), stacks to 800% (Rend Armor Max lab to 1550%), the enhancement multiplies all three to ×5 |
 | All 9 UWs + UW+ | ✅ | uwdps.ts; Golden Tower for coins only |
 | Flame Bot | ✅ | From the run's FlameBotDamage (2026-10-18): ×Damage × tower damage × crits ÷ cooldown; burn stacks and Wild Fire (Bot+) not modeled. Its Damage Reduction counts for eHP survival (2026-10-23), by the share of hits the run shows it covering |
 | Amplify Bot, Bot Bot | ✅ | Tower damage multiplier |
@@ -57,7 +57,7 @@ reports set the baseline, so even unmodeled effects are already in it; only
 |---|---|---|
 | Coins per kill and wave, tier multiplier, Golden Tower / Combo, Black Hole, Spotlight, Death Wave, Golden Bot coin bonuses, Wave Skip, Critical Coin | ✅ | farming.ts + runCoins.ts, calibrated on your runs |
 | Coins per run and per hour as runs get longer | ✅ | Coins per Run projection |
-| Cells, gems, medals, reroll and module shards per run | ◐ | Read from your runs (2026-10-18, Coins per Run page); upgrades that raise them (Cells / Kill enhancement, DW cell bonus, Cells card) aren't valued |
+| Cells, gems, medals, reroll and module shards per run | ◐ | Read from your runs (2026-10-18, Coins per Run page). Elite cells in What If (2026-10-23, cells.ts): the run's cells per elite = (k × Cells/Kill Bonus + Cells card) × card mastery (wiki Currencies), so the enhancement, card and mastery lab move the right part, at the same waves. The DW cell lab and Golden Bot+ Bonus Cells stay in k (not valued); cells aren't an Optimizer goal |
 | Guardian fetch | ✅ | In the run drops; its coins are a separate share of the run's coins, scaled by the Fetch chip's finds per second |
 | In-run cash, interest, free upgrades, perks picked in a run | ✗ | The site assumes AFK runs; the calibration includes what you usually pick |
 

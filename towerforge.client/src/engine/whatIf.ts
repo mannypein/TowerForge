@@ -35,6 +35,7 @@ import { readActiveModuleBonuses } from './modBonuses';
 import { attackSkipSources, healthSkipChance, healthSkipSources } from './levelSkip';
 import { readEhpInputs } from './ehp';
 import { orbStats } from './orbs';
+import { cellsPerRun } from './cells';
 import { activeChips, bountyExtra, damageMeterFactor, fetchRate, summonExtra, withChipLevel } from './guardian';
 import { calcDamageMeter, echoingShotBullets } from './towerDamage';
 import { CHIPS, statBits } from '../constants/guardianData';
@@ -294,6 +295,7 @@ export interface WhatIfResult {
     coinsHourPct: number;              // coin income at the same wave (coin bonuses only)
     coinsRun: { from: number; to: number } | null;
     coinsHour: { from: number; to: number } | null;   // playing each run to its end
+    cellsRun: { from: number; to: number } | null;    // elite cells on the chosen run, at the same waves (cells.ts)
     survivalPct: number | null;        // eHP (not Glass Cannon)
     chain: ChainLink[];
     perChange: { kind: ChangeKind; key: string; waves: number }[];   // each change on its own
@@ -641,7 +643,7 @@ export function whatIf(
         }
     }
     return {
-        damagePct, pushPct, waves, coinsHourPct, coinsRun, coinsHour,
+        damagePct, pushPct, waves, coinsHourPct, coinsRun, coinsHour, cellsRun: cellsPerRun(base, after, report),
         skipPoints: gc ? skipPoints : attackSkip,
         skipKind: gc ? 'health' : 'attack',
         survivalPct,

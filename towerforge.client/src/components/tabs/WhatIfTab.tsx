@@ -359,6 +359,15 @@ export default function WhatIfTab() {
                                     {' '}({pct((result.coinsHour.to / result.coinsHour.from - 1) * 100)})
                                 </span>
                             </>)}
+                            {result.cellsRun && Math.abs(result.cellsRun.to / result.cellsRun.from - 1) > 1e-9 && (<>
+                                <span className="wi-k" title="Elite cells on your chosen run: Cells/Kill Bonus, the Cells card and its mastery, at the same waves">
+                                    Elite cells per run
+                                </span>
+                                <span className="wi-v">
+                                    {formatGameNumber(result.cellsRun.from)} → {formatGameNumber(result.cellsRun.to)}
+                                    {' '}({pct((result.cellsRun.to / result.cellsRun.from - 1) * 100)})
+                                </span>
+                            </>)}
                             <span className="wi-k" title="Coin bonuses only: what the same waves would pay">
                                 Coin income at the same wave
                             </span>
