@@ -21,7 +21,7 @@ import { botsForPreset } from '../constants/botData';
 import { buildFarmCalibration } from './farming';
 import { buildEhpCalibration } from './ehp';
 import { buildEdpsCalibration } from './edps';
-import { buildRunLengthModel, killerMix, skipWorth } from './runLength';
+import { buildRunLengthModel, killerMix, oneHitEnds, skipWorth } from './runLength';
 import type { RunLengthModel, RunStat } from './runLength';
 import { buildRunModel, projectRun, runSettingsFromCards } from './runCoins';
 import type { RunProjection } from './runCoins';
@@ -69,9 +69,12 @@ export function snapshotFromState(s: AccountState): OptimizerSnapshot {
         excludedUWs: [...(s.profile.excludedUWs ?? [])],
         excludedWorkshop: [...(s.profile.excludedWorkshop ?? [])],
         vault: s.vaultLevels ? { ...s.vaultLevels } : undefined,
-        metric: s.profile.build === 'Farming' ? 'coins' : s.profile.build === 'eHP' ? 'ehp' : 'edps',
+        metric: metricOf(effectiveBuild(s.profile.build, s.importedBattles)),
     };
 }
+
+const metricOf = (build: BuildType): OptimizerSnapshot['metric'] =>
+    (build === 'Farming' ? 'coins' : build === 'eHP' ? 'ehp' : 'edps');
 
 export interface GoalModels {
     run: RunLengthModel | null;        // Run Length, from the deaths in the history
@@ -99,11 +102,25 @@ export interface GoalModels {
 export const runStatOf = (build: BuildType | '' | undefined): RunStat =>
     build && pushGoalOf(build) === 'survival' ? 'attack' : 'health';
 
+// Hybrid builds are scored as the build their runs behave like (2026-10-23):
+// Glass Cannon when the recent deaths end to single hits far past what the
+// tower heals (enemy health decides, runLength.oneHitEnds), eHP when hits
+// wear the tower down (enemy attack decides). Without deaths that say
+// (none saved, or exports before damage taken was recorded): Glass Cannon.
+// Every other build is itself; no build set reads as Glass Cannon.
+export function effectiveBuild(build: BuildType | '' | undefined, battles: BattleReport[]): BuildType {
+    if (build !== 'Hybrid') return (build || 'Glass Cannon') as BuildType;
+    const model = buildRunLengthModel(battles, { stat: 'attack' });
+    return model && oneHitEnds(model) === false ? 'eHP' : 'Glass Cannon';
+}
+
 export function runModels(s: Pick<AccountState, 'importedBattles' | 'cardData' | 'activePreset'
     | 'battleReportText' | 'battleReportChoice'> & Partial<Pick<AccountState, 'profile' | 'labData'>>): GoalModels {
     const chosen = activeBattleReport(s.battleReportText, s.importedBattles, s.battleReportChoice);
     const tournament = !!chosen?.tournament;
-    const run = buildRunLengthModel(s.importedBattles, { tournament, tier: chosen?.tier, stat: runStatOf(s.profile?.build) });
+    const run = buildRunLengthModel(s.importedBattles, {
+        tournament, tier: chosen?.tier, stat: runStatOf(effectiveBuild(s.profile?.build, s.importedBattles)),
+    });
     const settings = runSettingsFromCards(s.cardData, s.activePreset);
     const coinModel = tournament ? null
         : buildRunModel(s.importedBattles, defaultBattleIndex(s.importedBattles), settings);

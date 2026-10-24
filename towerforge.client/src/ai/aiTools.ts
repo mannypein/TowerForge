@@ -16,7 +16,7 @@
 
 import type { AppState, BuildType, League, OptCandidate, OptCategory, OptCurrency } from '../types/gameTypes';
 import type { AccountState, GoalModels } from '../engine/accountModels';
-import { applyGoal, chosenReport, runModels, snapshotFromState } from '../engine/accountModels';
+import { applyGoal, chosenReport, effectiveBuild, runModels, snapshotFromState } from '../engine/accountModels';
 import { groupPath, mergeRepeats, simulateCategoryPath, simulateMedalPath, simulateStonePath } from '../engine/optimizer';
 import { changeCost, upgradeTargets, whatIf } from '../engine/whatIf';
 import type { Change, Costs, UpgradeTarget } from '../engine/whatIf';
@@ -58,7 +58,7 @@ export interface ToolResult {
 
 const num = (v: number) => formatGameNumber(v < 1000 ? Math.round(v) : v);
 const pct = (v: number) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(2)}%`;
-const buildOf = (s: AiAccount) => (s.profile.build || 'Glass Cannon') as BuildType;
+const buildOf = (s: AiAccount) => effectiveBuild(s.profile.build as BuildType, s.importedBattles);
 
 // ── Account summary ───────────────────────────────────────────
 export function accountSummary(s: AiAccount, now = Date.now()): string {

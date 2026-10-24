@@ -14,7 +14,7 @@ import {
     buildRunLengthModel, oneHitEnds, runEnds, wavesFromDamage, wavesFromSkip,
 } from '../../engine/runLength';
 import type { RunStat } from '../../engine/runLength';
-import { runStatOf } from '../../engine/accountModels';
+import { effectiveBuild, runStatOf } from '../../engine/accountModels';
 import { runSavers } from '../../engine/battleReport';
 import type { BattleReport } from '../../engine/battleReport';
 import { buildRunModel, projectRun, runSettingsFromCards } from '../../engine/runCoins';
@@ -44,7 +44,7 @@ export default function RunLengthTab() {
     // What ends the runs: enemy attack for eHP builds, enemy health for Glass
     // Cannon — the build's own unless the player switches.
     const [statPick, setStatPick] = useState<RunStat | null>(null);
-    const stat = statPick ?? runStatOf(build);
+    const stat = statPick ?? runStatOf(effectiveBuild(build, battles));
     const attack = stat === 'attack';
 
     // Campaign and tournament runs scale differently, so each has its own

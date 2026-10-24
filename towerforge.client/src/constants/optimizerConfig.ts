@@ -9,11 +9,12 @@ import type { BuildType, OptCategory, OptCurrency } from '../types/gameTypes';
 // ── Build Type Support Status ─────────────────────────────────
 // Glass Cannon scores eDPS; Farming scores coins/hour (engine/farming.ts);
 // eHP scores survival (engine/ehp.ts). Farming and eHP are calibrated by a
-// pasted Battle Report. Hybrid is still "coming soon".
+// pasted Battle Report. Hybrid is scored as the build its runs behave like
+// (accountModels.effectiveBuild: Glass Cannon or eHP).
 export const BUILD_SUPPORT: Record<string, { ready: boolean; label: string }> = {
     'Glass Cannon': { ready: true, label: 'Glass Cannon' },
     'eHP': { ready: true, label: 'eHP / Thorns' },
-    'Hybrid': { ready: false, label: 'Hybrid' },
+    'Hybrid': { ready: true, label: 'Hybrid' },
     'Farming': { ready: true, label: 'Farming / Econ' },
 };
 
@@ -40,7 +41,7 @@ export const BUILD_GOALS: Record<BuildType, OptGoal[]> = {
     'Glass Cannon': ['waves', 'damage', 'coins', 'blend'],
     'eHP': ['survival', 'coins', 'blend'],
     'Farming': ['coins', 'survival', 'blend'],
-    'Hybrid': [],
+    'Hybrid': [],                       // never scored as itself (effectiveBuild)
 };
 
 // The push half of "coins and push" for a build.

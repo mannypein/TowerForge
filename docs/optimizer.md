@@ -18,6 +18,13 @@ The Optimizer asks what the player wants, and every panel ranks by it
 | Survive longer | survival (`ehp.ts`) × e^(worth × attack skip%) × the killers' attack labs; waves on the enemy-attack model (2026-10-23) | eHP, Farming |
 | Coins and push together | coins^w × push^(1 − w), w on a slider (default 50%) | all (push = waves for GC, survival otherwise) |
 
+- **Hybrid** (2026-10-23, `accountModels.effectiveBuild`): scored as the
+  build its runs behave like — eHP when the recent deaths came from hits
+  wearing the tower down (damage taken ≈ healing), Glass Cannon when single
+  hits far past its healing ended them (`runLength.oneHitEnds`) or the runs
+  don't say. The Optimizer says which, and it follows the runs as they
+  change. The same reading drives What If, Run Length's default view, the
+  Tournament page and Ask AI.
 - The blend is a weighted geometric mean, so an upgrade that helps both
   halves beats one that helps only one at the same price; rows show both
   halves (`attachParts`). The code's assumption: a 1% coin gain and a 1%

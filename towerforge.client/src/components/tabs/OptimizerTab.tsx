@@ -23,7 +23,7 @@ import type { TTTDisplayStats } from '../../engine/ttt';
 import type { FarmCalibration } from '../../engine/farming';
 import type { EhpCalibration } from '../../engine/ehp';
 import type { EdpsCalibration } from '../../engine/edps';
-import { applyGoal, chosenReport, runModels, snapshotFromState } from '../../engine/accountModels';
+import { applyGoal, chosenReport, effectiveBuild, runModels, snapshotFromState } from '../../engine/accountModels';
 import { CELL_BOOSTS } from '../../engine/upgradeCosts';
 import { BattleReportPanel, EconomyStats, EhpStats } from './BuildPanels';
 import { buildRunLengthModel, pathRunGains, pathSkipGains } from '../../engine/runLength';
@@ -105,7 +105,9 @@ export default function OptimizerTab() {
     const presetCount = profile.presets || 2;
     const presets = Array.from({ length: presetCount }, (_, i) => i);
 
-    const buildType = (profile.build || 'Glass Cannon') as BuildType;
+    const chosenBuild = (profile.build || 'Glass Cannon') as BuildType;
+    // Hybrid is scored as the build its runs behave like (accountModels.effectiveBuild).
+    const buildType = useMemo(() => effectiveBuild(chosenBuild, importedBattles), [chosenBuild, importedBattles]);
     const buildSupport = BUILD_SUPPORT[buildType] ?? BUILD_SUPPORT['Glass Cannon'];
     const isFarming = buildType === 'Farming';
     const isEhp = buildType === 'eHP';
@@ -420,7 +422,7 @@ export default function OptimizerTab() {
                         <div>
                             <span className="opt-control-label">Build</span>
                             <select
-                                value={buildType}
+                                value={chosenBuild}
                                 onChange={e => updateProfile({ build: e.target.value as BuildType })}
                                 style={{ fontSize: '13px' }}
                             >
@@ -590,6 +592,18 @@ export default function OptimizerTab() {
                             </div>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {chosenBuild === 'Hybrid' && (
+                <div className="relics-note">
+                    <strong>Hybrid — ranked as {buildType === 'eHP' ? 'eHP' : 'Glass Cannon'}.</strong>{' '}
+                    {buildType === 'eHP'
+                        ? 'Your recent deaths came from hits wearing your tower down, so enemy attack decides how far your runs get: upgrades are ranked for survival, like an eHP build.'
+                        : importedBattles.length
+                            ? 'Your recent deaths came from single hits far bigger than your tower heals (or your runs don’t record damage taken), so enemy health decides how far your runs get: upgrades are ranked for damage and push, like a Glass Cannon.'
+                            : 'Import runs that ended in a death and the Optimizer reads how they end; until then it ranks like a Glass Cannon.'}
+                    {' '}It follows your runs as they change (Optimizer → Run Length shows both views).
                 </div>
             )}
 

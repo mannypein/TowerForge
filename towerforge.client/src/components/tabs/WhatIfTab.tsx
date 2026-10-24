@@ -13,7 +13,7 @@
 import { useMemo, useState } from 'react';
 import { useGameStore } from '../../store/useGameStore';
 import type { BuildType, League, OptCurrency } from '../../types/gameTypes';
-import { chosenReport, runModels, snapshotFromState } from '../../engine/accountModels';
+import { chosenReport, effectiveBuild, runModels, snapshotFromState } from '../../engine/accountModels';
 import type { AccountState } from '../../engine/accountModels';
 import { changeCost, upgradeTargets, whatIf } from '../../engine/whatIf';
 import type { ChainLink, Change, Costs } from '../../engine/whatIf';
@@ -99,7 +99,8 @@ export default function WhatIfTab() {
     }), [activePreset, profile, perkData, wsData, enhData, labData, cardData, uwData, relicData, botData,
         moduleState, battleReportText, importedBattles, battleReportChoice, guardianData]);
 
-    const build = (profile.build || 'Glass Cannon') as BuildType;
+    // Hybrid reads as the build its runs behave like (accountModels.effectiveBuild).
+    const build = useMemo(() => effectiveBuild(profile.build as BuildType, importedBattles), [profile.build, importedBattles]);
 
     // Campaign runs, or a tournament with the tournament build and this
     // week's conditions (settings shared with the Tournament page).

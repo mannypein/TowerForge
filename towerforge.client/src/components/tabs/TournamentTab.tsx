@@ -14,6 +14,7 @@ import { useMemo, useState } from 'react';
 import { useGameStore } from '../../store/useGameStore';
 import type { BuildType, League, LoadoutSlots, ModuleType, TourneyLogEntry } from '../../types/gameTypes';
 import type { AccountState } from '../../engine/accountModels';
+import { effectiveBuild } from '../../engine/accountModels';
 import { bestLoadout, loadoutScore } from '../../engine/loadoutOptimizer';
 import type { LoadoutResult } from '../../engine/loadoutOptimizer';
 import { killedBy, killerMix, wavesSpread } from '../../engine/runLength';
@@ -50,7 +51,7 @@ export default function TournamentTab() {
     const state = useGameStore();
     const setModuleState = useGameStore(s => s.setModuleState);
     const setTourneyLogEntry = useGameStore(s => s.setTourneyLogEntry);
-    const build = (state.profile.build || 'Glass Cannon') as BuildType;
+    const build = effectiveBuild(state.profile.build as BuildType, state.importedBattles);
     const isGC = build === 'Glass Cannon';
 
     const [sim, setSimState] = useState<TourneySim>(loadTourneySim);
