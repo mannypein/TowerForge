@@ -201,6 +201,8 @@ const labCut = (labs: LabData, ref: LabRef | undefined) => (ref ? 1 - ref[1] * (
 
 // What an enemy type's health lab leaves of its health (1 = no lab).
 export const healthLabCut = (labs: LabData, type: EnemyType) => labCut(labs, HEALTH_LAB[type]);
+// …and its attack lab of its attack.
+export const attackLabCut = (labs: LabData, type: EnemyType) => labCut(labs, ATTACK_LAB[type]);
 
 // ── Trade-off perks that change enemies ───────────────────────
 // Improve Trade-Off Perks raises the benefit side by 1% a level (half for the

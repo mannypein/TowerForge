@@ -1,8 +1,11 @@
 // ============================================================
-//  TowerForge Companion — Enemy Health Level Skip upgrades
-//  The coin upgrades that raise the chance to skip an enemy health
-//  level, and how many skip points each one adds — for Glass Cannon,
-//  where each point moves the death wave a long way (runLength.ts).
+//  TowerForge Companion — Enemy Level Skip upgrades
+//  The coin upgrades that raise the chance to skip an enemy health level
+//  (Glass Cannon) or attack level (eHP), and how many skip points each
+//  one adds — each point moves the death wave a long way (runLength.ts).
+//  Health and attack have their own workshop stat, lab, relic and module
+//  substat; the Enemy Level Skips enhancement multiplies both
+//  (TheTowerSDK mechanics/enemies/level-skip: one ELS+ field for both).
 //
 //  Skip chance = (workshop + lab + relic + module substats)
 //                × the Enemy Level Skips enhancement, capped at 100%;
@@ -23,8 +26,13 @@ import {
     enhancementCost, enhancementDiscount, formatLabTime, labLevelCost, workshopCost, workshopDiscount,
 } from './upgradeCosts';
 
-const WORKSHOP_STAT = 'Enemy HP Level Skip';
-const LAB = 'Enemy HP Lvl Skip Lab';
+export type SkipKind = 'health' | 'attack';
+
+// Each kind's workshop stat, lab, relic and module substat.
+export const SKIP_NAMES: Record<SkipKind, { workshop: string; lab: string; relic: string; substat: string }> = {
+    health: { workshop: 'Enemy HP Level Skip', lab: 'Enemy HP Lvl Skip Lab', relic: 'rEHPSkip', substat: 'Enemy HP Level Skip' },
+    attack: { workshop: 'Enemy Atk Level Skip', lab: 'Enemy Atk Lvl Skip Lab', relic: 'rEAtkSkip', substat: 'Enemy Atk Level Skip' },
+};
 const WORKSHOP_MAX = 699;
 const LAB_MAX = 20;
 const ENH = 'Enemy Level Skips';
@@ -32,6 +40,7 @@ const ENH_MAX = 60;
 const WORKSHOP_STEP = 10;     // offered in steps of 10 levels — one level is 0.05%
 
 export interface SkipSources {
+    kind?: SkipKind;          // default 'health'
     workshop: number;         // workshop level (0–699)
     lab: number;              // lab level (0–20)
     enhancement: number;      // enhancement level (0–60); 0 also when not unlocked
@@ -43,24 +52,34 @@ export interface SkipSources {
     relics?: Record<string, number>;
 }
 
-const WS_IDX = WS_STATS.utility.findIndex(([n]) => n === WORKSHOP_STAT);
+const wsIdx = (kind: SkipKind) => WS_STATS.utility.findIndex(([n]) => n === SKIP_NAMES[kind].workshop);
 const ENH_IDX = WS_ENH.utility.findIndex(([n]) => n === ENH);
 
-export function healthSkipSources(
-    ws: WSPreset | undefined, labs: LabData, enh: EnhData, relics: Record<string, number>,
+export function skipSources(
+    kind: SkipKind, ws: WSPreset | undefined, labs: LabData, enh: EnhData, relics: Record<string, number>,
     subs: Record<string, number>,
 ): SkipSources {
+    const names = SKIP_NAMES[kind];
     return {
-        workshop: ws?.utility[WS_IDX] ?? 0,
-        lab: labs[LAB] ?? 0,
+        kind,
+        workshop: ws?.utility[wsIdx(kind)] ?? 0,
+        lab: labs[names.lab] ?? 0,
         enhancement: enh.d.utility?.[ENH_IDX] ?? 0,
         enhancementOwned: enh.u.utility?.[ENH_IDX] ?? false,
-        otherPct: (relics['rEHPSkip'] ?? 0) + (subs['Enemy HP Level Skip'] ?? 0),
+        otherPct: (relics[names.relic] ?? 0) + (subs[names.substat] ?? 0),
         labs, relics,
     };
 }
 
-// Skip chance before tier battle conditions, in %.
+export const healthSkipSources = (
+    ws: WSPreset | undefined, labs: LabData, enh: EnhData, relics: Record<string, number>, subs: Record<string, number>,
+) => skipSources('health', ws, labs, enh, relics, subs);
+
+export const attackSkipSources = (
+    ws: WSPreset | undefined, labs: LabData, enh: EnhData, relics: Record<string, number>, subs: Record<string, number>,
+) => skipSources('attack', ws, labs, enh, relics, subs);
+
+// Skip chance before tier battle conditions, in % (health or attack: same rules).
 export function healthSkipChance(s: SkipSources): number {
     const base = (s.workshop > 0 ? 0.05 * (s.workshop + 1) : 0) + 0.1 * s.lab + s.otherPct;
     return Math.min(100, base * (s.enhancementOwned ? 1 + 0.01 * s.enhancement : 1));
@@ -78,6 +97,7 @@ export interface SkipUpgrade {
 // The next step of each source, from the given levels.
 export function nextSkipUpgrades(s: SkipSources): SkipUpgrade[] {
     const now = healthSkipChance(s);
+    const names = SKIP_NAMES[s.kind ?? 'health'];
     const labs = s.labs ?? {};
     const out: SkipUpgrade[] = [];
     if (s.workshop < WORKSHOP_MAX) {
@@ -85,10 +105,10 @@ export function nextSkipUpgrades(s: SkipSources): SkipUpgrade[] {
         out.push({
             source: 'workshop', from: s.workshop, to,
             points: healthSkipChance({ ...s, workshop: to }) - now,
-            cost: workshopCost(WORKSHOP_STAT, s.workshop, to, workshopDiscount(labs, 'utility')) ?? 0,
+            cost: workshopCost(names.workshop, s.workshop, to, workshopDiscount(labs, 'utility')) ?? 0,
         });
     }
-    const lab = s.lab < LAB_MAX ? labLevelCost(LAB, s.lab + 1, labs, s.relics ?? {}) : null;
+    const lab = s.lab < LAB_MAX ? labLevelCost(names.lab, s.lab + 1, labs, s.relics ?? {}) : null;
     if (lab) {
         out.push({
             source: 'lab', from: s.lab, to: s.lab + 1,

@@ -43,7 +43,7 @@ const wavesText = (w: number) => {
 };
 
 const CHAIN_GROUPS: ChainLink['group'][] = [
-    'Enemies in range', 'Tower', 'Damage to each enemy', 'Level skip', 'Run savers', 'Coin bonuses',
+    'Enemies in range', 'Tower', 'Damage to each enemy', 'Survival', 'Level skip', 'Run savers', 'Coin bonuses',
 ];
 
 // A link as "before → after (change)"; relative ones (×) as a % change.
@@ -321,7 +321,7 @@ export default function WhatIfTab() {
                                 <span className="wi-v">{pct(result.pushPct)}</span>
                             </>)}
                             {result.skipPoints !== 0 && (<>
-                                <span className="wi-k">Enemy Health Level Skip</span>
+                                <span className="wi-k">Enemy {result.skipKind === 'attack' ? 'Attack' : 'Health'} Level Skip</span>
                                 <span className="wi-v">{result.skipPoints > 0 ? '+' : ''}{result.skipPoints.toFixed(2)} points</span>
                             </>)}
                             {result.waves && (<>
@@ -377,9 +377,15 @@ export default function WhatIfTab() {
                                 that shows over several runs, not one.
                             </p>
                         )}
-                        {gc && !models.run && (
+                        {!models.run && (!tourney || gc) && (
                             <p className="wi-hint">
                                 Waves and coins per run need runs that ended in a death — use Import Game Data.
+                            </p>
+                        )}
+                        {!gc && models.run && !tourney && (
+                            <p className="wi-hint">
+                                eHP: your runs end where enemy attack outgrows what your tower can take, so more
+                                survival moves the end to where enemies hit that much harder (Run Length).
                             </p>
                         )}
                         <p className="wi-hint">

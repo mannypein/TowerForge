@@ -68,6 +68,46 @@ enhancement levels from the wiki, less its discount lab), each step turned
 into waves (`pathSkipGains`) and coins per run. Lab time isn't weighed in
 this panel — it's shown next to the cost; the Labs panel weighs it.
 
+### Run length, eHP (2026-10-23)
+
+`engine/runLength.ts` with `stat: 'attack'`, Run Length's eHP view, the
+Optimizer's survival rows, What If. An eHP tower takes the hits, so a run
+ends where enemy **attack** outgrows what it can take (health, overheal,
+wall, healing, Defense %, Chrono Field and module damage cuts, thorns — the
+survival score, [optimizer.md](optimizer.md)). Same model as Glass Cannon on
+the basic enemy's attack at the run's attack level (wave − AttackLevelSkips,
+the panel's footer rule) and Enemy Attack Level Skip: more survival moves the
+death wave to where enemy attack has grown by the same factor.
+
+Checked on the saved runs of the site's eHP accounts (7 accounts, 158
+deaths, read on the server for totals only — no names, nothing kept):
+- **What blocks the damage:** Defense % took 50–94% of raw incoming damage;
+  **Defense Absolute under 1%** at these waves (so it barely matters late);
+  Chrono Field, Chain Thunder (to 19%), Flame Bot (to 47%) and Primordial
+  Collapse (29–42%) mattered for some. Healing: packages, wall regen, and
+  **lifesteal 20–30%** for lower-tier players (now counted, `ehp.ts`).
+- **Attack holds steady at death:** runs on one tier with the same build die
+  within ±16–30% of enemy attack (e.g. sd 0.05–0.11 in log10), and across
+  tiers too where the deaths are eHP-like — one account's long runs on
+  T7–T12 died at enemy attack 10^13.1–10^13.3 while enemy health at death
+  differed by thousands of times.
+- **Two kinds of eHP death.** Where damage taken ≈ the run's healing (×1),
+  hits wore the tower down — the attack model fits. Where damage taken was
+  ~10⁶× healing, single hits far past any pool ended the run, as in a Glass
+  Cannon run (enemy health decides; one-tier-predicts-another was better on
+  health there). `oneHitEnds` flags it (median > 100×) and Run Length says
+  so; the player can switch the view.
+- **Deaths left out:** eHP histories have many short runs (tries at a higher
+  tier, a different build). The eHP model drops deaths under 60% of the
+  recent ones' median wave, and the default tier is the one with the most
+  waves played to a death (both builds), not the most deaths.
+- Typical numbers (T10–T18, W8000–9500, 30–60% attack skip): +10% survival
+  ≈ 80–110 waves; +1 point of attack skip ≈ 120–240 waves (worth +14–24%
+  survival).
+- Not checked: how far a single upgrade really moves an eHP death (needs
+  runs before and after a known upgrade); the tournament attack curve (eHP
+  tournament waves aren't shown).
+
 ### Run length, Glass Cannon (step 2)
 
 `engine/runLength.ts`, Optimizer → Run Length. Owner plays GC: one enemy hit

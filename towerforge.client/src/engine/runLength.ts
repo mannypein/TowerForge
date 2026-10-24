@@ -1,7 +1,7 @@
 // ============================================================
 //  TowerForge Companion — Run length (run simulator, step 2)
-//  How far a Glass Cannon run gets, and how many waves more damage or
-//  more Enemy Health Level Skip would buy.
+//  How far a run gets, and how many waves more damage (Glass Cannon) or
+//  more survival (eHP), or more level skip, would buy.
 //
 //  A GC tower dies to the first enemy that reaches it (one hit takes
 //  all its health; Death Defy, Energy Shield and the wall only absorb a
@@ -19,11 +19,23 @@
 //    deaths on one tier (each run is a little luckier or unluckier).
 //  - Level skips are deterministic, so health level = wave × (1 − rate).
 //  Attack levels don't matter here: any hit is lethal either way.
+//
+//  eHP (`stat: 'attack'`): an eHP tower takes the hits, so its run ends
+//  where enemy ATTACK outgrows what it can take — health, healing and
+//  defense (engine/ehp.ts). Same model, on the basic enemy's attack at
+//  the run's attack level (wave − AttackLevelSkips) and Enemy Attack
+//  Level Skip: more survival moves the death wave to where enemy attack
+//  has grown by the same factor. Checked on eHP players' saved runs
+//  (2026-10-23, docs/run-simulation.md): where damage taken ≈ healing,
+//  the attack at death holds steady run to run and tier to tier (one
+//  account: within ×1.6 from T7 to T12, while enemy health at death
+//  differed by thousands of times). Campaign only — the tournament attack
+//  curve isn't known.
 //  Pure functions — no store imports.
 // ============================================================
 
 import type { BattleReport } from './battleReport';
-import { baseEnemyHealth } from './enemyStats';
+import { baseEnemyDamage, baseEnemyHealth } from './enemyStats';
 import type { EnemyType } from './enemyStats';
 
 // What ended a run (the game's KilledBy number): its enemy-type order.
@@ -53,31 +65,46 @@ export function runLevelSkips(run: BattleReport): { health: number; attack: numb
     return health !== null && attack !== null ? { health, attack } : null;
 }
 
+// What ends the runs: enemy health outgrowing the tower's damage (Glass
+// Cannon) or enemy attack outgrowing its survival (eHP).
+export type RunStat = 'health' | 'attack';
+
 export interface RunEnd {
     index: number;            // into the runs passed in
     run: BattleReport;
     killer: string | null | undefined;   // enemy type; null = quit; undefined = not recorded
     healthLevel: number | null;
     enemyHealth: number | null;          // basic enemy at death (base formula)
+    attackLevel: number | null;
+    enemyAttack: number | null;          // basic enemy's attack at death (campaign only)
 }
 
 export function runEnds(runs: BattleReport[]): RunEnd[] {
     return runs.map((run, index) => {
         const skips = runLevelSkips(run);
         const healthLevel = skips ? Math.max(1, run.wave - skips.health) : null;
+        const attackLevel = skips ? Math.max(1, run.wave - skips.attack) : null;
         return {
             index, run,
             killer: killedBy(run),
             healthLevel,
             enemyHealth: healthLevel !== null ? baseEnemyHealth(healthLevel, run.tier, run.tournament) : null,
+            attackLevel,
+            enemyAttack: attackLevel !== null && !run.tournament ? baseEnemyDamage(attackLevel, run.tier) : null,
         };
     });
 }
 
-// Waves until the basic enemy's health reaches `limit`, skipping `skipRate`
-// of health levels (enemy health only rises with the wave, so a halving search works).
-export function deathWave(limit: number, tier: number, skipRate: number, tournament = false): number {
-    const healthAt = (w: number) => baseEnemyHealth(Math.max(1, w - Math.floor(w * skipRate)), tier, tournament);
+// The stat's level and value at a death.
+const levelOf = (d: RunEnd, stat: RunStat) => (stat === 'attack' ? d.attackLevel : d.healthLevel);
+const valueOf = (d: RunEnd, stat: RunStat) => (stat === 'attack' ? d.enemyAttack : d.enemyHealth);
+const statAt = (level: number, tier: number, tournament: boolean, stat: RunStat) =>
+    (stat === 'attack' ? baseEnemyDamage(level, tier) : baseEnemyHealth(level, tier, tournament));
+
+// Waves until the basic enemy's health (or attack) reaches `limit`, skipping
+// `skipRate` of its levels (both only rise with the wave, so a halving search works).
+export function deathWave(limit: number, tier: number, skipRate: number, tournament = false, stat: RunStat = 'health'): number {
+    const healthAt = (w: number) => statAt(Math.max(1, w - Math.floor(w * skipRate)), tier, tournament, stat);
     let lo = 1;
     let hi = 1;
     while (healthAt(hi) < limit && hi < 1e6) hi *= 2;
@@ -89,11 +116,12 @@ export function deathWave(limit: number, tier: number, skipRate: number, tournam
 }
 
 export interface RunLengthModel {
+    stat: RunStat;            // what ends the runs: enemy health (GC) or attack (eHP)
     tier: number;
     tournament: boolean;      // built from tournament deaths, on the tournament curve
     used: RunEnd[];           // the deaths the model works from (newest first)
-    limit: number;            // their typical basic-enemy health at death (geometric mean)
-    skipRate: number;         // health levels skipped per wave (newest of those runs)
+    limit: number;            // their typical basic-enemy health (or attack) at death (geometric mean)
+    skipRate: number;         // health (or attack) levels skipped per wave (newest of those runs)
     typicalWave: number;      // the average wave they ended on
 }
 
@@ -101,32 +129,67 @@ const RECENT_DEATHS = 5;
 
 // Which deaths to learn from: campaign or tournament runs (they scale
 // differently), and on campaign a tier — the chosen run's when it has
-// deaths, else the tier you die on most.
+// deaths, else the tier you've played the most waves to a death on.
 export interface RunPick {
     tournament?: boolean;
     tier?: number;
+    stat?: RunStat;           // default 'health' (Glass Cannon)
 }
+
+// eHP histories hold many short runs that ended some other way (a try at
+// a higher tier, another build): the eHP model leaves out deaths short of
+// this share of the recent ones' median wave.
+const SHORT_RUN = 0.6;
 
 // The newest deaths of the picked kind.
 export function buildRunLengthModel(runs: BattleReport[], pick: RunPick = {}): RunLengthModel | null {
     const tournament = !!pick.tournament;
+    const stat = pick.stat ?? 'health';
+    if (stat === 'attack' && tournament) return null;
     const deaths = runEnds(runs).filter(e =>
-        e.killer !== null && e.enemyHealth !== null && e.run.tournament === tournament && e.run.wave > 1);
+        e.killer !== null && valueOf(e, stat) !== null && e.run.tournament === tournament && e.run.wave > 1);
     if (deaths.length === 0) return null;
+    // The usual tier: the most waves played to a death, so a string of quick
+    // tries at a higher tier doesn't outweigh the runs you really play.
     const byTier = new Map<number, number>();
-    for (const d of deaths) byTier.set(d.run.tier, (byTier.get(d.run.tier) ?? 0) + 1);
+    for (const d of deaths) byTier.set(d.run.tier, (byTier.get(d.run.tier) ?? 0) + d.run.wave);
     const tier = pick.tier !== undefined && byTier.has(pick.tier)
         ? pick.tier
         : [...byTier.entries()].sort((a, b) => b[1] - a[1] || b[0] - a[0])[0][0];
-    const used = deaths.filter(d => d.run.tier === tier)
-        .sort((a, b) => (b.run.time ?? b.index) - (a.run.time ?? a.index))
-        .slice(0, RECENT_DEATHS);
-    const limit = Math.exp(used.reduce((s, d) => s + Math.log(d.enemyHealth!), 0) / used.length);
+    let onTier = deaths.filter(d => d.run.tier === tier)
+        .sort((a, b) => (b.run.time ?? b.index) - (a.run.time ?? a.index));
+    if (stat === 'attack') {
+        const waves = onTier.slice(0, RECENT_DEATHS).map(d => d.run.wave).sort((a, b) => a - b);
+        const median = waves[Math.floor(waves.length / 2)];
+        onTier = onTier.filter(d => d.run.wave >= SHORT_RUN * median);
+    }
+    const used = onTier.slice(0, RECENT_DEATHS);
+    const limit = Math.exp(used.reduce((s, d) => s + Math.log(valueOf(d, stat)!), 0) / used.length);
     return {
-        tier, tournament, used, limit,
-        skipRate: 1 - used[0].healthLevel! / used[0].run.wave,
+        stat, tier, tournament, used, limit,
+        skipRate: 1 - levelOf(used[0], stat)! / used[0].run.wave,
         typicalWave: Math.round(used.reduce((s, d) => s + d.run.wave, 0) / used.length),
     };
+}
+
+// Do the model's runs end to single hits far beyond what the tower can take?
+// The game counts each hit in full, the killing one too, so when damage
+// taken is many times the run's whole healing, one hit did it — as in a
+// Glass Cannon run, where enemy health decides the end, not attack. On
+// eHP players' runs (2026-10-23) it was ~1× where hits wore the tower
+// down, ~10⁶× and more where single hits ended runs. null = not recorded.
+const ONE_HIT = 100;
+
+export function oneHitEnds(m: RunLengthModel): boolean | null {
+    const ratios = m.used.flatMap(d => {
+        const raw = d.run.raw ?? {};
+        const n = (k: string) => (typeof raw[k] === 'number' ? (raw[k] as number) : 0);
+        if (typeof raw.DamageTaken !== 'number') return [];
+        const healed = n('TowerHealthRegen') + n('WallHealthRegen') + n('RecoveryPackagesRegen') + n('Lifesteal')
+            + n('HealthFromDeathWaveThisRound');
+        return healed > 0 ? [n('DamageTaken') / healed] : [];
+    }).sort((a, b) => a - b);
+    return ratios.length ? ratios[Math.floor(ratios.length / 2)] > ONE_HIT : null;
 }
 
 // The enemies that ended the model's runs, as shares (Scatter split counts
@@ -145,25 +208,28 @@ export function killerMix(m: RunLengthModel): Partial<Record<EnemyType, number>>
 // which could sit right on a wall.
 const startWaves = new WeakMap<RunLengthModel, number[]>();
 
+// A death's own skip rate for the model's stat.
+const rateOf = (m: RunLengthModel, d: RunEnd) => 1 - levelOf(d, m.stat)! / d.run.wave;
+// Where a death lands with its limit × `factor`, at a skip rate.
+const landsAt = (m: RunLengthModel, d: RunEnd, factor: number, rate: number) =>
+    deathWave(valueOf(d, m.stat)! * factor, m.tier, Math.max(0, Math.min(0.99, rate)), m.tournament, m.stat);
+
 function averageMove(m: RunLengthModel, healthFactor: number, extraSkip: number): number {
     let from = startWaves.get(m);
     if (!from) {
-        from = m.used.map(d => deathWave(d.enemyHealth!, m.tier, 1 - d.healthLevel! / d.run.wave, m.tournament));
+        from = m.used.map(d => landsAt(m, d, 1, rateOf(m, d)));
         startWaves.set(m, from);
     }
-    const moves = m.used.map((d, i) => {
-        const rate = 1 - d.healthLevel! / d.run.wave;
-        return deathWave(d.enemyHealth! * healthFactor, m.tier, Math.max(0, Math.min(0.99, rate + extraSkip)), m.tournament) - from[i];
-    });
+    const moves = m.used.map((d, i) => landsAt(m, d, healthFactor, rateOf(m, d) + extraSkip) - from[i]);
     return moves.reduce((a, b) => a + b, 0) / moves.length;
 }
 
-// Waves gained if the tower's damage rose by `gain` (0.1 = +10%).
+// Waves gained if the tower's damage (eHP: survival) rose by `gain` (0.1 = +10%).
 export function wavesFromDamage(m: RunLengthModel, gain: number): number {
     return averageMove(m, 1 + gain, 0);
 }
 
-// Waves gained if `points` more percent of health levels were skipped.
+// Waves gained if `points` more percent of health (eHP: attack) levels were skipped.
 export function wavesFromSkip(m: RunLengthModel, points: number): number {
     return averageMove(m, 1, points / 100);
 }
@@ -171,7 +237,8 @@ export function wavesFromSkip(m: RunLengthModel, points: number): number {
 // What one point of Enemy Health Level Skip is worth in flat damage: the log
 // of the damage factor that gains the same waves. Both move the death wave,
 // so this puts skip and damage upgrades on one scale (the optimizer ranks
-// workshop and labs by it). Measured over +50% damage and 2 skip points, so
+// workshop and labs by it). On the attack model (eHP): a point of Enemy
+// Attack Level Skip, in survival. Measured over +50% damage and 2 skip points, so
 // single health walls don't swing it.
 const WORTH_DAMAGE = 0.5;
 const WORTH_SKIP = 2;
@@ -208,13 +275,13 @@ export function wavesSpread(
     const points = Math.max(0, skipPoints);
     const logGain = Math.max(0, Math.log(1 + Math.max(0, gainPct) / 100) - worth * points);
     const moves = m.used.map(d => {
-        const rate = 1 - d.healthLevel! / d.run.wave;
+        const rate = rateOf(m, d);
         let moved = 0;
         let start = 0;
         for (let k = 0; k < LUCK_POINTS; k++) {
             const spread = -LUCK + (2 * LUCK * k) / (LUCK_POINTS - 1);
-            moved += deathWave(d.enemyHealth! * Math.exp(logGain + spread), m.tier, Math.min(0.99, rate + points / 100), m.tournament);
-            start += deathWave(d.enemyHealth! * Math.exp(spread), m.tier, rate, m.tournament);
+            moved += landsAt(m, d, Math.exp(logGain + spread), rate + points / 100);
+            start += landsAt(m, d, Math.exp(spread), rate);
         }
         return (moved - start) / LUCK_POINTS;
     });

@@ -29,8 +29,8 @@ import { BattleReportPanel, EconomyStats, EhpStats } from './BuildPanels';
 import { buildRunLengthModel, pathRunGains, pathSkipGains } from '../../engine/runLength';
 import { conditionedSkip } from '../../engine/battleConditions';
 import { formatLabTime } from '../../engine/upgradeCosts';
-import { healthSkipSources, skipUpgradePath } from '../../engine/levelSkip';
-import type { SkipUpgrade } from '../../engine/levelSkip';
+import { SKIP_NAMES, skipSources, skipUpgradePath } from '../../engine/levelSkip';
+import type { SkipKind, SkipUpgrade } from '../../engine/levelSkip';
 import { formatGameNumber } from '../../engine/gameNumbers';
 import type { StepRunGain } from '../../engine/runLength';
 import { withChipLevel } from '../../engine/guardian';
@@ -115,6 +115,7 @@ export default function OptimizerTab() {
     const blendMode = shown === 'blend';
     const pushWaves = pushGoalOf(buildType) === 'waves';
     const wavesMode = shown === 'waves' || (blendMode && pushWaves);
+    const survivalMode = shown === 'survival' || (blendMode && !pushWaves);
     const metricLabel = {
         damage: 'eDPS', waves: 'waves', coins: 'coins', survival: 'survival', blend: 'coins and push',
     }[shown];
@@ -128,8 +129,11 @@ export default function OptimizerTab() {
         [importedBattles, cardData, activePreset, battleReportText, battleReportChoice, profile, labData],
     );
     const { run: runModel, coinsAt, worth } = models;
+    // Waves for each step: pushing waves on the enemy-health model (Glass
+    // Cannon), pushing survival on the enemy-attack model (eHP).
+    const runFits = !!runModel && (wavesMode ? runModel.stat === 'health' : survivalMode && runModel.stat === 'attack');
     const runGains = (cat: OptCategory): StepRunGain[] | undefined => {
-        if (!wavesMode || !runModel) return undefined;
+        if (!runFits || !runModel) return undefined;
         const path = results[cat] ?? [];
         const gains = path.map(c => (blendMode ? c.pushPct ?? 0 : c.scorePct));
         return pathRunGains(runModel, gains, coinsAt, path.map(c => c.skipPoints ?? 0), worth);
@@ -178,10 +182,13 @@ export default function OptimizerTab() {
                 applyGoal(snap, goal, buildType, chosenReport(st), runModels(st), coinWeight);
                 setResultsGoal(goal);
                 const pushingWaves = snap.edpsMode === 'waves' || snap.blend?.push === 'waves';
-                // Pushing waves: the Enemy Health Level Skip coin upgrades, most skip per coin first.
-                setSkipPath(pushingWaves
-                    ? skipUpgradePath(healthSkipSources(
-                        snap.wsData[snap.presetIdx], snap.labData, snap.enhData, snap.relicData, snap.modBonuses.subs ?? {},
+                const pushingSurvival = snap.metric === 'ehp' || snap.blend?.push === 'ehp';
+                // Pushing waves: the Enemy Health Level Skip coin upgrades, most skip per
+                // coin first; pushing survival (eHP), the Enemy Attack Level Skip ones.
+                const skipKind = pushingWaves ? 'health' : pushingSurvival && snap.skipWorth ? 'attack' : null;
+                setSkipPath(skipKind
+                    ? skipUpgradePath(skipSources(
+                        skipKind, snap.wsData[snap.presetIdx], snap.labData, snap.enhData, snap.relicData, snap.modBonuses.subs ?? {},
                     ), SKIP_PATH_STEPS)
                     : []);
                 setFarmCalib(snap.farm ?? null);
@@ -716,7 +723,12 @@ export default function OptimizerTab() {
                         </>)}
                         {shown === 'survival' && (<>
                             <strong>Ranked for survival.</strong> Damage and coins aren&apos;t counted (thorns are
-                            the exception).
+                            the exception). An eHP run ends where enemy attack outgrows what your tower can take, so
+                            Enemy Attack Level Skip and the attack labs of the enemies that end your runs count as the
+                            survival that gains the same waves.{' '}
+                            {runFits && runModel
+                                ? `Waves come from Run Length — your last ${runModel.used.length} tier ${runModel.tier} deaths (around W${runModel.typicalWave.toLocaleString()}).`
+                                : 'Import runs that ended in a death to see waves.'}
                         </>)}
                         {shown === 'blend' && (<>
                             <strong>Ranked for coins and {pushWaves ? 'push' : 'survival'} together</strong>, at
@@ -789,7 +801,7 @@ export default function OptimizerTab() {
                             <div className="opt-row-label" style={{ marginTop: '14px' }}>
                                 {group.label}
                             </div>
-                            {group.currency === 'coins' && wavesMode && skipPath.length > 0 && runModel && (
+                            {group.currency === 'coins' && runFits && skipPath.length > 0 && runModel && (
                                 <SkipPanel path={skipPath} runModel={runModel} coinsAt={coinsAt} skipScale={conditionedSkip(1, models.conditions)} />
                             )}
                             {OPT_PANELS.filter(p => group.cats.includes(p.cat)).map(panel => (
@@ -901,16 +913,16 @@ const CAT_BADGE: Partial<Record<OptCategory, string>> = {
 const fmtWaves = (w: number) => (w < 10 ? w.toFixed(1) : Math.round(w).toLocaleString());
 
 const SKIP_PATH_STEPS = 10;
-const SKIP_SOURCE: Record<SkipUpgrade['source'], { badge: string; name: string }> = {
-    workshop: { badge: 'WS', name: 'Enemy HP Level Skip' },
-    lab: { badge: 'LAB', name: 'Enemy HP Lvl Skip Lab' },
+const skipSource = (kind: SkipKind): Record<SkipUpgrade['source'], { badge: string; name: string }> => ({
+    workshop: { badge: 'WS', name: SKIP_NAMES[kind].workshop },
+    lab: { badge: 'LAB', name: SKIP_NAMES[kind].lab },
     enhancement: { badge: 'ENH', name: 'Enhancement — Enemy Level Skips' },
-};
+});
 
-// Enemy Health Level Skip, Glass Cannon waves mode: each point of skip slows
-// how fast enemies get tougher, so it moves the death wave a long way.
-// In a tournament the league's Skip Reduction and Skip Decay shrink each
-// point (`skipScale`).
+// Enemy Health Level Skip (Glass Cannon waves mode) or Enemy Attack Level
+// Skip (eHP survival): each point of skip slows how fast enemies get
+// tougher, so it moves the death wave a long way. In a tournament the
+// league's Skip Reduction and Skip Decay shrink each point (`skipScale`).
 function SkipPanel({ path, runModel, coinsAt, skipScale }: {
     path: SkipUpgrade[];
     runModel: NonNullable<ReturnType<typeof buildRunLengthModel>>;
@@ -920,23 +932,25 @@ function SkipPanel({ path, runModel, coinsAt, skipScale }: {
     const gains = pathSkipGains(runModel, path.map(u => u.points * skipScale), coinsAt);
     const rows = path.map((u, i) => ({ u, ...gains[i] }));
     const totalWaves = gains.reduce((sum, g) => sum + g.waves, 0);
+    const attack = runModel.stat === 'attack';
+    const source = skipSource(runModel.stat);
     return (
         <div className="opt-section">
             <div className="opt-section-head">
-                <span className="opt-section-title">Enemy Health Level Skip</span>
+                <span className="opt-section-title">Enemy {attack ? 'Attack' : 'Health'} Level Skip</span>
                 <span className="s-badge">+{fmtWaves(totalWaves)} waves</span>
             </div>
             <p className="opt-row-explainer" style={{ padding: '6px 12px 0' }}>
-                Each point of skip chance slows how fast enemies get tougher, so it moves your death wave a long
-                way. Most skip per coin first; the enhancement multiplies the other sources, so its value grows
-                with them.
+                Each point of skip chance slows how fast enemies {attack ? 'hit harder' : 'get tougher'}, so it moves
+                your death wave a long way. Most skip per coin first; the enhancement multiplies the other sources, so
+                its value grows with them.
             </p>
             {rows.map(({ u, waves, coins }, idx) => (
                 <div key={`${u.source}-${u.to}`} className="opt-row">
                     <span className="opt-rank">#{idx + 1}</span>
-                    <span className="opt-cat-badge">{SKIP_SOURCE[u.source].badge}</span>
+                    <span className="opt-cat-badge">{source[u.source].badge}</span>
                     <div className="opt-name-col">
-                        <span className="opt-name">{SKIP_SOURCE[u.source].name}</span>
+                        <span className="opt-name">{source[u.source].name}</span>
                         <span className="opt-sub">Lv {u.from} → {u.to} · +{u.points.toFixed(2)} skip points</span>
                         <span className="opt-waves">
                             +{fmtWaves(waves)} waves{coins !== null && <> · +{(coins * 100).toFixed(2)}% coins</>}
@@ -991,7 +1005,7 @@ function OptPanel({
                                 <span className="opt-sub">{c.subLabel}</span>
                                 {blend && c.coinsPct !== undefined ? (
                                     <span className="opt-waves">
-                                        {blend === 'waves' && runGains?.[idx]
+                                        {runGains?.[idx]
                                             ? `+${fmtWaves(runGains[idx].waves)} waves`
                                             : `${pct(c.pushPct ?? 0)} ${blend === 'waves' ? 'push' : 'survival'}`}
                                         {' · '}{pct(c.coinsPct)} coins/hr

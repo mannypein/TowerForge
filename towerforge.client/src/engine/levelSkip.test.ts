@@ -1,9 +1,11 @@
-// Enemy Health Level Skip upgrades: the chance from each source, what the
-// next step of each adds, and the coins it costs (wiki tables).
+// Enemy Health (and Attack) Level Skip upgrades: the chance from each
+// source, what the next step of each adds, and the coins it costs (wiki tables).
 
 import { describe, expect, it } from 'vitest';
-import { healthSkipChance, nextSkipUpgrades, skipUpgradePath } from './levelSkip';
+import { attackSkipSources, healthSkipChance, healthSkipSources, nextSkipUpgrades, skipUpgradePath } from './levelSkip';
 import type { SkipSources } from './levelSkip';
+import { labLevelCost, workshopCost } from './upgradeCosts';
+import { WS_STATS } from '../constants/gameData';
 
 const maxed: SkipSources = { workshop: 699, lab: 20, enhancement: 60, enhancementOwned: true, otherPct: 2 };
 
@@ -56,5 +58,31 @@ describe('a path of the most skip per coin', () => {
         expect(path[0].source).toBe('lab');                      // billions of coins against quadrillions
         expect(path.filter(u => u.source === 'lab').map(u => u.to)).toEqual([13, 14, 15, 16, 17, 18, 19, 20]);
         for (const u of path) expect(u.points).toBeGreaterThan(0);
+    });
+});
+
+// eHP: Enemy Attack Level Skip has its own workshop stat, lab, relic and
+// module substat; the Enemy Level Skips enhancement multiplies it too.
+describe('Enemy Attack Level Skip', () => {
+    it('reads the attack sources, not the health ones', () => {
+        const ws = { attack: [], defense: [], utility: [] as number[] };
+        ws.utility[WS_STATS.utility.findIndex(([n]) => n === 'Enemy Atk Level Skip')] = 300;
+        ws.utility[WS_STATS.utility.findIndex(([n]) => n === 'Enemy HP Level Skip')] = 600;
+        const enh = { d: { attack: [], defense: [], utility: [] }, u: { attack: [], defense: [], utility: [] } };
+        const labs = { 'Enemy Atk Lvl Skip Lab': 5, 'Enemy HP Lvl Skip Lab': 20 };
+        const relics = { rEAtkSkip: 2, rEHPSkip: 1 };
+        const subs = { 'Enemy Atk Level Skip': 4, 'Enemy HP Level Skip': 8 };
+        const atk = attackSkipSources(ws as never, labs, enh as never, relics, subs);
+        expect(atk).toMatchObject({ kind: 'attack', workshop: 300, lab: 5, otherPct: 6 });
+        expect(healthSkipSources(ws as never, labs, enh as never, relics, subs)).toMatchObject({ workshop: 600, lab: 20, otherPct: 9 });
+        expect(healthSkipChance(atk)).toBeCloseTo(0.05 * 301 + 0.5 + 6, 9);
+    });
+
+    it('prices its steps from the attack tables', () => {
+        const mid: SkipSources = { kind: 'attack', workshop: 450, lab: 12, enhancement: 30, enhancementOwned: true, otherPct: 2 };
+        const ups = Object.fromEntries(nextSkipUpgrades(mid).map(u => [u.source, u]));
+        expect(ups.workshop.cost).toBe(workshopCost('Enemy Atk Level Skip', 450, 460, 0));
+        expect(ups.lab.cost).toBe(labLevelCost('Enemy Atk Lvl Skip Lab', 13, {}, {})!.coins);
+        expect(ups.workshop.points).toBeCloseTo(0.5 * 1.3, 9);
     });
 });

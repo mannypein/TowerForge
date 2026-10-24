@@ -143,8 +143,9 @@ import type { FarmCalibration } from './farming';
 import { ehpScore } from './ehp';
 import type { EhpCalibration } from './ehp';
 import { edpsScore, edpsWaves } from './edps';
-import { healthSkipChance, healthSkipSources } from './levelSkip';
-import { healthLabCut } from './enemyStats';
+import { healthSkipChance, skipSources } from './levelSkip';
+import type { SkipKind } from './levelSkip';
+import { attackLabCut, healthLabCut } from './enemyStats';
 import { assistLevelCost } from './assistModules';
 import type { EnemyType } from './enemyStats';
 import {
@@ -206,11 +207,13 @@ export interface OptimizerSnapshot {
     edpsMode?: 'damage' | 'waves';
     // Waves mode: the flat damage one point of Enemy Health Level Skip is
     // worth, as the log of the damage factor that gains the same waves
-    // (runLength.skipWorth). Omitted = skip isn't scored.
+    // (runLength.skipWorth). Survival (eHP): the survival one point of Enemy
+    // Attack Level Skip is worth, on the attack model. Omitted = skip isn't scored.
     skipWorth?: number;
     // Waves: the enemy types that end the runs, as shares (runLength.killerMix).
     // An enemy health lab counts as that much more damage against its type,
-    // weighted by how often the type ends a run. Omitted = labs not scored.
+    // weighted by how often the type ends a run; for survival, an enemy
+    // attack lab as that much more survival. Omitted = labs not scored.
     killers?: Partial<Record<EnemyType, number>>;
     // "Coins and push": coins per hour (needs `farm`) blended with the push
     // score — waves (flat damage + skip, needs `edps`) or survival (`ehp`).
@@ -280,9 +283,29 @@ function getScore(raw: OptimizerSnapshot): number {
         return coinRate(snap, snap.farm) ** w * pushScore(snap) ** (1 - w);
     }
     if (snap.metric === 'coins' && snap.farm) return coinRate(snap, snap.farm);
-    if (snap.metric === 'ehp' && snap.ehp) return ehpScore(snap, snap.ehp);
+    if (snap.metric === 'ehp' && snap.ehp) return survivalScore(snap);
     if (snap.edps && snap.edpsMode !== 'waves') return edpsScore(snap, snap.edps);
     return wavesScore(snap);
+}
+
+// Survival (eHP), with Enemy Attack Level Skip counted as the survival it's
+// worth in waves (runLength.skipWorth on the attack model) and the attack
+// labs of the enemy types that end runs.
+function survivalScore(snap: OptimizerSnapshot): number {
+    if (!snap.ehp) return 1;
+    return ehpScore(snap, snap.ehp) * Math.exp((snap.skipWorth ?? 0) * scoredSkip(snap)) * killerAttackFactor(snap);
+}
+
+// Less attack from the enemies that end eHP runs works like more survival
+// against them: Π (1 ÷ attack left)^(share of deaths). The code's
+// assumption, as for health labs below — an eHP tower takes hits from
+// every type, and the type that lands the last one stands for them.
+function killerAttackFactor(snap: OptimizerSnapshot): number {
+    let log = 0;
+    for (const [type, share] of Object.entries(snap.killers ?? {}) as [EnemyType, number][]) {
+        log -= share * Math.log(Math.max(0.01, attackLabCut(snap.labData, type)));
+    }
+    return Math.exp(log);
 }
 
 // Flat damage, with the skip chance counted as the damage it's worth; the
@@ -306,7 +329,7 @@ function killerHealthFactor(snap: OptimizerSnapshot): number {
 
 // The push half of "coins and push".
 function pushScore(snap: OptimizerSnapshot): number {
-    if (snap.blend?.push === 'ehp') return snap.ehp ? ehpScore(snap, snap.ehp) : 1;
+    if (snap.blend?.push === 'ehp') return survivalScore(snap);
     return wavesScore(snap);
 }
 
@@ -318,17 +341,23 @@ export function scoreParts(raw: OptimizerSnapshot): { coins: number; push: numbe
 
 const pushesWaves = (snap: OptimizerSnapshot) =>
     snap.blend ? snap.blend.push === 'waves' : snap.edpsMode === 'waves';
+const pushesSurvival = (snap: OptimizerSnapshot) =>
+    snap.blend ? snap.blend.push === 'ehp' : snap.metric === 'ehp';
 
-// Enemy Health Level Skip chance, in waves mode once skip is worth something.
+// The level skip that moves the death wave, once it's worth something:
+// Enemy Health Level Skip when pushing waves (Glass Cannon), Enemy Attack
+// Level Skip when pushing survival (eHP).
 function scoredSkip(snap: OptimizerSnapshot): number {
-    if (!snap.skipWorth || !snap.edps || !pushesWaves(snap)) return 0;
+    if (!snap.skipWorth) return 0;
+    if (pushesSurvival(snap)) return snap.ehp ? skipChanceOf(snap, 'attack') : 0;
+    if (!snap.edps || !pushesWaves(snap)) return 0;
     return skipChanceOf(snap);
 }
 
-// Enemy Health Level Skip chance in points, under the snapshot's conditions.
-export function skipChanceOf(snap: OptimizerSnapshot): number {
-    return conditionedSkip(healthSkipChance(healthSkipSources(
-        snap.wsData[snap.presetIdx], snap.labData, snap.enhData, snap.relicData, snap.modBonuses.subs ?? {},
+// Enemy Health (or Attack) Level Skip chance in points, under the snapshot's conditions.
+export function skipChanceOf(snap: OptimizerSnapshot, kind: SkipKind = 'health'): number {
+    return conditionedSkip(healthSkipChance(skipSources(
+        kind, snap.wsData[snap.presetIdx], snap.labData, snap.enhData, snap.relicData, snap.modBonuses.subs ?? {},
     )), snap.conditions);
 }
 

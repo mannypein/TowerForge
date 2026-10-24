@@ -15,7 +15,7 @@ The Optimizer asks what the player wants, and every panel ranks by it
 | Push further (milestones, tournaments) | flat damage × e^(skipWorth × skip%) | Glass Cannon |
 | More damage | calibrated eDPS | Glass Cannon |
 | More coins | coins per hour (`farming.ts`) | all |
-| Survive longer | eHP (`ehp.ts`) | eHP, Farming |
+| Survive longer | survival (`ehp.ts`) × e^(worth × attack skip%) × the killers' attack labs; waves on the enemy-attack model (2026-10-23) | eHP, Farming |
 | Coins and push together | coins^w × push^(1 − w), w on a slider (default 50%) | all (push = waves for GC, survival otherwise) |
 
 - The blend is a weighted geometric mean, so an upgrade that helps both
@@ -378,8 +378,29 @@ Death Ray for runs that end to enemies they can touch.
   and "killed with effect active" coverage. Golden Combo uses the wiki's
   compounding formula.
 - **eHP** — `engine/ehp.ts`, calibrated by recovery packages and thorns
-  kills. Not modeled: Chain Thunder, Slow Aura mastery (enemy attack speed),
-  Enemy Level Skip workshop stats.
+  kills; lifesteal and Death Wave healing at the chosen run's rate
+  (2026-10-23 — they follow the tower's damage, so defense upgrades don't
+  move them, but they dilute a regen upgrade; on eHP players' runs lifesteal
+  was a fifth to a third of all healing). Flame Bot and Chain Thunder cut a
+  share of damage that these upgrades don't change, so it cancels out.
+  Not modeled: Slow Aura mastery (enemy attack speed).
+- **eHP, in waves** (2026-10-23) — survival moves the death wave on the
+  enemy-attack model (Run Length, `stat: 'attack'`; evidence in
+  [run-simulation.md](run-simulation.md) "Run length, eHP"):
+  - Enemy Attack Level Skip (workshop, lab, relic, module substat; the
+    Enemy Level Skips enhancement multiplies it too) counts as the survival
+    that gains the same waves: survival × e^(worth × attack skip%), worth =
+    `skipWorth` on the attack model. On eHP players' saved runs one point
+    was worth +14–24% survival (120–240 waves near W8000–9500), which puts
+    the attack-skip workshop stat at the top of most eHP coin paths.
+  - Enemy attack labs (−0.4% a level, −0.3% for Boss) of the types that
+    ended the recent runs, by their share: × Π (1 ÷ attack left)^share. The
+    code's assumption, like the health labs for Glass Cannon — every type
+    hits an eHP tower, and the one that landed the last hit stands for them.
+  - Rows show waves and coins per run (`pathRunGains`); Coins has an Enemy
+    Attack Level Skip panel; What If shows waves reached, run-to-run spread
+    and a Survival group in "How it adds up". Tournaments: no eHP waves (the
+    tournament attack curve isn't known).
 
 ## Stone rules (verified)
 

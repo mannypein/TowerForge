@@ -1,14 +1,15 @@
-// Run length for Glass Cannon: what ended each run, the enemy health a
-// tower stops coping with, and how many waves damage or level skip buy.
+// Run length: what ended each run, the enemy health (Glass Cannon) or
+// attack (eHP) a tower stops coping with, and how many waves damage,
+// survival or level skip buy.
 // KilledBy names checked against the owner's in-game battle reports
 // (Ray, Tank, Vampire, Overcharge, and blank for a run ended by hand).
 
 import { describe, expect, it } from 'vitest';
 import {
-    buildRunLengthModel, deathWave, killedBy, killerMix, pathRunGains, pathSkipGains, runEnds, skipWorth, wavesSpread,
-    wavesFromDamage, wavesFromSkip,
+    buildRunLengthModel, deathWave, killedBy, killerMix, oneHitEnds, pathRunGains, pathSkipGains, runEnds, skipWorth,
+    wavesSpread, wavesFromDamage, wavesFromSkip,
 } from './runLength';
-import { baseEnemyHealth } from './enemyStats';
+import { baseEnemyDamage, baseEnemyHealth } from './enemyStats';
 import { parseGameExport } from './gameExport';
 import { battle, makeExport } from '../test/makeExport';
 
@@ -174,5 +175,65 @@ describe('waves along a level skip path', () => {
         const steps = pathSkipGains(model, [0.13, 0.13, 0.4]);
         expect(steps.reduce((s, x) => s + x.waves, 0)).toBeCloseTo(wavesFromSkip(model, 0.66), 9);
         expect(steps[2].waves).toBeGreaterThan(steps[0].waves);   // a bigger step buys more
+    });
+});
+
+// eHP: a run ends where enemy attack outgrows the tower's survival, so the
+// model reads the basic enemy's attack at the run's attack level.
+describe('eHP runs (enemy attack)', () => {
+    // A T10 eHP death at `wave` with 40% of attack levels skipped.
+    const eDeath = (wave: number, day: number, killer = 4, extra: Record<string, unknown> = {}) => ({
+        BattleDate: `2026-10-${String(day).padStart(2, '0')}T12:00:00Z`, Tier: 10, Wave: wave, KilledBy: killer,
+        HealthLevelSkips: Math.floor(wave * 0.38), AttackLevelSkips: Math.floor(wave * 0.4), ...extra,
+    });
+
+    it('reads the enemy attack at death from the run’s attack skips', () => {
+        const [end] = runEnds(runs(eDeath(9000, 10)));
+        expect(end.attackLevel).toBe(9000 - 3600);
+        expect(end.enemyAttack).toBe(baseEnemyDamage(5400, 10));
+        const limit = baseEnemyDamage(5400, 10);
+        expect(Math.abs(deathWave(limit, 10, 0.4, false, 'attack') - 9000)).toBeLessThanOrEqual(3);
+    });
+
+    it('builds on the attack, and leaves out runs that ended far short of the others', () => {
+        const m = buildRunLengthModel(runs(
+            eDeath(9100, 10), eDeath(9000, 11), eDeath(3100, 12, 1), eDeath(8900, 13), eDeath(9200, 14),
+        ), { stat: 'attack' })!;
+        expect(m.stat).toBe('attack');
+        expect(m.used.map(d => d.run.wave)).toEqual([9200, 8900, 9000, 9100]);   // not the W3100 try
+        expect(m.skipRate).toBeCloseTo(0.4, 3);
+        expect(m.limit).toBeGreaterThan(baseEnemyDamage(8900 - 3560, 10) * 0.99);
+    });
+
+    it('turns more survival and more attack skip into waves', () => {
+        const m = buildRunLengthModel(runs(eDeath(9100, 10), eDeath(9000, 11), eDeath(8900, 13)), { stat: 'attack' })!;
+        const ten = wavesFromDamage(m, 0.1);
+        expect(ten).toBeGreaterThan(40);       // attack grows more slowly than health, so +10% buys more
+        expect(ten).toBeLessThan(200);
+        expect(wavesFromDamage(m, 1)).toBeGreaterThan(ten);
+        expect(wavesFromSkip(m, 1)).toBeGreaterThan(0);
+        expect(skipWorth(m)).toBeGreaterThan(0);
+    });
+
+    it('has no tournament model (the tournament attack curve isn’t known)', () => {
+        const t = runs({ ...eDeath(140, 12), IsTournament: true });
+        expect(buildRunLengthModel(t, { tournament: true, stat: 'attack' })).toBeNull();
+        expect(buildRunLengthModel(t, { tournament: true })).not.toBeNull();
+    });
+
+    it('picks the tier with the most waves played to a death, not the most tries', () => {
+        const many = runs(eDeath(9000, 10), eDeath(9100, 11),
+            ...[12, 13, 14, 15, 16].map(d => ({ ...eDeath(60, d, 1), Tier: 15 })));
+        expect(buildRunLengthModel(many, { stat: 'attack' })!.tier).toBe(10);
+    });
+
+    it('says when runs end to single hits far beyond the tower’s healing', () => {
+        const heal = { TowerHealthRegen: 1e12, RecoveryPackagesRegen: 1e12, Lifesteal: 0 };
+        const worn = buildRunLengthModel(runs(eDeath(9000, 10, 4, { ...heal, DamageTaken: 2.1e12 })), { stat: 'attack' })!;
+        const oneHit = buildRunLengthModel(runs(eDeath(9000, 10, 4, { ...heal, DamageTaken: 3e18 })), { stat: 'attack' })!;
+        const unknown = buildRunLengthModel(runs(eDeath(9000, 10)), { stat: 'attack' })!;
+        expect(oneHitEnds(worn)).toBe(false);
+        expect(oneHitEnds(oneHit)).toBe(true);
+        expect(oneHitEnds(unknown)).toBeNull();
     });
 });

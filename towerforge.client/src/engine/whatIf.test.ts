@@ -12,7 +12,7 @@ import { buildRunLengthModel, skipWorth } from './runLength';
 import { runModels } from './accountModels';
 import { buildEdpsCalibration, edpsParts, edpsSurvivalScore } from './edps';
 import { calcCFPlusHiddenSlow, calcTTT } from './ttt';
-import { UWS, UW_PLUS_DATA, UW_STONE_COSTS } from '../constants/gameData';
+import { UWS, UW_PLUS_DATA, UW_STONE_COSTS, WS_STATS } from '../constants/gameData';
 import { battle, makeExport } from '../test/makeExport';
 
 // Five T18 deaths with damage by source (made up).
@@ -273,5 +273,40 @@ describe('what happens', () => {
         expect(r.damagePct).toBeCloseTo(0, 9);
         expect(r.skipPoints).toBeCloseTo(0.5, 9);
         expect(r.waves!.to - r.waves!.from).toBeGreaterThan(50);    // ~200 waves a point near W8300
+    });
+});
+
+// eHP: survival moves the death wave on the enemy-attack model.
+describe('waves for an eHP build', () => {
+    const ehpRuns = parseGameExport(makeExport({
+        BattleHistory: [9000, 9100, 8900].map((wave, i) => battle({
+            BattleDate: `2026-10-1${i}T12:00:00Z`, Tier: 10, Wave: wave, KilledBy: 4, GameTime: wave * 30,
+            HealthLevelSkips: Math.floor(wave * 0.38), AttackLevelSkips: Math.floor(wave * 0.4),
+            TotalEnemies: 100000, RecoveryPackages: 500,
+        })),
+    })).battles;
+    const run = buildRunLengthModel(ehpRuns, { stat: 'attack' })!;
+    const models = { run, worth: skipWorth(run) };
+    const healthIdx = WS_STATS.defense.findIndex(([n]) => n === 'Health');
+    const atkSkipIdx = WS_STATS.utility.findIndex(([n]) => n === 'Enemy Atk Level Skip');
+    const ehpAccount = () => account(s => { s.wsData[0].defense[healthIdx] = 400; });
+
+    it('turns more health into survival and waves, link by link', () => {
+        const snap = ehpAccount();
+        const r = whatIf(snap, [{ kind: 'workshop', key: `defense|${healthIdx}`, level: 600 }], upgradeTargets(snap), 'eHP', ehpRuns[2], models);
+        expect(r.survivalPct).toBeGreaterThan(0);
+        expect(r.waves!.to).toBeGreaterThan(r.waves!.from);
+        expect(r.waves!.from).toBe(run.typicalWave);
+        expect(r.perChange[0].waves).toBeCloseTo(r.waves!.gained, 6);
+        expect(r.chain.find(l => l.label === 'Max health')!.after).toBeGreaterThan(1);
+    });
+
+    it('counts Enemy Attack Level Skip as attack skip', () => {
+        const snap = ehpAccount();
+        const r = whatIf(snap, [{ kind: 'workshop', key: `utility|${atkSkipIdx}`, level: 100 }], upgradeTargets(snap), 'eHP', ehpRuns[2], models);
+        expect(r.skipKind).toBe('attack');
+        expect(r.skipPoints).toBeCloseTo(0.05 * 101, 6);
+        expect(r.waves!.gained).toBeGreaterThan(100);     // ~5 points at 40% skip: hundreds of waves
+        expect(r.chain.find(l => l.label === 'Enemy Attack Level Skip')!.after).toBeCloseTo(0.05 * 101, 6);
     });
 });

@@ -9,9 +9,10 @@ import { runRatesFrom } from './runRates';
 import { parseGameExport } from './gameExport';
 import { buildCandidates, goalScore, groupPath, mergeRepeats, pathGain, simulateMedalPath, simulateStonePath } from './optimizer';
 import { buildFarmCalibration } from './farming';
+import { buildEhpCalibration } from './ehp';
 import type { OptimizerSnapshot } from './optimizer';
 import { buildEdpsCalibration, edpsScore, edpsSurvivalScore } from './edps';
-import { UWS, UW_STAT_VALUES, UW_STONE_COSTS } from '../constants/gameData';
+import { UWS, UW_STAT_VALUES, UW_STONE_COSTS, WS_STATS } from '../constants/gameData';
 import { GC_SCORING } from '../constants/optimizerConfig';
 import type { BattleReport } from './battleReport';
 import { battle, makeExport } from '../test/makeExport';
@@ -438,5 +439,42 @@ describe('stone path', () => {
         const path = simulateStonePath(60, snap);
         expect(path.length).toBeGreaterThan(0);
         for (const c of path) expect(c.scorePct).toBeGreaterThanOrEqual(GC_SCORING.minGainPct);
+    });
+});
+
+// eHP: survival, with Enemy Attack Level Skip at the survival a point is
+// worth in waves (runLength.skipWorth on the attack model), and the attack
+// labs of the enemy types that end runs.
+describe('survival score (eHP)', () => {
+    const ehpSnap = (edit?: (s: OptimizerSnapshot) => void) => snapshot(null, s => {
+        s.metric = 'ehp';
+        s.wsData[0].defense[WS_STATS.defense.findIndex(([n]) => n === 'Health')] = 500;
+        s.ehp = buildEhpCalibration(s, null);
+        edit?.(s);
+    });
+    const atkIdx = WS_STATS.utility.findIndex(([n]) => n === 'Enemy Atk Level Skip');
+
+    it('counts Enemy Attack Level Skip once it’s worth something', () => {
+        const before = ehpSnap(s => { s.skipWorth = 0.2; });
+        const after = ehpSnap(s => { s.skipWorth = 0.2; s.wsData[0].utility[atkIdx] = 99; });
+        // 99 workshop levels: 0.05 × 100 = 5 points → e^(0.2 × 5)
+        expect(goalScore(after) / goalScore(before)).toBeCloseTo(Math.exp(0.2 * 5), 6);
+        const unscored = ehpSnap(s => { s.wsData[0].utility[atkIdx] = 99; });
+        expect(goalScore(unscored) / goalScore(ehpSnap())).toBeCloseTo(1, 9);
+    });
+
+    it('counts the attack labs of the enemies that end runs, by their share', () => {
+        const killers = { Ranged: 0.75, Basic: 0.25 };
+        const before = ehpSnap(s => { s.killers = killers; });
+        const after = ehpSnap(s => { s.killers = killers; s.labData = { 'Ranged Enemy Attack': 10 }; });
+        // 10 levels take 4% off Ranged attack: (1 / 0.96)^0.75
+        expect(goalScore(after) / goalScore(before)).toBeCloseTo((1 / 0.96) ** 0.75, 6);
+    });
+
+    it('ranks the attack skip workshop step when it’s scored', () => {
+        const snap = ehpSnap(s => { s.skipWorth = 0.2; });
+        const step = buildCandidates(snap, 'workshop').find(c => c.label.includes('Enemy Atk Level Skip'))!;
+        expect(step.scorePct).toBeGreaterThan(0);
+        expect(step.skipPoints).toBeGreaterThan(0);
     });
 });

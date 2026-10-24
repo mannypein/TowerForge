@@ -22,8 +22,14 @@
 //  Conductor, Negative Mass Projector, Primordial Collapse) divide
 //  both eHP and eRegen by the share of damage that still lands.
 //
-//  Not modeled: lifesteal (needs tower damage), Death Defy, Energy
-//  Shield, Second Wind, and orbs/knockback/land mines.
+//  Lifesteal and Death Wave healing (they follow the tower's damage, not
+//  its defenses) heal at the rate the chosen run shows, the same before
+//  and after an upgrade — on eHP players' runs lifesteal was a fifth to a
+//  third of all healing (2026-10-23).
+//
+//  Not modeled: Death Defy, Energy Shield, Second Wind, and
+//  orbs/knockback/land mines. Flame Bot and Chain Thunder cut damage by a
+//  share that upgrades here don't change, so it cancels out of the score.
 //
 //  Pure functions — no store imports.
 // ============================================================
@@ -90,6 +96,7 @@ export interface EhpCalibration {
     thornsShare: number;     // share of kills made by thorns
     packagesPerSec: number;  // observed package rate at the anchor
     waveSec: number;
+    otherHealPerSec?: number; // lifesteal + Death Wave healing per second in the run
 }
 
 export interface EhpBreakdown {
@@ -311,12 +318,15 @@ export function buildEhpCalibration(snap: OptimizerSnapshot, report: BattleRepor
         };
     }
     const waveSec = report.wave > 0 ? report.gameTimeSec / report.wave : DEFAULT_WAVE_S;
+    const raw = report.raw ?? {};
+    const healed = (key: string) => (typeof raw[key] === 'number' ? (raw[key] as number) : 0);
     return {
         source: 'report',
         anchor,
         thornsShare: report.totalEnemies > 0 ? Math.min(1, report.thornsKills / report.totalEnemies) : DEFAULT_THORNS_SHARE,
         packagesPerSec: report.recoveryPackages > 0 ? report.recoveryPackages / report.gameTimeSec : anchor.pkgChance / waveSec,
         waveSec,
+        otherHealPerSec: (healed('Lifesteal') + healed('HealthFromDeathWaveThisRound')) / report.gameTimeSec,
     };
 }
 
@@ -330,7 +340,7 @@ export function ehpBreakdown(x: EhpInputs, calib: EhpCalibration): EhpBreakdown 
     // Package rate follows the observed rate, scaled by any change in package chance.
     const a = calib.anchor;
     const pkgRate = a.pkgChance > 0 ? calib.packagesPerSec * (x.pkgChance / a.pkgChance) : x.pkgChance / calib.waveSec;
-    const healing = x.regen + x.wallRegen + pkgRate * x.pkgAmount * x.health;
+    const healing = x.regen + x.wallRegen + pkgRate * x.pkgAmount * x.health + (calib.otherHealPerSec ?? 0);
     const eRegen = healing / (throughCF * throughDef * lands);
 
     return { eHP, eRegen, survival: Math.sqrt(eHP * (eHP + SUSTAIN_WINDOW_S * eRegen)) };

@@ -32,7 +32,8 @@ import type { GoalModels } from './accountModels';
 import type { OptGoal } from '../constants/optimizerConfig';
 import type { BattleReport } from './battleReport';
 import { readActiveModuleBonuses } from './modBonuses';
-import { healthSkipChance, healthSkipSources } from './levelSkip';
+import { attackSkipSources, healthSkipChance, healthSkipSources } from './levelSkip';
+import { readEhpInputs } from './ehp';
 import { activeChips, bountyExtra, damageMeterFactor, fetchRate, summonExtra, withChipLevel } from './guardian';
 import { calcDamageMeter, echoingShotBullets } from './towerDamage';
 import { CHIPS, statBits } from '../constants/guardianData';
@@ -45,7 +46,7 @@ import {
     attackRatio, buildEdpsCalibration, conditionRatios, edpsParts, edpsSurvivalScore, edpsWaves, flatDamageRatio, reachShares,
 } from './edps';
 import { buildFarmCalibration, coinFactors, FARM_EFFECTS, FARM_EFFECT_LABELS } from './farming';
-import { healthLabCut } from './enemyStats';
+import { attackLabCut, healthLabCut } from './enemyStats';
 import { deathDefyChance, hitsSurvived, saverAverages } from './runSavers';
 import type { EnemyType } from './enemyStats';
 import {
@@ -261,7 +262,7 @@ export function changeCost(snap: OptimizerSnapshot, t: UpgradeTarget, level: num
 // One link in the chain: a quantity before and after. `kind` says how to
 // show it; `share` is that damage source's share of the run's damage.
 export interface ChainLink {
-    group: 'Enemies in range' | 'Tower' | 'Damage to each enemy' | 'Level skip' | 'Run savers' | 'Coin bonuses';
+    group: 'Enemies in range' | 'Tower' | 'Damage to each enemy' | 'Survival' | 'Level skip' | 'Run savers' | 'Coin bonuses';
     label: string;
     before: number;
     after: number;
@@ -286,14 +287,15 @@ interface WaveSplit {
 export interface WhatIfResult {
     damagePct: number;                 // all damage (calibrated eDPS when the report has damage by source)
     pushPct: number;                   // flat damage + skip as damage (what moves a Glass Cannon death wave)
-    skipPoints: number;                // Enemy Health Level Skip points added
+    skipPoints: number;                // level skip points added: health (GC) or attack (eHP)
+    skipKind: 'health' | 'attack';
     waves: { from: number; to: number; gained: number } | null;   // gained: unrounded (to = from + gained, rounded)
     coinsHourPct: number;              // coin income at the same wave (coin bonuses only)
     coinsRun: { from: number; to: number } | null;
     coinsHour: { from: number; to: number } | null;   // playing each run to its end
     survivalPct: number | null;        // eHP (not Glass Cannon)
     chain: ChainLink[];
-    perChange: { kind: ChangeKind; key: string; waves: number }[];   // each change on its own (GC)
+    perChange: { kind: ChangeKind; key: string; waves: number }[];   // each change on its own
     // Run to run: the waves gained from each recent death on its own, and
     // the waves those runs ended on.
     spread: { min: number; max: number; endedMin: number; endedMax: number; runs: number; tournament: boolean } | null;
@@ -427,6 +429,30 @@ function buildChain(
                 kind: 'percent', share, waves: wavesOf(share * Math.log(cut0 / cut1)) });
         }
     }
+    if (build !== 'Glass Cannon') {
+        // What an eHP tower takes and heals (engine/ehp.ts).
+        const [e0, e1] = [readEhpInputs(base), readEhpInputs(after)];
+        const rel = (a: number, b: number) => (b > 0 ? a / b : 1);
+        add({ group: 'Survival', label: 'Max health', before: 1, after: rel(e1.health, e0.health), kind: 'times' });
+        add({ group: 'Survival', label: 'Overheal from packages (Max Recovery)', before: e0.maxRecovery, after: e1.maxRecovery, kind: 'times' });
+        add({ group: 'Survival', label: 'Wall health', before: 1, after: rel(e1.wallPool, e0.wallPool), kind: 'times' });
+        add({ group: 'Survival', label: 'Health regen', before: 1, after: rel(e1.regen, e0.regen), kind: 'times' });
+        add({ group: 'Survival', label: 'Wall regen', before: 1, after: rel(e1.wallRegen, e0.wallRegen), kind: 'times' });
+        add({ group: 'Survival', label: 'Recovery package chance', before: e0.pkgChance * 100, after: e1.pkgChance * 100, kind: 'percent' });
+        add({ group: 'Survival', label: 'Recovery package healing (share of max health)', before: e0.pkgAmount * 100, after: e1.pkgAmount * 100, kind: 'percent' });
+        add({ group: 'Survival', label: 'Defense %', before: e0.defPct * 100, after: e1.defPct * 100, kind: 'percent' });
+        add({ group: 'Survival', label: 'Defense Absolute', before: 1, after: rel(e1.defAbs, e0.defAbs), kind: 'times' });
+        add({ group: 'Survival', label: 'Chrono Field damage cut (with its uptime)', before: e0.cfReduction * 100, after: e1.cfReduction * 100, kind: 'percent' });
+        add({ group: 'Survival', label: 'Enemy damage that still lands (module effects)', before: e0.damageTaken * 100, after: e1.damageTaken * 100, kind: 'percent' });
+        add({ group: 'Survival', label: 'Thorns (share of the attacker’s health per hit)', before: e0.thorns * 100, after: e1.thorns * 100, kind: 'percent' });
+        add({ group: 'Level skip', label: 'Enemy Attack Level Skip', before: attackSkipOf(base, models), after: attackSkipOf(after, models), kind: 'points' });
+        if (models.run?.stat === 'attack') {
+            for (const [type, share] of Object.entries(killerMix(models.run)) as [EnemyType, number][]) {
+                add({ group: 'Level skip', label: `${type} attack (lab)`, before: attackLabCut(base.labData, type) * 100,
+                    after: attackLabCut(after.labData, type) * 100, kind: 'percent', share });
+            }
+        }
+    }
 
     // Run savers: Death Defy against the saves behind it in the player's runs.
     const [dd0, dd1] = [deathDefyChance(base), deathDefyChance(after)];
@@ -455,6 +481,9 @@ function buildChain(
 // Skip as the run gets it: in a tournament, after the league's Skip
 // Reduction and Skip Decay.
 const skipOf = (s: OptimizerSnapshot, models: GoalModels) => conditionedSkip(healthSkipChance(healthSkipSources(
+    s.wsData[s.presetIdx], s.labData, s.enhData, s.relicData, s.modBonuses.subs ?? {},
+)), s.conditions ?? models.conditions);
+const attackSkipOf = (s: OptimizerSnapshot, models: GoalModels) => conditionedSkip(healthSkipChance(attackSkipSources(
     s.wsData[s.presetIdx], s.labData, s.enhData, s.relicData, s.modBonuses.subs ?? {},
 )), s.conditions ?? models.conditions);
 
@@ -571,9 +600,43 @@ export function whatIf(
             coinsHour = { from: p0.coinsPerHour, to: p1.coinsPerHour * bonus };
         }
     }
+    const survivalPct = gc ? null : goalPct(base, after, 'survival', build, report, models);
+    let attackSkip = 0;
+    // eHP: survival (with Enemy Attack Level Skip at what it's worth) moves
+    // the death wave on the enemy-attack model (runLength.ts).
+    if (!gc && models.run?.stat === 'attack' && survivalPct !== null) {
+        const run = models.run;
+        const wavesFor = (gain: number, skip: number) =>
+            pathRunGains(run, [gain], undefined, [Math.max(0, skip)], models.worth)[0].waves;
+        attackSkip = attackSkipOf(after, models) - attackSkipOf(base, models);
+        const gained = wavesFor(survivalPct, attackSkip);
+        const from = run.typicalWave;
+        const to = Math.round(from + gained);
+        waves = { from, to, gained };
+        for (const c of changes) {
+            const one = JSON.parse(JSON.stringify(base)) as OptimizerSnapshot;
+            applyChange(one, c);
+            one.modBonuses = readActiveModuleBonuses(one.moduleState, one.perkData, one.labData, one.cardData, one.modBonuses.run);
+            perChange.push({ kind: c.kind, key: c.key,
+                waves: wavesFor(goalPct(base, one, 'survival', build, report, models), attackSkipOf(one, models) - attackSkipOf(base, models)) });
+        }
+        const s = wavesSpread(run, survivalPct, attackSkip, models.worth);
+        spread = {
+            min: Math.min(...s.moves), max: Math.max(...s.moves),
+            endedMin: Math.min(...s.ended), endedMax: Math.max(...s.ended), runs: s.ended.length, tournament: false,
+        };
+        if (models.projectAt) {
+            const [p0, p1] = [models.projectAt(from), models.projectAt(to)];
+            const bonus = 1 + coinsHourPct / 100;
+            coinsRun = { from: p0.coins, to: p1.coins * bonus };
+            coinsHour = { from: p0.coinsPerHour, to: p1.coinsPerHour * bonus };
+        }
+    }
     return {
-        damagePct, pushPct, skipPoints, waves, coinsHourPct, coinsRun, coinsHour,
-        survivalPct: gc ? null : goalPct(base, after, 'survival', build, report, models),
+        damagePct, pushPct, waves, coinsHourPct, coinsRun, coinsHour,
+        skipPoints: gc ? skipPoints : attackSkip,
+        skipKind: gc ? 'health' : 'attack',
+        survivalPct,
         chain: buildChain(base, atStart, build, report, models, split),
         perChange, spread,
         costs,

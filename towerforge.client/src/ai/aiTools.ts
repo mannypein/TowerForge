@@ -230,8 +230,9 @@ export function bestUpgrades(s: AiAccount, currency: AiCurrency, goalWanted?: st
     const snap = snapshotFromState(account);
     const models = runModels(account);
     applyGoal(snap, goal, build, chosenReport(account), models);
-    // Pushing waves with Run Length: gains read in waves, like the Optimizer page.
-    const inWaves = goal === 'waves' && !!models.run;
+    // Pushing waves (Glass Cannon) or survival (eHP) with Run Length: gains
+    // read in waves, like the Optimizer page.
+    const inWaves = !!models.run && (goal === 'waves' ? models.run.stat === 'health' : goal === 'survival' && models.run.stat === 'attack');
     const wanted: OptCurrency[] = currency === 'any' ? ['stones', 'coins', 'research'] : [currency];
     const metric = { damage: 'damage', waves: 'push (damage toward waves)', coins: 'coins per hour', survival: 'survival', blend: 'coins and push' }[goal];
     const budget = ask.budget && ask.budget > 0 ? ask.budget : null;

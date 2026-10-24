@@ -3106,8 +3106,15 @@
 /* Run Length: campaign or tournament runs. */
 .rl-kind {
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
     margin-bottom: 12px;
+}
+
+/* Run Length, eHP view: runs that end to single hits. */
+.rl-warn {
+    border-color: color-mix(in srgb, var(--gold) 55%, var(--border));
+    color: var(--text);
 }
 
 /* Tournament: the module swaps the loadout search found. */

@@ -22,7 +22,7 @@ import { buildFarmCalibration } from './farming';
 import { buildEhpCalibration } from './ehp';
 import { buildEdpsCalibration } from './edps';
 import { buildRunLengthModel, killerMix, skipWorth } from './runLength';
-import type { RunLengthModel } from './runLength';
+import type { RunLengthModel, RunStat } from './runLength';
 import { buildRunModel, projectRun, runSettingsFromCards } from './runCoins';
 import type { RunProjection } from './runCoins';
 import { defaultBattleIndex } from './gameExport';
@@ -94,11 +94,16 @@ export interface GoalModels {
 // the chosen run: a tournament run is measured against your tournament
 // deaths on the tournament curve (and has no Coins per Run — tournaments
 // pay differently), a campaign run against deaths on its own tier.
+// What ends a build's runs: enemy health for Glass Cannon (any hit is
+// lethal), enemy attack for builds that push survival (eHP, Farming).
+export const runStatOf = (build: BuildType | '' | undefined): RunStat =>
+    build && pushGoalOf(build) === 'survival' ? 'attack' : 'health';
+
 export function runModels(s: Pick<AccountState, 'importedBattles' | 'cardData' | 'activePreset'
     | 'battleReportText' | 'battleReportChoice'> & Partial<Pick<AccountState, 'profile' | 'labData'>>): GoalModels {
     const chosen = activeBattleReport(s.battleReportText, s.importedBattles, s.battleReportChoice);
     const tournament = !!chosen?.tournament;
-    const run = buildRunLengthModel(s.importedBattles, { tournament, tier: chosen?.tier });
+    const run = buildRunLengthModel(s.importedBattles, { tournament, tier: chosen?.tier, stat: runStatOf(s.profile?.build) });
     const settings = runSettingsFromCards(s.cardData, s.activePreset);
     const coinModel = tournament ? null
         : buildRunModel(s.importedBattles, defaultBattleIndex(s.importedBattles), settings);
@@ -133,8 +138,11 @@ export function applyGoal(
     // Waves need damage by source; without it eDPS stands in.
     snap.edpsMode = wantsWaves && snap.edps ? 'waves' : 'damage';
     snap.blend = goal === 'blend' ? { push: pushWaves ? 'waves' : 'ehp', coinWeight } : undefined;
-    snap.skipWorth = wantsWaves && models.run ? models.worth : undefined;
-    snap.killers = wantsWaves && models.run ? killerMix(models.run) : undefined;
+    // Level skip and the killers' labs count when the run model matches the
+    // push: enemy health for waves, enemy attack for survival.
+    const runFits = !!models.run && (wantsWaves ? models.run.stat === 'health' : wantsEhp && models.run.stat === 'attack');
+    snap.skipWorth = runFits ? models.worth : undefined;
+    snap.killers = runFits ? killerMix(models.run!) : undefined;
     // Set before the calibration by the Tournament page; else the league's own.
     snap.conditions = snap.conditions ?? models.conditions;
 }
