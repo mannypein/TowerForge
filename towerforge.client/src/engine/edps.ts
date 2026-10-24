@@ -83,7 +83,7 @@ import type { OptimizerSnapshot } from './optimizer';
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 
 // A bot stat at a medal level (level 0 = the unlock value).
-function botStatValue(bot: string, stat: string, level: number): number {
+export function botStatValue(bot: string, stat: string, level: number): number {
     const s = BOTS_CONFIG.find(b => b.name === bot)?.stats.find(x => x.label === stat);
     if (!s) return 0;
     return parseFloat(level > 0 ? s.values[Math.min(level, s.values.length) - 1] : s.lv0) || 0;

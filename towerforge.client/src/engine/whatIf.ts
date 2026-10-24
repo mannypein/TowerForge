@@ -450,6 +450,8 @@ function buildChain(
         add({ group: 'Survival', label: 'Defense Absolute', before: 1, after: rel(e1.defAbs, e0.defAbs), kind: 'times' });
         add({ group: 'Survival', label: 'Chrono Field damage cut (with its uptime)', before: e0.cfReduction * 100, after: e1.cfReduction * 100, kind: 'percent' });
         add({ group: 'Survival', label: 'Enemy damage that still lands (module effects)', before: e0.damageTaken * 100, after: e1.damageTaken * 100, kind: 'percent' });
+        add({ group: 'Survival', label: 'Flame Bot damage reduction', before: (e0.flameReduction ?? 0) * 100, after: (e1.flameReduction ?? 0) * 100, kind: 'percent' });
+        add({ group: 'Survival', label: 'Chain Thunder (most it can cut)', before: (e0.chainThunderCap ?? 0) * 100, after: (e1.chainThunderCap ?? 0) * 100, kind: 'percent' });
         add({ group: 'Survival', label: 'Thorns (share of the attacker’s health per hit)', before: e0.thorns * 100, after: e1.thorns * 100, kind: 'percent' });
         add({ group: 'Level skip', label: 'Enemy Attack Level Skip', before: attackSkipOf(base, models), after: attackSkipOf(after, models), kind: 'points' });
         if (models.run?.stat === 'attack') {

@@ -34,9 +34,21 @@
 //  and after an upgrade — on eHP players' runs lifesteal was a fifth to a
 //  third of all healing (2026-10-23).
 //
-//  Not modeled: Death Defy, Energy Shield, Second Wind, and
-//  orbs/knockback/land mines. Flame Bot and Chain Thunder cut damage by a
-//  share that upgrades here don't change, so it cancels out of the score.
+//  Flame Bot and Chain Thunder (2026-10-23) cut the damage that's left
+//  after Defense % and Chrono Field (the game's order, TheTowerSDK
+//  damage-redux-layers). The run says how much each cut —
+//  blocked ÷ what reached that layer — and that, against what the
+//  upgrade gives now, is the share of hits it covers:
+//    Flame Bot: Damage Reduction 20% + 3% a level (bot table), on the
+//      enemies it has burned — coverage = cut ÷ reduction.
+//    Chain Thunder (lab "CL-Chain Thunder"): min(CL's share of the
+//      damage × 10% per 6%, 3% a level, 90%) — the lab's own wording,
+//      coverage = cut ÷ that.
+//  An upgrade moves the cut by its coverage. On eHP players' runs they
+//  cut up to 47% and 19% (docs/run-simulation.md).
+//
+//  Not modeled: Death Defy, Energy Shield, Second Wind, knockback and
+//  land mines.
 //
 //  Pure functions — no store imports.
 // ============================================================
@@ -56,7 +68,7 @@ import {
 import type { BattleReport } from './battleReport';
 import type { OptimizerSnapshot } from './optimizer';
 import { runMix } from './battleConditions';
-import { touchesOf } from './edps';
+import { botStatValue, touchesOf } from './edps';
 import { orbStats } from './orbs';
 
 // Seconds of sustained pressure the score weighs healing over.
@@ -99,6 +111,8 @@ export interface EhpInputs {
     thorns: number;          // fraction of the attacker's max health per hit
     damageTaken: number;     // share of enemy damage that still lands after module effects (0–1)
     orbRate?: number;        // orbs × speed × size (engine/orbs.ts)
+    flameReduction?: number; // Flame Bot's Damage Reduction at its level (0 when not owned)
+    chainThunderCap?: number; // Chain Thunder lab: 3% a level, at most 90%
 }
 
 export interface EhpCalibration {
@@ -112,6 +126,11 @@ export interface EhpCalibration {
     // they can touch (not bosses, elites, fleets).
     orbKills?: number;
     touchable?: number;
+    // Flame Bot and Chain Thunder: the share of the hits each covers
+    // (the run's cut ÷ what the upgrade gave), and CL's share of the damage.
+    flameCover?: number;
+    chainThunderCover?: number;
+    clShare?: number;
 }
 
 export interface EhpBreakdown {
@@ -317,10 +336,45 @@ export function readEhpInputs(snap: OptimizerSnapshot): EhpInputs {
         `enemies in a Black Hole deal ${uniq(mb, 'Primordial Collapse')}% less × ${(mb.run.bhShare * 100).toFixed(0)}% of kills inside holes`);
     const damageTaken = parts.damageTaken.reduce((p, f) => p * f.value, 1);
 
+    // Flame Bot's Damage Reduction (stat 0) and the Chain Thunder lab's cap.
+    const flame = snap.botData?.['Flame Bot'];
+    const flameReduction = flame?.owned ? botStatValue('Flame Bot', 'Damage Reduction', flame.medals?.[0] ?? 0) / 100 : 0;
+    const chainThunderCap = Math.min(CHAIN_THUNDER_MAX, 0.03 * (lab['CL-Chain Thunder'] ?? 0));
+
     return {
         parts, health, maxRecovery, armorMainMissing, wallPool, defAbs, defPct, defPctUncapped, cfReduction, regen, wallRegen,
-        pkgChance, pkgAmount, thorns, damageTaken, orbRate: orbStats(snap).rate,
+        pkgChance, pkgAmount, thorns, damageTaken, orbRate: orbStats(snap).rate, flameReduction, chainThunderCap,
     };
+}
+
+const CHAIN_THUNDER_MAX = 0.9;
+// "Enemy damage is reduced by 10% for every 6% of health lost from Chain
+// Lightning" (lab text, TheTowerSDK chainThunderReduction).
+const chainThunderAt = (cap: number, clShare: number) => Math.min((clShare / 0.06) * 0.1, cap, CHAIN_THUNDER_MAX);
+
+// What each layer cut in the run: blocked ÷ what reached it. Layers run
+// Defense % → Absolute → Chrono Field → Chain Thunder → Flame Bot →
+// Primordial Collapse → Negative Mass Projector, so what reached a layer is
+// what it blocked plus everything blocked after it and what still landed.
+function runCuts(raw: Record<string, unknown>): { flame: number; chainThunder: number } {
+    const n = (k: string) => (typeof raw[k] === 'number' ? raw[k] as number : 0);
+    const landed = n('DamageTaken') + n('DamageTakenWall');
+    const afterFlame = landed + n('PrimordialCollapseBlocked') + n('MagicOrbBlocked');
+    const atFlame = afterFlame + n('FlameBotBlocked');
+    const atThunder = atFlame + n('ChainThunderBlocked');
+    return {
+        flame: atFlame > 0 ? n('FlameBotBlocked') / atFlame : 0,
+        chainThunder: atThunder > 0 ? n('ChainThunderBlocked') / atThunder : 0,
+    };
+}
+
+// Damage that still lands after Flame Bot and Chain Thunder, now ÷ at the
+// calibration run (1 = no change).
+export function cutsRatio(x: EhpInputs, calib: EhpCalibration): number {
+    const a = calib.anchor;
+    const flame = (i: EhpInputs) => Math.min(0.95, (calib.flameCover ?? 0) * (i.flameReduction ?? 0));
+    const thunder = (i: EhpInputs) => Math.min(0.95, (calib.chainThunderCover ?? 0) * chainThunderAt(i.chainThunderCap ?? 0, calib.clShare ?? 0));
+    return ((1 - flame(x)) * (1 - thunder(x))) / ((1 - flame(a)) * (1 - thunder(a)));
 }
 
 // ── Calibration ───────────────────────────────────────────────
@@ -339,6 +393,9 @@ export function buildEhpCalibration(snap: OptimizerSnapshot, report: BattleRepor
     const raw = report.raw ?? {};
     const healed = (key: string) => (typeof raw[key] === 'number' ? (raw[key] as number) : 0);
     const mix = runMix(report);
+    const cuts = runCuts(raw);
+    const clShare = report.damage && report.damage.total > 0 ? report.damage.chainLightning / report.damage.total : 0;
+    const thunderNow = chainThunderAt(anchor.chainThunderCap ?? 0, clShare);
     return {
         source: 'report',
         anchor,
@@ -348,6 +405,9 @@ export function buildEhpCalibration(snap: OptimizerSnapshot, report: BattleRepor
         otherHealPerSec: (healed('Lifesteal') + healed('HealthFromDeathWaveThisRound')) / report.gameTimeSec,
         orbKills: mix.orbKills,
         touchable: mix.touchable,
+        flameCover: (anchor.flameReduction ?? 0) > 0 ? Math.min(1, cuts.flame / anchor.flameReduction!) : 0,
+        chainThunderCover: thunderNow > 0 ? Math.min(1, cuts.chainThunder / thunderNow) : 0,
+        clShare,
     };
 }
 
@@ -390,7 +450,9 @@ export function ehpScore(snap: OptimizerSnapshot, calib: EhpCalibration): number
     const thornsFactor = a.thorns > 0
         ? (1 - calib.thornsShare) + calib.thornsShare * (x.thorns / a.thorns)
         : 1 + calib.thornsShare * x.thorns;
-    // Fewer enemies past the orbs: fewer hits on the tower.
+    // Fewer enemies past the orbs: fewer hits on the tower; and less of
+    // each hit through Flame Bot and Chain Thunder.
     const orbFactor = 1 / Math.max(0.01, orbReachRatio(x, calib));
-    return (before > 0 ? after / before : 1) * thornsFactor * orbFactor;
+    const cutFactor = 1 / Math.max(0.01, cutsRatio(x, calib));
+    return (before > 0 ? after / before : 1) * thornsFactor * orbFactor * cutFactor;
 }

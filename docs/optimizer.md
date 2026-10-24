@@ -50,9 +50,9 @@ What each currency buys (wiki Currencies page) and how it's ranked:
   (damage), Golden Bot (coins). Flame and Thunder Bot aren't modeled, so
   their levels show no gain: battle reports record Flame Bot kills and hits
   and Thunder Bot stuns (TheTowerSDK's battle field list), but no bot
-  damage, so there's no share of damage to calibrate them from; Flame Bot's
-  damage reduction only matters to tanky builds, and Thunder Bot's stuns
-  would need a stun-uptime model in TTT. Bot+ (stones) isn't offered.
+  damage, so there's no share of damage to calibrate them from; Thunder
+  Bot's stuns would need a stun-uptime model in TTT. Flame Bot's Damage
+  Reduction counts for survival since 2026-10-23 (below). Bot+ (stones) isn't offered.
 - **Bot+** (game v29, checked 2026-10-19): once all five bots are owned,
   each one's ability unlocks for 1,250 stones and then levels with medals —
   Wild Fire ×1.5 +0.1 to 20 levels, Titan Shock 5% +1% to 20, Bonus Cells
@@ -394,8 +394,15 @@ Death Ray for runs that end to enemies they can touch.
   kills; lifesteal and Death Wave healing at the chosen run's rate
   (2026-10-23 — they follow the tower's damage, so defense upgrades don't
   move them, but they dilute a regen upgrade; on eHP players' runs lifesteal
-  was a fifth to a third of all healing). Flame Bot and Chain Thunder cut a
-  share of damage that these upgrades don't change, so it cancels out.
+  was a fifth to a third of all healing). **Flame Bot and Chain Thunder**
+  (2026-10-23, `ehp.cutsRatio`): the run shows what each cut — blocked ÷
+  what reached it (the game's order: Defense %, Absolute, Chrono Field,
+  Chain Thunder, Flame Bot, Primordial Collapse, NMP); against what the
+  upgrade gives (Flame Bot Damage Reduction 20% + 3% a level, the bot
+  table; Chain Thunder min(CL share × 10% per 6%, 3% a lab level, 90%), the
+  lab's wording via TheTowerSDK) that's the share of hits it covers, and a
+  higher level cuts that share more. So Flame Bot's reduction (medals) and
+  the Chain Thunder lab now rank for survival.
   Not modeled: Slow Aura mastery (enemy attack speed).
 - **eHP, in waves** (2026-10-23) — survival moves the death wave on the
   enemy-attack model (Run Length, `stat: 'attack'`; evidence in

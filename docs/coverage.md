@@ -15,7 +15,7 @@ reports set the baseline, so even unmodeled effects are already in it; only
 | Multishot, Bounce Shot, Rapid Fire | ✅ | Averages (2026-10-18); give Chain Lightning, tower shots and Smite more hits |
 | Rend Armor | ◐ | In the tower-shots share; Rend chance/mult upgrades aren't modeled on their own |
 | All 9 UWs + UW+ | ✅ | uwdps.ts; Golden Tower for coins only |
-| Flame Bot | ✅ | From the run's FlameBotDamage (2026-10-18): ×Damage × tower damage × crits ÷ cooldown; burn stacks and Wild Fire (Bot+) not modeled |
+| Flame Bot | ✅ | From the run's FlameBotDamage (2026-10-18): ×Damage × tower damage × crits ÷ cooldown; burn stacks and Wild Fire (Bot+) not modeled. Its Damage Reduction counts for eHP survival (2026-10-23), by the share of hits the run shows it covering |
 | Amplify Bot, Bot Bot | ✅ | Tower damage multiplier |
 | Echoing Shot (Amplify Bot+) | ◐ | Since 2026-10-19: tower shots × the bullets each counts as (3 + level, up to 12), always on like Amplify Bot's Bonus (uptime and range aren't modeled). The wiki's 1/3 boost for UW projectiles isn't modeled |
 | Other Bot+ abilities: Wild Fire, Titan Shock, Bonus Cells, Maximum Power | ✗ | Levels entered or imported (v29 tables, 2026-10-19) but not valued: Wild Fire's Enflamed bonus lasts by Flame Bot damage, Titan Shock needs enemy attack speed, Bonus Cells needs elite cells per run, and how Maximum Power boosts the other abilities (whole value or the part above 1) isn't confirmed |
