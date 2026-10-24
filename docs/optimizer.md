@@ -59,7 +59,9 @@ What each currency buys (wiki Currencies page) and how it's ranked:
   and Thunder Bot stuns (TheTowerSDK's battle field list), but no bot
   damage, so there's no share of damage to calibrate them from; Thunder
   Bot's stuns would need a stun-uptime model in TTT. Flame Bot's Damage
-  Reduction counts for survival since 2026-10-23 (below). Bot+ (stones) isn't offered.
+  Reduction counts for survival since 2026-10-23 (below). Bot+ unlocks (1,250 stones each, once all five bots are owned) are in
+  the stone path since 2026-10-23, scored by what the ability does at level
+  0 — only Echoing Shot gains anything so far.
 - **Bot+** (game v29, checked 2026-10-19): once all five bots are owned,
   each one's ability unlocks for 1,250 stones and then levels with medals —
   Wild Fire ×1.5 +0.1 to 20 levels, Titan Shock 5% +1% to 20, Bonus Cells

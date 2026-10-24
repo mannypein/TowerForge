@@ -153,7 +153,7 @@ import {
     MEDAL_TRADE_PRICES, MODULE_SLOT_MAX, moduleSlotCost, workshopCost, workshopDiscount,
 } from './upgradeCosts';
 import type { EdpsCalibration } from './edps';
-import { BOTS_CONFIG, isBotPlusOwned } from '../constants/botData';
+import { BOT_PLUS_UNLOCK_STONES, BOTS_CONFIG, isBotPlusOwned } from '../constants/botData';
 
 import type {
     AppState,
@@ -548,6 +548,34 @@ export function buildCandidates(
                 costType: 'stones',
                 scorePct: delta,
                 scorePerCost: cost > 0 ? delta / cost : 0,
+            });
+        }
+    }
+
+    // ── Bot+ unlocks (stones) ──────────────────────────────────
+    // Once all five bots are owned, each one's Bot+ ability unlocks for
+    // 1,250 stones at level 0 (then levels with medals). Scored by what the
+    // ability does at level 0 — only abilities a model reads gain anything
+    // (Echoing Shot today), so the rest drop out under the gain threshold.
+    if (cat === 'botplus') {
+        const allOwned = BOTS_CONFIG.every(b => snap.botData[b.name]?.owned);
+        for (const bot of allOwned ? BOTS_CONFIG : []) {
+            const entry = snap.botData[bot.name];
+            if (!entry || isBotPlusOwned(entry)) continue;
+            const after = cloneSnapshot(snap);
+            after.botData[bot.name] = { ...entry, plusOwned: true, plusLv: 0 };
+            const delta = edpsDeltaPct(basEDPS, getScore(after));
+            candidates.push({
+                category: 'botplus',
+                label: `${bot.name}+ — ${bot.plus.label}`,
+                subLabel: 'Unlock (Lv 0) — more levels come from medals',
+                fromLv: -1,
+                toLv: 0,
+                cost: BOT_PLUS_UNLOCK_STONES,
+                costType: 'stones',
+                scorePct: delta,
+                scorePerCost: delta / BOT_PLUS_UNLOCK_STONES,
+                ref: [bot.name],
             });
         }
     }
@@ -1006,6 +1034,13 @@ export function applyUpgrade(
             break;
         }
 
+        case 'botplus': {
+            const name = c.ref?.[0];
+            const entry = name !== undefined ? snap.botData[name] : undefined;
+            if (name !== undefined && entry) snap.botData[name] = { ...entry, plusOwned: true, plusLv: 0 };
+            break;
+        }
+
         case 'assist': {
             const parts = c.label.split(' — ');
             // label is "<Type> Assist — Mult Eff" / "... — Substat Eff" / "... — Rarity" / "... — Unlock"
@@ -1293,7 +1328,7 @@ export function attachParts(snapshot: OptimizerSnapshot, path: OptCandidate[]): 
 //  category. This is what "where should my next stones go" actually
 //  means, since players draw from one shared stone pool.
 // ============================================================
-const STONE_CATEGORIES: OptCategory[] = ['uw', 'uwp', 'mast', 'assist'];
+const STONE_CATEGORIES: OptCategory[] = ['uw', 'uwp', 'mast', 'assist', 'botplus'];
 
 export function simulateStonePath(
     steps: number,

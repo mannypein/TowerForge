@@ -315,7 +315,7 @@ export interface TTTData {
 // UW/UW+/Mastery/Assist stone path. Individual OptCandidate.category
 // values stay as 'uw'/'uwp'/'mast'/'assist' for badge display.
 export type OptCategory =
-    | 'uw' | 'uwp' | 'mast' | 'assist' | 'stones'
+    | 'uw' | 'uwp' | 'mast' | 'assist' | 'botplus' | 'stones'
     | 'workshop' | 'labs' | 'cards' | 'enhancements' | 'bots' | 'modules' | 'guardian';
 
 // What a cost is paid in.

@@ -16,6 +16,7 @@ import { UWS, UW_STAT_VALUES, UW_STONE_COSTS, WS_STATS } from '../constants/game
 import { GC_SCORING } from '../constants/optimizerConfig';
 import type { BattleReport } from './battleReport';
 import { battle, makeExport } from '../test/makeExport';
+import { BOTS_CONFIG } from '../constants/botData';
 
 // A made-up run: 1000 enemies, total damage 1000 split by source.
 function run(fields: Record<string, unknown> = {}): BattleReport {
@@ -476,5 +477,33 @@ describe('survival score (eHP)', () => {
         const step = buildCandidates(snap, 'workshop').find(c => c.label.includes('Enemy Atk Level Skip'))!;
         expect(step.scorePct).toBeGreaterThan(0);
         expect(step.skipPoints).toBeGreaterThan(0);
+    });
+});
+
+// Bot+ unlocks: 1,250 stones each once all five bots are owned; only an
+// ability a model reads gains anything (Echoing Shot: tower shots × bullets).
+describe('Bot+ unlocks in the stone path', () => {
+    const allBots = Object.fromEntries(BOTS_CONFIG.map(b => [b.name, { owned: true, medals: [0, 0, 0, 0], plusLv: 0 }]));
+
+    it('offers each locked Bot+ for 1,250 stones once every bot is owned', () => {
+        const report = run({ ProjectilesDamage: 300, OrbDamage: 510 });
+        const snap = snapshot(report, s => { s.botData = JSON.parse(JSON.stringify(allBots)); });
+        snap.edps = buildEdpsCalibration(snap, report)!;
+        const rows = buildCandidates(snap, 'botplus');
+        expect(rows).toHaveLength(BOTS_CONFIG.length);
+        expect(rows.every(r => r.cost === 1250 && r.costType === 'stones')).toBe(true);
+        const echo = rows.find(r => r.label.startsWith('Amplify Bot+'))!;
+        expect(echo.scorePct).toBeGreaterThan(0);      // tower shots count as 3 bullets
+        expect(rows.find(r => r.label.startsWith('Golden Bot+'))!.scorePct).toBeCloseTo(0, 9);
+    });
+
+    it('offers none until all five bots are owned, or once unlocked', () => {
+        const some = snapshot(null, s => { s.botData = { 'Amplify Bot': { owned: true, medals: [], plusLv: 0 } }; });
+        expect(buildCandidates(some, 'botplus')).toEqual([]);
+        const unlocked = snapshot(null, s => {
+            s.botData = JSON.parse(JSON.stringify(allBots));
+            s.botData['Amplify Bot'] = { ...s.botData['Amplify Bot'], plusOwned: true };
+        });
+        expect(buildCandidates(unlocked, 'botplus').map(r => r.ref?.[0])).not.toContain('Amplify Bot');
     });
 });

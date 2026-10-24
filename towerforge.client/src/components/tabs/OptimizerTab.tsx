@@ -54,12 +54,12 @@ const loadWeight = (): number => {
 };
 
 const EMPTY_RESULTS: Record<OptCategory, OptCandidate[]> = {
-    uw: [], uwp: [], mast: [], assist: [], stones: [],
+    uw: [], uwp: [], mast: [], assist: [], botplus: [], stones: [],
     workshop: [], labs: [], cards: [], enhancements: [], bots: [], modules: [], guardian: [],
 };
 
 const EMPTY_SHOW_MORE: Record<OptCategory, boolean> = {
-    uw: false, uwp: false, mast: false, assist: false, stones: false,
+    uw: false, uwp: false, mast: false, assist: false, botplus: false, stones: false,
     workshop: false, labs: false, cards: false, enhancements: false, bots: false, modules: false, guardian: false,
 };
 
@@ -269,6 +269,13 @@ export default function OptimizerTab() {
                 st.setCardMasteryUnlocked(c.label.replace(' Mastery', ''), level >= 0);
                 return true;
             }
+            case 'botplus': {
+                // Bot+ unlocks account-wide; level 0 until medals raise it.
+                const name = c.ref?.[0];
+                if (!name) return false;
+                st.setBotPlusOwned(name, level >= 0);
+                return true;
+            }
             case 'assist': {
                 const type = c.label.split(' — ')[0].replace(/ Assist$/i, '').toLowerCase();
                 const key = c.label.includes('Substat') ? 'subEff' : 'multEff';
@@ -383,6 +390,7 @@ export default function OptimizerTab() {
             uwp: { bg: 'rgba(147,51,234,.15)', color: 'var(--purple)' },
             mast: { bg: 'var(--gold-glow)', color: 'var(--gold)' },
             assist: { bg: 'rgba(79,195,247,.15)', color: 'var(--rr)' },
+            botplus: { bg: 'rgba(231,76,60,.15)', color: '#e74c3c' },
             stones: { bg: 'var(--bg4)', color: 'var(--text-dim)' },
             workshop: { bg: 'var(--accent-glow)', color: 'var(--accent)' },
             labs: { bg: 'rgba(59,130,246,.15)', color: '#4fc3f7' },
@@ -789,8 +797,8 @@ export default function OptimizerTab() {
                 <div>
                     <div className="opt-row-label">Stone Upgrades</div>
                     <p className="opt-row-explainer">
-                        One ranked path across UW stats, UW+, Card Mastery, and Assist
-                        modules — since they all draw from the same stone pool, this is
+                        One ranked path across UW stats, UW+, Card Mastery, Assist modules
+                        and Bot+ unlocks — since they all draw from the same stone pool, this is
                         the order that gets you the most {metricLabel} per stone spent.
                         <br />
                         <strong>💡 Double-click any upgrade to apply it to your tower.</strong>
@@ -921,7 +929,7 @@ const coinsText = (v: number) => formatGameNumber(v < 1000 ? Math.round(v) : v);
 
 // Short badges, so the name keeps its room on a phone.
 const CAT_BADGE: Partial<Record<OptCategory, string>> = {
-    workshop: 'WS', labs: 'LAB', enhancements: 'ENH', cards: 'CARD', bots: 'BOT', modules: 'MOD', guardian: 'GRD',
+    workshop: 'WS', labs: 'LAB', enhancements: 'ENH', cards: 'CARD', bots: 'BOT', modules: 'MOD', guardian: 'GRD', botplus: 'BOT+',
 };
 
 const fmtWaves = (w: number) => (w < 10 ? w.toFixed(1) : Math.round(w).toLocaleString());
