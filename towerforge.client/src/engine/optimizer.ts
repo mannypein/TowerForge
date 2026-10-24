@@ -170,7 +170,9 @@ import type {
     ModuleType, GuardianData } from '../types/gameTypes';
 import { conditioned, conditionedSkip, conditionHealth } from './battleConditions';
 import type { TourneyConditions } from './battleConditions';
-import { activeChips, withChipLevel } from './guardian';
+import { activeChips, guardianPreset, withChipLevel } from './guardian';
+import { CHIPS } from '../constants/guardianData';
+import type { ChipDef, ChipId } from '../constants/guardianData';
 
 // ── State Snapshot ────────────────────────────────────────────
 // Subset of AppState the optimizer needs. Passed by value (cloned).
@@ -1358,6 +1360,58 @@ export function simulateStonePath(
     }
 
     return path;
+}
+
+// ============================================================
+//  GUARDIAN CHIPS TO EQUIP
+//  Swapping chips is free in game, so this isn't a purchase: every set of
+//  owned, released chips that fits the preset's slots (at most C(6,3) =
+//  20), scored for the goal at the chips' current levels — Attack and
+//  Scout for damage and waves, Bounty, Summon and Fetch (its coins) for
+//  coins. Ally isn't counted (docs/coverage.md), so it never wins a slot
+//  on its own merit. Best first; `current` marks the set equipped now.
+// ============================================================
+export interface ChipSet {
+    chips: ChipId[];
+    scorePct: number;      // against the chips equipped now
+    current: boolean;
+}
+
+export function bestGuardianChips(snap: OptimizerSnapshot): ChipSet[] {
+    const g = snap.guardian;
+    const preset = guardianPreset(g, snap.presetIdx);
+    if (!g || !preset) return [];
+    const pi = Math.min(Math.max(0, g.presetFor[snap.presetIdx] ?? 0), g.presets.length - 1);
+    const slots = 1 + Math.min(2, Math.max(0, preset.extraSlots));
+    const owned = CHIPS.filter(c => c.released && g.chipsOwned[c.index]);
+    const size = Math.min(slots, owned.length);
+    if (size === 0) return [];
+    const now = activeChips(g, snap.presetIdx).map(a => a.chip.id).sort();
+    const base = getScore(snap);
+
+    const sets: ChipDef[][] = [];
+    const pick = (from: number, chosen: ChipDef[]) => {
+        if (chosen.length === size) { sets.push(chosen); return; }
+        for (let i = from; i < owned.length; i++) pick(i + 1, [...chosen, owned[i]]);
+    };
+    pick(0, []);
+
+    return sets.map(set => {
+        const after = cloneSnapshot(snap);
+        const p = after.guardian!.presets[pi];
+        p.chips = [...set.map(c => c.index), -1, -1, -1].slice(0, Math.max(3, p.chips.length));
+        const ids = set.map(c => c.id).sort();
+        return {
+            chips: ids,
+            scorePct: edpsDeltaPct(base, getScore(after)),
+            current: ids.length === now.length && ids.every((id, i) => id === now[i]),
+        };
+    }).sort((a, b) => {
+        // Ties (a chip that adds nothing either way): the fewest swaps first.
+        if (Math.abs(b.scorePct - a.scorePct) > 1e-9) return b.scorePct - a.scorePct;
+        const kept = (s: ChipSet) => s.chips.filter(id => now.includes(id)).length;
+        return kept(b) - kept(a);
+    });
 }
 
 // ============================================================

@@ -72,7 +72,7 @@ reports set the baseline, so even unmodeled effects are already in it; only
 | Module Shards: slot levels | ✅ | Shard cost lab; level caps by rarity |
 | Gems: card slots | ✅ | Card pulls random; lab slots and rushes not ranked |
 | Elite Cells: lab boosts | ◐ | Boost table; your cells per day now visible in run drops |
-| Bits: Guardian chips | ✅ | Optimizer Bits panel: each equipped chip's next level per Bit (wiki and SDK tables; 2026-10-19). Slots and which chips to equip aren't ranked |
+| Bits: Guardian chips | ✅ | Optimizer Bits panel: each equipped chip's next level per Bit (wiki and SDK tables; 2026-10-19). Which chips to equip: every owned set that fits the slots, scored for the goal (2026-10-23; swapping is free). Slots aren't ranked |
 | Keys (Vault), Guild Tokens | ◐ | Vault levels imported (2026-10-22); only Bot Range (id 1810, 2 m a level — checked on the owner's Bots screen) is used. The rest of TheTowerSDK's vault data is marked unverified |
 
 ## What it would take to close the biggest gaps

@@ -14,7 +14,10 @@ import {
 import type { OptGoal } from '../../constants/optimizerConfig';
 import { presetLabel, UWS, WS_STATS, WS_ENH, MEDAL_SYMBOL } from '../../constants/gameData';
 import stoneIcon from '../../assets/stone.png';
-import { simulateStonePath, simulateCategoryPath, simulateMedalPath, attachParts, workshopKey } from '../../engine/optimizer';
+import { simulateStonePath, simulateCategoryPath, simulateMedalPath, attachParts, workshopKey, bestGuardianChips } from '../../engine/optimizer';
+import type { ChipSet } from '../../engine/optimizer';
+import { chipById } from '../../constants/guardianData';
+import { guardianPreset } from '../../engine/guardian';
 import { calcTTT, calcTTTDisplayStats } from '../../engine/ttt';
 import { calcTowerEDPS, calcSmiteWaveHPFraction } from '../../engine/uwdps';
 import type { OptCandidate, OptCategory, OptCurrency, BuildType, ModuleType } from '../../types/gameTypes';
@@ -93,6 +96,7 @@ export default function OptimizerTab() {
     const [coinWeight, setCoinWeight] = useState<number>(loadWeight);
     const [resultsGoal, setResultsGoal] = useState<OptGoal | null>(null);
     const [skipPath, setSkipPath] = useState<SkipUpgrade[]>([]);
+    const [chipSets, setChipSets] = useState<ChipSet[]>([]);
     useEffect(() => {
         try {
             if (savedGoal) localStorage.setItem(GOAL_KEY, savedGoal);
@@ -193,6 +197,8 @@ export default function OptimizerTab() {
                         skipKind, snap.wsData[snap.presetIdx], snap.labData, snap.enhData, snap.relicData, snap.modBonuses.subs ?? {},
                     ), SKIP_PATH_STEPS)
                     : []);
+                // Which Guardian chips to equip for the goal (free to swap).
+                setChipSets(bestGuardianChips(snap));
                 setFarmCalib(snap.farm ?? null);
                 setEhpCalib(snap.ehp ?? null);
                 setEdpsCalib(snap.edps ?? null);
@@ -333,6 +339,19 @@ export default function OptimizerTab() {
             default:
                 return false;
         }
+    }
+
+    // ── Equip a Guardian chip set (free in game) ──────────────
+    function equipChips(set: ChipSet) {
+        const st = useGameStore.getState();
+        const g = st.guardianData;
+        const preset = guardianPreset(g, st.activePreset);
+        if (!g || !preset) return;
+        const pi = Math.min(Math.max(0, g.presetFor[st.activePreset] ?? 0), g.presets.length - 1);
+        const chips = [...set.chips.map(id => chipById(id).index), -1, -1, -1].slice(0, Math.max(3, preset.chips.length));
+        st.setGuardianData({ ...g, presets: g.presets.map((p, i) => (i === pi ? { ...p, chips } : p)) });
+        setAppliedMsg(`✓ Equipped: ${set.chips.map(id => chipById(id).name).join(' + ')} — swap them in game too`);
+        runOptimizer();
     }
 
     // ── Apply a recommended upgrade to the actual tower ───────
@@ -823,6 +842,9 @@ export default function OptimizerTab() {
                             <div className="opt-row-label" style={{ marginTop: '14px' }}>
                                 {group.label}
                             </div>
+                            {group.currency === 'bits' && chipSets.length > 1 && (
+                                <ChipAdvice sets={chipSets} metric={metricLabel} onEquip={equipChips} />
+                            )}
                             {group.currency === 'coins' && runFits && skipPath.length > 0 && runModel && (
                                 <SkipPanel path={skipPath} runModel={runModel} coinsAt={coinsAt} skipScale={conditionedSkip(1, models.conditions)} />
                             )}
@@ -864,8 +886,8 @@ export default function OptimizerTab() {
                             <strong>Not ranked yet</strong>
                             <p>
                                 Keys (the Vault) and Guild Tokens — the Guild Store sells gems, bits, cells, shards
-                                and relics, so value tokens by what those buy above. Guardian chip slots and which
-                                chips to equip are your call (see Gear → Guardian).
+                                and relics, so value tokens by what those buy above. Guardian chip slots aren&apos;t
+                                ranked; which chips to equip is under Bits.
                             </p>
                         </div>
                     </div>
@@ -940,6 +962,39 @@ const skipSource = (kind: SkipKind): Record<SkipUpgrade['source'], { badge: stri
     lab: { badge: 'LAB', name: SKIP_NAMES[kind].lab },
     enhancement: { badge: 'ENH', name: 'Enhancement — Enemy Level Skips' },
 });
+
+// Which Guardian chips to equip for the goal: the best few sets against
+// the chips equipped now (optimizer.bestGuardianChips).
+function ChipAdvice({ sets, metric, onEquip }: { sets: ChipSet[]; metric: string; onEquip: (s: ChipSet) => void }) {
+    const best = sets[0];
+    const names = (s: ChipSet) => s.chips.map(id => chipById(id).name).join(' + ');
+    return (
+        <div className="opt-section">
+            <div className="opt-section-head">
+                <span className="opt-section-title">Guardian chips to equip</span>
+                <span className="s-badge">free to swap</span>
+            </div>
+            <p className="opt-row-explainer" style={{ padding: '6px 12px 0' }}>
+                {best.current
+                    ? `Your chips are already the best set for ${metric}.`
+                    : `Best for ${metric}: ${names(best)}. Swapping chips costs nothing in game.`}
+                {' '}Ally isn&apos;t counted (its overheal isn&apos;t modeled), and Fetch only for its coins.
+            </p>
+            {sets.slice(0, 4).map((s, idx) => (
+                <div key={s.chips.join('+')} className="opt-row" onDoubleClick={() => { if (!s.current) onEquip(s); }}
+                    title={s.current ? 'Equipped now' : 'Double-click to equip this set on the site'}>
+                    <span className="opt-rank">#{idx + 1}</span>
+                    <span className="opt-cat-badge">GRD</span>
+                    <div className="opt-name-col">
+                        <span className="opt-name">{names(s)}</span>
+                        <span className="opt-sub">{s.current ? 'Equipped now' : 'Double-click to equip'}</span>
+                    </div>
+                    <span className="opt-gain">{s.current ? '—' : `${s.scorePct >= 0 ? '+' : ''}${s.scorePct.toFixed(2)}%`}</span>
+                </div>
+            ))}
+        </div>
+    );
+}
 
 // Enemy Health Level Skip (Glass Cannon waves mode) or Enemy Attack Level
 // Skip (eHP survival): each point of skip slows how fast enemies get

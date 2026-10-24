@@ -46,7 +46,7 @@ What each currency buys (wiki Currencies page) and how it's ranked:
 | Medals | bot stat and Bot+ levels vs Event Shop trades (per medal) | bots: 100 + 40 × (L − 1) a level (wiki bot Cost pages, every bot); Bot+: 100 + 50 × (L − 1), Echoing Shot 100 + 200 × (L − 1); trades 40, 65, 90, 130, 175, 230, then 380 |
 | Gems | card slots: the best owned card not in the preset, into a free slot or the next one bought (per gem) | wiki Cards: 50 → 10,000 gems, 22 slots |
 | Elite Cells | not a path: a table of lab boosts (×1.5 at 15/h … ×8 at 1M/h) and the extra lab hours per cell, on the top lab | wiki Currencies |
-| Bits | Guardian chip stats, each equipped chip's next level (per Bit) | wiki Chips tables and TheTowerSDK guardian upgrades — matched at every level (`constants/guardianData.ts`) |
+| Bits | Guardian chip stats, each equipped chip's next level (per Bit); which chips to equip (free to swap: every owned set that fits the slots, scored for the goal, 2026-10-23 `bestGuardianChips`) | wiki Chips tables and TheTowerSDK guardian upgrades — matched at every level (`constants/guardianData.ts`) |
 | Keys, Guild Tokens | not ranked (Vault, Guild Store) | — |
 
 - **Medal trades** are worth what 15 stones / 250 shards buy next on their own

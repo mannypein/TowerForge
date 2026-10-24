@@ -13,7 +13,7 @@ import { buildEdpsCalibration, edpsParts, edpsScore, edpsSurvivalScore } from '.
 import { parseGameExport } from './gameExport';
 import { readActiveModuleBonuses } from './modBonuses';
 import { DEFAULT_RUN_RATES } from './runRates';
-import { buildCandidates } from './optimizer';
+import { bestGuardianChips, buildCandidates } from './optimizer';
 import type { OptimizerSnapshot } from './optimizer';
 import { buildFarmCalibration, coinRate } from './farming';
 import { changeCost, upgradeTargets } from './whatIf';
@@ -169,6 +169,25 @@ describe('Guardian in the coin model, Optimizer and What If', () => {
         expect(coinRate(more, s.farm)).toBeGreaterThan(1);
         const longer = { ...s, guardian: withChipLevel(s.guardian!, 0, chipById('summon').index, 1, 30) };
         expect(coinRate(longer, s.farm)).toBeGreaterThan(1);
+    });
+
+    it('suggests the chip set that does most for the goal (free to swap)', () => {
+        // One slot, Attack equipped; Bounty and Summon pay coins, Attack doesn't.
+        const g = guardian({ attack: [0, 0, 0] });
+        g.presets[0].extraSlots = 0;
+        const s = snap(g);
+        s.farm = buildFarmCalibration(s, report);
+        const sets = bestGuardianChips(s);
+        expect(sets).toHaveLength(CHIPS.filter(c => c.released).length);   // every owned chip, one at a time
+        expect(sets.find(x => x.current)!.chips).toEqual(['attack']);
+        expect(['bounty', 'summon', 'fetch']).toContain(sets[0].chips[0]);
+        expect(sets[0].scorePct).toBeGreaterThan(0);
+        expect(sets.find(x => x.chips[0] === 'ally')!.scorePct).toBeCloseTo(0, 9);   // Ally isn't counted
+        // Three slots: every set of three.
+        const three = snap(guardian({ attack: [0, 0, 0] }));
+        three.farm = buildFarmCalibration(three, report);
+        const n = CHIPS.filter(c => c.released).length;
+        expect(bestGuardianChips(three)).toHaveLength((n * (n - 1) * (n - 2)) / 6);
     });
 
     it('the Bits panel ranks equipped chips’ next levels at their real price', () => {
