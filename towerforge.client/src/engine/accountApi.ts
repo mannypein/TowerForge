@@ -1,7 +1,8 @@
 // ============================================================
 //  TowerForge Companion — Account API
-//  Register / sign in / sign out, synced stats, and the
-//  player's own share codes.
+//  Register / sign in / sign out, synced stats, the player's own
+//  share codes, and passwords: a recovery code (shown once when it's
+//  made) sets a new password when the old one is forgotten.
 // ============================================================
 
 import { ApiError, apiRequest } from './http';
@@ -19,11 +20,17 @@ export interface AccountShare {
     expiresAt: string;
 }
 
-// The signed-in account: its username and the preview parts of the site
-// it can see (server's features.json).
+// The signed-in account: its username, the preview parts of the site it
+// can see (server's features.json), and whether it holds a recovery code.
 export interface Me {
     username: string;
     features?: string[];
+    recoveryCodeSet?: boolean;
+}
+
+// A recovery code, as the server hands it out (the only time it's readable).
+export interface NewCode {
+    recoveryCode: string;
 }
 
 // Returns the signed-in account, or null when not signed in.
@@ -37,7 +44,7 @@ export async function getMe(): Promise<Me | null> {
 }
 
 export function register(username: string, password: string, save: AccountSave, claims: ShareClaim[]) {
-    return apiRequest<Me>(`${BASE}/register`, {
+    return apiRequest<Me & NewCode>(`${BASE}/register`, {
         method: 'POST',
         body: JSON.stringify({ username, password, save, claims }),
     }, 'Could not create the account.');
@@ -52,6 +59,27 @@ export function login(username: string, password: string) {
 
 export function logout() {
     return apiRequest<void>(`${BASE}/logout`, { method: 'POST' });
+}
+
+// A new password with the account's recovery code: signs in like login,
+// and hands out a fresh code (the old one is used up).
+export function resetPassword(username: string, recoveryCode: string, newPassword: string) {
+    return apiRequest<Me & NewCode & { save: AccountSave | null; updatedAt: string | null }>(`${BASE}/reset-password`, {
+        method: 'POST',
+        body: JSON.stringify({ username, recoveryCode, newPassword }),
+    }, 'Could not reset the password.');
+}
+
+// Replaces the signed-in account's recovery code.
+export function newRecoveryCode() {
+    return apiRequest<NewCode>(`${BASE}/recovery-code`, { method: 'POST' }, 'Could not make a recovery code.');
+}
+
+export function changePassword(currentPassword: string, newPassword: string) {
+    return apiRequest<void>(`${BASE}/password`, {
+        method: 'POST',
+        body: JSON.stringify({ currentPassword, newPassword }),
+    }, 'Could not change the password.');
 }
 
 export function getSave() {

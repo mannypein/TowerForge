@@ -15,6 +15,9 @@ namespace TowerForge.Server.Controllers;
 //  player's own share codes.
 //  Registering uploads whatever the player had entered locally;
 //  signing in to an existing account never uploads local data.
+//  Forgotten passwords: a recovery code (UserStore) sets a new one;
+//  the player gets a code with the account and can make a new one
+//  while signed in, and can change the password.
 // ============================================================
 [ApiController]
 [Route("api/account")]
@@ -41,6 +44,12 @@ public class AccountController : ControllerBase
     public record ShareClaim(string Code, string Token);
     public record RegisterRequest(string Username, string Password, JsonElement? Save, List<ShareClaim>? Claims);
     public record LoginRequest(string Username, string Password);
+    public record ResetRequest(string Username, string RecoveryCode, string NewPassword);
+    public record PasswordRequest(string CurrentPassword, string NewPassword);
+
+    private static bool PasswordOk(string? password) =>
+        (password?.Length ?? 0) >= MinPasswordLength && password!.Length <= MaxPasswordLength;
+    private static readonly object PasswordRule = new { error = $"Passwords must be at least {MinPasswordLength} characters." };
 
     // POST /api/account/register
     [HttpPost("register")]
@@ -51,22 +60,72 @@ public class AccountController : ControllerBase
         var username = req.Username?.Trim() ?? "";
         if (!UsernamePattern.IsMatch(username))
             return BadRequest(new { error = "Usernames are 3–24 characters: letters, numbers, _ and -." });
-        if ((req.Password?.Length ?? 0) < MinPasswordLength || req.Password!.Length > MaxPasswordLength)
-            return BadRequest(new { error = $"Passwords must be at least {MinPasswordLength} characters." });
+        if (!PasswordOk(req.Password))
+            return BadRequest(PasswordRule);
 
         string? saveData = null;
         if (req.Save is { ValueKind: JsonValueKind.Object } save)
             saveData = save.GetRawText();
 
-        var user = await _users.CreateAsync(username, req.Password, saveData);
+        var user = await _users.CreateAsync(username, req.Password!, saveData);
         if (user is null)
             return Conflict(new { error = "That username is already taken." });
 
         if (req.Claims is { Count: > 0 })
             await _shares.ClaimAsync(user.Id, req.Claims.Select(c => (c.Code, c.Token)));
 
+        // Shown once, for the player to keep: it resets a forgotten password.
+        var recoveryCode = await _users.IssueRecoveryCodeAsync(user.Id, "player");
         await SignInAsync(user);
-        return Ok(new { username = user.Username, features = _previews.For(user.Username) });
+        return Ok(new { username = user.Username, features = _previews.For(user.Username), recoveryCode, recoveryCodeSet = true });
+    }
+
+    // POST /api/account/reset-password — a new password with the account's
+    // recovery code. Signs in, loads the saved stats like signing in, and
+    // returns a fresh recovery code (the old one is used up).
+    [HttpPost("reset-password")]
+    [EnableRateLimiting("auth")]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetRequest req)
+    {
+        if (!PasswordOk(req.NewPassword))
+            return BadRequest(PasswordRule);
+        var user = await _users.ResetPasswordAsync(req.Username?.Trim() ?? "", req.RecoveryCode ?? "", req.NewPassword);
+        if (user is null)
+            return Unauthorized(new { error = "That username and recovery code don’t match." });
+
+        var recoveryCode = await _users.IssueRecoveryCodeAsync(user.Id, "player");
+        await SignInAsync(user);
+        var save = await _users.GetSaveAsync(user.Id);
+        return Ok(new
+        {
+            username = user.Username,
+            features = _previews.For(user.Username),
+            save = ParseSave(save),
+            updatedAt = save?.UpdatedAt,
+            recoveryCode,
+            recoveryCodeSet = true,
+        });
+    }
+
+    // POST /api/account/recovery-code — replaces the account's recovery code
+    // with a new one, shown once.
+    [Authorize]
+    [HttpPost("recovery-code")]
+    [EnableRateLimiting("auth")]
+    public async Task<IActionResult> NewRecoveryCode() =>
+        Ok(new { recoveryCode = await _users.IssueRecoveryCodeAsync(CurrentUserId(), "player") });
+
+    // POST /api/account/password — changes the password of the signed-in account.
+    [Authorize]
+    [HttpPost("password")]
+    [EnableRateLimiting("auth")]
+    public async Task<IActionResult> ChangePassword([FromBody] PasswordRequest req)
+    {
+        if (!PasswordOk(req.NewPassword))
+            return BadRequest(PasswordRule);
+        return await _users.ChangePasswordAsync(CurrentUserId(), req.CurrentPassword ?? "", req.NewPassword)
+            ? NoContent()
+            : BadRequest(new { error = "Your current password isn’t right." });
     }
 
     // POST /api/account/login — returns the account's saved stats so the
@@ -87,6 +146,7 @@ public class AccountController : ControllerBase
             features = _previews.For(user.Username),
             save = ParseSave(save),
             updatedAt = save?.UpdatedAt,
+            recoveryCodeSet = await _users.RecoveryCodeCreatedAsync(user.Id) is not null,
         });
     }
 
@@ -98,8 +158,9 @@ public class AccountController : ControllerBase
         return NoContent();
     }
 
-    // GET /api/account/me — 200 { username, features } when signed in, else
-    // 401. features: the preview parts of the site this account can see.
+    // GET /api/account/me — 200 { username, features, recoveryCodeSet } when
+    // signed in, else 401. features: the preview parts of the site this
+    // account can see; recoveryCodeSet: whether it holds a recovery code.
     [Authorize]
     [HttpGet("me")]
     public async Task<IActionResult> Me()
@@ -110,7 +171,12 @@ public class AccountController : ControllerBase
             await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
             return Unauthorized();
         }
-        return Ok(new { username = user.Username, features = _previews.For(user.Username) });
+        return Ok(new
+        {
+            username = user.Username,
+            features = _previews.For(user.Username),
+            recoveryCodeSet = await _users.RecoveryCodeCreatedAsync(user.Id) is not null,
+        });
     }
 
     // GET /api/account/save — the account's synced stats.

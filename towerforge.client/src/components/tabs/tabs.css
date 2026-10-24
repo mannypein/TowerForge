@@ -5193,3 +5193,108 @@
         color: var(--text-dim);
     }
 }
+
+/* Account tab: forms, the recovery code shown once, password changes. */
+.acc-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-width: 360px;
+}
+
+    .acc-form h4 {
+        margin-top: 14px;
+        font-size: 14px;
+        color: var(--text-bright);
+    }
+
+.acc-title {
+    margin-bottom: 6px;
+    font-size: 16px;
+    color: var(--text-bright);
+}
+
+.acc-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+}
+
+.acc-link {
+    padding: 0;
+    background: none;
+    border: none;
+    color: var(--accent);
+    font: inherit;
+    font-size: 13px;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.acc-error {
+    font-size: 12px;
+    color: var(--danger);
+}
+
+.acc-ok {
+    font-size: 12px;
+    color: var(--good);
+}
+
+.acc-warn {
+    font-size: 12px;
+    color: var(--gold);
+}
+
+.acc-security {
+    padding: 10px 14px;
+}
+
+    .acc-security > p {
+        margin-bottom: 10px;
+        line-height: 1.5;
+    }
+
+.acc-code-input {
+    font-family: var(--font-mono);
+    letter-spacing: 1px;
+}
+
+.acc-code-box {
+    margin-bottom: 12px;
+    padding: 14px;
+    background: var(--bg3);
+    border: 1px solid color-mix(in srgb, var(--gold) 55%, var(--border));
+    border-radius: 10px;
+    box-shadow: var(--glow-sm);
+}
+
+    .acc-code-box > strong {
+        display: block;
+        color: var(--text-bright);
+    }
+
+    .acc-code-box p {
+        margin-top: 8px;
+        font-size: 12px;
+        line-height: 1.6;
+        color: var(--text-dim);
+    }
+
+.acc-code {
+    display: block;
+    margin: 8px 0;
+    font-family: var(--font-mono);
+    font-size: 20px;
+    letter-spacing: 1px;
+    color: var(--gold);
+    overflow-wrap: anywhere;
+    user-select: all;
+}
+
+.acc-code-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}

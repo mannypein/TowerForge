@@ -7,6 +7,13 @@ namespace TowerForge.Server.Data;
 //  Accounts and their synced stats.
 //  Passwords are hashed with ASP.NET Core Identity's
 //  PasswordHasher (PBKDF2); plain passwords are never stored.
+//
+//  Recovery codes (accounts have no email): each account can hold one
+//  random code, hashed the same way, that sets a new password. The
+//  player gets one when the account is made and can make a new one
+//  while signed in; the site owner can issue one with the server's
+//  --recovery-code command. A code works once, then a fresh one is
+//  issued.
 // ============================================================
 public sealed class UserStore
 {
@@ -116,7 +123,113 @@ public sealed class UserStore
         return now;
     }
 
-    private async Task<User?> FindByUsernameAsync(string username)
+    // ── Passwords and recovery codes ──────────────────────────────
+
+    // 16 characters from 31 that can't be mistaken for each other (no 0/O,
+    // 1/I/L): about 79 bits, shown as XXXX-XXXX-XXXX-XXXX.
+    private const string CodeAlphabet = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+
+    private static string NewCode()
+    {
+        var raw = System.Security.Cryptography.RandomNumberGenerator.GetString(CodeAlphabet, 16);
+        return string.Join('-', Enumerable.Range(0, 4).Select(i => raw.Substring(i * 4, 4)));
+    }
+
+    // Spaces, dashes and case don't matter when a code is typed back.
+    private static string NormalizeCode(string code) =>
+        new(code.ToUpperInvariant().Where(char.IsLetterOrDigit).ToArray());
+
+    // Replaces the account's recovery code with a new one and returns it
+    // (the only time it's readable).
+    public async Task<string> IssueRecoveryCodeAsync(long userId, string issuedBy)
+    {
+        var code = NewCode();
+        await using var conn = await _db.OpenAsync();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            INSERT INTO recovery_codes (user_id, code_hash, created_at, issued_by) VALUES ($id, $hash, $now, $by)
+            ON CONFLICT(user_id) DO UPDATE SET code_hash = excluded.code_hash, created_at = excluded.created_at,
+                issued_by = excluded.issued_by
+            """;
+        cmd.Parameters.AddWithValue("$id", userId);
+        cmd.Parameters.AddWithValue("$hash", _hasher.HashPassword("", NormalizeCode(code)));
+        cmd.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+        cmd.Parameters.AddWithValue("$by", issuedBy);
+        await cmd.ExecuteNonQueryAsync();
+        return code;
+    }
+
+    // When the account's recovery code was made, or null when it has none.
+    public async Task<DateTimeOffset?> RecoveryCodeCreatedAsync(long userId)
+    {
+        await using var conn = await _db.OpenAsync();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT created_at FROM recovery_codes WHERE user_id = $id";
+        cmd.Parameters.AddWithValue("$id", userId);
+        var at = await cmd.ExecuteScalarAsync();
+        return at is long secs ? DateTimeOffset.FromUnixTimeSeconds(secs) : null;
+    }
+
+    // Sets a new password with the account's recovery code, and uses the
+    // code up. Returns the user, or null when the name and code don't match
+    // (the same work either way, so a wrong name can't be told apart).
+    public async Task<User?> ResetPasswordAsync(string username, string code, string newPassword)
+    {
+        var user = await FindByUsernameAsync(username);
+        string? hash = null;
+        if (user is not null)
+        {
+            await using var conn = await _db.OpenAsync();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT code_hash FROM recovery_codes WHERE user_id = $id";
+            cmd.Parameters.AddWithValue("$id", user.Id);
+            hash = await cmd.ExecuteScalarAsync() as string;
+        }
+        var result = _hasher.VerifyHashedPassword("", hash ?? _dummyHash, NormalizeCode(code));
+        if (user is null || hash is null || result == PasswordVerificationResult.Failed) return null;
+
+        var newHash = _hasher.HashPassword(user.Username, newPassword);
+        await using (var conn = await _db.OpenAsync())
+        {
+            await using var tx = (SqliteTransaction)await conn.BeginTransactionAsync();
+            await using (var cmd = conn.CreateCommand())
+            {
+                cmd.Transaction = tx;
+                cmd.CommandText = "UPDATE users SET password_hash = $hash WHERE id = $id";
+                cmd.Parameters.AddWithValue("$hash", newHash);
+                cmd.Parameters.AddWithValue("$id", user.Id);
+                await cmd.ExecuteNonQueryAsync();
+            }
+            await using (var cmd = conn.CreateCommand())
+            {
+                cmd.Transaction = tx;
+                cmd.CommandText = "DELETE FROM recovery_codes WHERE user_id = $id";
+                cmd.Parameters.AddWithValue("$id", user.Id);
+                await cmd.ExecuteNonQueryAsync();
+            }
+            await tx.CommitAsync();
+        }
+        return user with { PasswordHash = newHash };
+    }
+
+    // Changes the password of a signed-in account; false when the current
+    // password is wrong.
+    public async Task<bool> ChangePasswordAsync(long userId, string currentPassword, string newPassword)
+    {
+        var user = await FindByIdAsync(userId);
+        if (user is null) return false;
+        if (_hasher.VerifyHashedPassword(user.Username, user.PasswordHash, currentPassword) == PasswordVerificationResult.Failed)
+            return false;
+        await using var conn = await _db.OpenAsync();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "UPDATE users SET password_hash = $hash WHERE id = $id";
+        cmd.Parameters.AddWithValue("$hash", _hasher.HashPassword(user.Username, newPassword));
+        cmd.Parameters.AddWithValue("$id", userId);
+        await cmd.ExecuteNonQueryAsync();
+        return true;
+    }
+
+    public async Task<User?> FindByUsernameAsync(string username)
     {
         await using var conn = await _db.OpenAsync();
         await using var cmd = conn.CreateCommand();
@@ -126,3 +239,4 @@ public sealed class UserStore
         return await reader.ReadAsync() ? new User(reader.GetInt64(0), reader.GetString(1), reader.GetString(2)) : null;
     }
 }
+

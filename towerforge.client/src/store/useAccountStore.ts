@@ -9,6 +9,9 @@
 //     account — except unsynced edits made while signed in to it).
 //   • While signed in, every change is saved to the account.
 //   • Signing out removes the stats from this device.
+//   • A recovery code the server just made (new account, password reset,
+//     or "make a new one") is kept here until the player says it's saved —
+//     it can't be shown again.
 // ============================================================
 
 import { create } from 'zustand';
@@ -40,10 +43,16 @@ interface AccountStore {
     lastSyncedAt: number | null;
     notice: string | null;          // e.g. "session expired" shown on the Account tab
     sharesVersion: number;          // bump to make share lists refetch
+    hasRecoveryCode: boolean;       // the account holds a recovery code
+    recoveryCode: string | null;    // one just made, shown until the player has saved it
 
     init: () => Promise<void>;
     register: (username: string, password: string) => Promise<void>;
     login: (username: string, password: string) => Promise<void>;
+    resetPassword: (username: string, recoveryCode: string, newPassword: string) => Promise<void>;
+    newRecoveryCode: () => Promise<void>;
+    changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+    recoveryCodeSaved: () => void;
     logout: () => Promise<void>;
     sharesChanged: () => void;
 }
@@ -146,6 +155,22 @@ function signedIn(username: string, features?: string[]): void {
     startSync();
 }
 
+// After signing in (password or recovery code): the account's stats onto
+// this device — unless this device holds unsaved edits for that same
+// account from an expired session, which then finish uploading.
+async function loadSignedIn(res: accountApi.Me & { save: AccountSave | null }): Promise<void> {
+    if (sameUser(readKey(LINKED_USER_KEY), res.username) && isDirty()) {
+        signedIn(res.username, res.features ?? []);
+        await push();
+        return;
+    }
+    if (res.save) applyRemoteSave(res.save);
+    else writeKey(DIRTY_KEY, '1');
+    useAccountStore.setState({ syncState: 'saved', lastSyncedAt: Date.now() });
+    signedIn(res.username, res.features ?? []);
+    await push();
+}
+
 // ── Store ─────────────────────────────────────────────────────
 export const useAccountStore = create<AccountStore>((set) => ({
     status: 'loading',
@@ -155,6 +180,8 @@ export const useAccountStore = create<AccountStore>((set) => ({
     lastSyncedAt: null,
     notice: null,
     sharesVersion: 0,
+    hasRecoveryCode: false,
+    recoveryCode: null,
 
     // Runs once on app load, after the local stats are loaded.
     init: async () => {
@@ -188,6 +215,7 @@ export const useAccountStore = create<AccountStore>((set) => ({
         } catch {
             set({ syncState: 'error' });
         }
+        set({ hasRecoveryCode: !!me.recoveryCodeSet });
         signedIn(me.username, me.features ?? []);
         await push();
     },
@@ -198,24 +226,35 @@ export const useAccountStore = create<AccountStore>((set) => ({
         const res = await accountApi.register(username, password, currentSave(), getShareClaims());
         clearShareClaims();
         writeKey(DIRTY_KEY, null);
-        set({ syncState: 'saved', lastSyncedAt: Date.now() });
+        set({ syncState: 'saved', lastSyncedAt: Date.now(), hasRecoveryCode: true, recoveryCode: res.recoveryCode ?? null });
         signedIn(res.username, res.features ?? []);
     },
 
     // Signing in loads the account's stats onto this device.
     login: async (username, password) => {
         const res = await accountApi.login(username, password);
-        if (sameUser(readKey(LINKED_USER_KEY), res.username) && isDirty()) {
-            signedIn(res.username, res.features ?? []);
-            await push();                           // finish uploading edits from an expired session
-            return;
-        }
-        if (res.save) applyRemoteSave(res.save);
-        else writeKey(DIRTY_KEY, '1');
-        set({ syncState: 'saved', lastSyncedAt: Date.now() });
-        signedIn(res.username, res.features ?? []);
-        await push();
+        set({ hasRecoveryCode: !!res.recoveryCodeSet });
+        await loadSignedIn(res);
     },
+
+    // A forgotten password: the recovery code sets a new one and signs in
+    // like login; the server hands out a fresh code to keep.
+    resetPassword: async (username, recoveryCode, newPassword) => {
+        const res = await accountApi.resetPassword(username, recoveryCode, newPassword);
+        set({ hasRecoveryCode: true, recoveryCode: res.recoveryCode });
+        await loadSignedIn(res);
+    },
+
+    newRecoveryCode: async () => {
+        const res = await accountApi.newRecoveryCode();
+        set({ hasRecoveryCode: true, recoveryCode: res.recoveryCode });
+    },
+
+    changePassword: async (currentPassword, newPassword) => {
+        await accountApi.changePassword(currentPassword, newPassword);
+    },
+
+    recoveryCodeSaved: () => set({ recoveryCode: null }),
 
     // Saves any pending edits, ends the session, and clears this device.
     // Refuses (throws) if the latest edits couldn't be saved, so nothing is lost.
@@ -231,7 +270,10 @@ export const useAccountStore = create<AccountStore>((set) => ({
         try { useGameStore.getState().resetAll(); } finally { applyingRemote = false; }
         writeKey(LINKED_USER_KEY, null);
         writeKey(DIRTY_KEY, null);
-        set({ status: 'signedOut', username: null, features: [], syncState: 'idle', lastSyncedAt: null, notice: null });
+        set({
+            status: 'signedOut', username: null, features: [], syncState: 'idle', lastSyncedAt: null, notice: null,
+            hasRecoveryCode: false, recoveryCode: null,
+        });
     },
 
     sharesChanged: () => set(s => ({ sharesVersion: s.sharesVersion + 1 })),

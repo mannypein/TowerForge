@@ -61,6 +61,16 @@ public sealed class AppDb
             );
 
             CREATE INDEX IF NOT EXISTS ix_shares_owner ON shares(owner_id);
+
+            -- One recovery code per account (hashed like a password): it
+            -- sets a new password when the old one is forgotten. issued_by
+            -- 'player' (made while signed in) or 'owner' (the reset command).
+            CREATE TABLE IF NOT EXISTS recovery_codes (
+                user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+                code_hash  TEXT    NOT NULL,
+                created_at INTEGER NOT NULL,
+                issued_by  TEXT    NOT NULL
+            );
             """;
         cmd.ExecuteNonQuery();
     }

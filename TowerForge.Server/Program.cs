@@ -14,6 +14,35 @@ var dataDir = builder.Configuration["Data:Directory"]
     ?? Path.Combine(builder.Environment.ContentRootPath, "App_Data");
 Directory.CreateDirectory(dataDir);
 
+// ── Owner command: a recovery code for a player who's locked out ──
+//   TowerForge.Server --recovery-code <username>
+// Prints a new recovery code for that account (replacing any it had) and
+// exits without starting the site. On the VPS run it as the service user
+// from the deploy folder: ops/accounts/recovery-code.sh <username>.
+if (args.Length >= 1 && args[0] == "--recovery-code")
+{
+    if (args.Length < 2)
+    {
+        Console.Error.WriteLine("Usage: TowerForge.Server --recovery-code <username>");
+        Environment.ExitCode = 2;
+        return;
+    }
+    var cliDb = new AppDb(dataDir);
+    cliDb.EnsureSchema();
+    var cliUsers = new UserStore(cliDb);
+    var who = await cliUsers.FindByUsernameAsync(args[1].Trim());
+    if (who is null)
+    {
+        Console.Error.WriteLine($"No account named \"{args[1]}\".");
+        Environment.ExitCode = 1;
+        return;
+    }
+    var code = await cliUsers.IssueRecoveryCodeAsync(who.Id, "owner");
+    Console.WriteLine($"Recovery code for {who.Username}: {code}");
+    Console.WriteLine("It replaces any code they had. On the site: Player → Account → Sign In → Forgot your password?");
+    return;
+}
+
 builder.Services.AddSingleton(new AppDb(dataDir));
 builder.Services.AddSingleton<ShareStore>();
 builder.Services.AddSingleton<UserStore>();
