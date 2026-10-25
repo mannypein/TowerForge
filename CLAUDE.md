@@ -71,7 +71,7 @@ Run from `towerforge.client/` unless noted.
 
 Build (`npm run build`), then start `towerforge-preview` from `.claude/launch.json` (serves `dist/` on port 4174). Put made-up data into localStorage (`tc_profile`, `tc_modules`, `tc_bots`, …), check desktop and phone widths, then remove the test data.
 
-Share links and accounts need the API: start `towerforge-server-local` instead (the server with `dist/` on port 5099, a throwaway database in `TowerForge.Server/bin/local-test-data` — delete it afterwards). Anonymous shares need no account: POST a made-up payload to `/api/shares` and open `/?share=<code>`. Export Image saves each poster page (`[data-poster-page]`, `components/share/PosterPages.tsx`), at most 4:5 tall so Reddit shows it whole.
+Share links and accounts need the API: start `towerforge-server-local` instead (the server with `dist/` on port 5099, a throwaway database in `TowerForge.Server/bin/local-test-data` — delete it afterwards). Anonymous shares need no account: POST a made-up payload to `/api/shares` and open `/?share=<code>`. Export Image opens the Export Images window (`components/share/exportImages.ts`): each poster page (`[data-poster-page]`, `PosterPages.tsx`, at most 4:5 tall so Reddit shows it whole) becomes a PNG (`posterImages.ts`, its own SVG loader because WebKit's `img.decode()` can fail on SVG). Computers download them; phones get Save or share (the share menu → Photos or Reddit) and press-and-hold.
 
 ## Environment notes
 

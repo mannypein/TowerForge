@@ -11,7 +11,8 @@ import type { UWAbbr } from '../../types/gameTypes';
 import stoneIcon from '../../assets/stone.png';
 import IconDropdown from '../common/IconDropdown';
 import UWShareCard from '../share/UWShareCard';
-import { exportPosterPages, SHARE_OFFSCREEN_STYLE } from '../share/shareTheme';
+import { SHARE_OFFSCREEN_STYLE } from '../share/shareTheme';
+import { openExportDialog } from '../share/exportImages';
 
 // Which uwBonus key corresponds to each stat index per UW.
 // null = no module sub-effect targets that stat.
@@ -96,11 +97,7 @@ export default function UWTab() {
     const unlockedPlusCount = UWS.filter(u => uwData.data[u.a]?.upOwn).length;
 
     const shareRef = useRef<HTMLDivElement>(null);
-    function handleExport() {
-        if (!shareRef.current) return;
-        exportPosterPages(shareRef.current, 'towerforge-uws')
-            .catch(() => alert('Image export failed. Please try again.'));
-    }
+    const handleExport = () => openExportDialog(shareRef.current, 'towerforge-uws', 'Ultimate Weapons');
 
     return (
         <div>

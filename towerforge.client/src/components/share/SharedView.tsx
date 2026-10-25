@@ -22,7 +22,8 @@ import ModulesShareCard from './ModulesShareCard';
 import StatsShareCard from './StatsShareCard';
 import type { StatGroup } from './StatsShareCard';
 import { guardianGroups, labsGroups, profileGroups, relicsGroups, workshopGroups } from './shareSections';
-import { exportPosterPages, SHARE_OFFSCREEN_STYLE } from './shareTheme';
+import { SHARE_OFFSCREEN_STYLE } from './shareTheme';
+import { openExportDialog } from './exportImages';
 import { BOTS_CONFIG, botsForPreset, getPresetBots, isBotEntryOwned } from '../../constants/botData';
 import { presetLabel } from '../../constants/gameData';
 
@@ -30,10 +31,9 @@ interface Props {
     code: string;
 }
 
-function exportCard(node: HTMLDivElement | null, name: string) {
-    if (!node) return;
-    exportPosterPages(node, name).catch(() => alert('Image export failed. Please try again.'));
-}
+// Export Image: the Export Images window for a section's poster.
+const exportCard = (node: HTMLDivElement | null, file: string, label: string) =>
+    openExportDialog(node, `towerforge-shared-${file}`, label);
 
 // One section: its preset buttons, Export Image, the on-page card, and
 // the off-screen poster that Export Image saves (`pages` images).
@@ -87,7 +87,7 @@ function StatsSection({ title, subtitle, groups, file, empty, controls, columns 
         <ShareSection
             controls={controls}
             pages={pages}
-            onExport={() => exportCard(ref.current, `towerforge-shared-${file}`)}
+            onExport={() => exportCard(ref.current, file, title)}
             poster={<StatsShareCard ref={ref} title={title} subtitle={subtitle} groups={groups} empty={empty} columns={columns} onPages={setPages} poster />}
         >
             <StatsShareCard title={title} subtitle={subtitle} groups={groups} empty={empty} />
@@ -195,7 +195,7 @@ export default function SharedView({ code }: Props) {
 
                 {payload?.uw && (
                     <ShareSection
-                        onExport={() => exportCard(uwRef.current, 'towerforge-shared-uws')}
+                        onExport={() => exportCard(uwRef.current, 'uws', 'Ultimate Weapons')}
                         poster={<UWShareCard ref={uwRef} snapshot={payload.uw} poster />}
                     >
                         <UWShareCard snapshot={payload.uw} />
@@ -206,7 +206,7 @@ export default function SharedView({ code }: Props) {
                     <ShareSection
                         controls={<PresetButtons count={cardPresetCount} names={sharedCards.presetNames} value={cardPreset} onChange={setCardPreset} />}
                         pages={cardPages}
-                        onExport={() => exportCard(cardsRef.current, 'towerforge-shared-cards')}
+                        onExport={() => exportCard(cardsRef.current, 'cards', 'Cards')}
                         poster={<CardsShareCard ref={cardsRef} snapshot={sharedCards} preset={cardPreset}
                             presetName={presetLabel(sharedCards.presetNames, cardPreset)} onPages={setCardPages} poster />}
                     >
@@ -217,7 +217,7 @@ export default function SharedView({ code }: Props) {
                 {botProps && (
                     <ShareSection
                         controls={<PresetButtons count={botPresetCount} names={sharedBots?.presetNames} value={botPreset} onChange={setBotPreset} />}
-                        onExport={() => exportCard(botsRef.current, 'towerforge-shared-bots')}
+                        onExport={() => exportCard(botsRef.current, 'bots', 'Bots')}
                         poster={<BotsShareCard ref={botsRef} {...botProps} poster />}
                     >
                         <BotsShareCard {...botProps} />
@@ -241,7 +241,7 @@ export default function SharedView({ code }: Props) {
                             </div>
                         )}
                         pages={modulePages}
-                        onExport={() => exportCard(modulesRef.current, 'towerforge-shared-modules')}
+                        onExport={() => exportCard(modulesRef.current, 'modules', 'Modules')}
                         poster={<ModulesShareCard ref={modulesRef} {...moduleProps} onPages={setModulePages} poster />}
                     >
                         <ModulesShareCard {...moduleProps} />

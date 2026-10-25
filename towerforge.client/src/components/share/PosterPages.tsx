@@ -5,7 +5,7 @@
 //  copy at poster width, then laid out page by page, each page with
 //  the header ("Labs · 2/3") and footer, the pages filled evenly and
 //  one height (the fullest page's). Export Image saves each
-//  [data-poster-page] as its own image (exportPosterPages).
+//  [data-poster-page] as its own image (posterImages.ts).
 //  Heights are measured again when they change (fonts loading,
 //  new data), so the pages always match what's drawn.
 // ============================================================

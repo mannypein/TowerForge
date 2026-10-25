@@ -10,7 +10,8 @@ import NumericInput from '../common/NumericInput';
 import { milestoneReached } from '../../engine/statHelpers';
 import { presetLabel } from '../../constants/gameData';
 import CardsShareCard from '../share/CardsShareCard';
-import { exportPosterPages, SHARE_OFFSCREEN_STYLE } from '../share/shareTheme';
+import { SHARE_OFFSCREEN_STYLE } from '../share/shareTheme';
+import { openExportDialog } from '../share/exportImages';
 
 const RARITY_LABELS = ['Common', 'Rare', 'Epic'];
 const RARITY_COLORS = ['var(--text-dim)', 'var(--blue)', 'var(--purple)'];
@@ -75,11 +76,7 @@ export default function CardsTab() {
     // ── Share image export ──
     const shareRef = useRef<HTMLDivElement>(null);
     const [sharePages, setSharePages] = useState(1);
-    function handleExport() {
-        if (!shareRef.current) return;
-        exportPosterPages(shareRef.current, 'towerforge-cards')
-            .catch(() => alert('Image export failed. Please try again.'));
-    }
+    const handleExport = () => openExportDialog(shareRef.current, 'towerforge-cards', 'Cards');
 
     return (
         <div>
