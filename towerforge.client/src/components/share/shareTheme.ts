@@ -6,7 +6,8 @@
 //  the shared-stats page (fits a phone), and as a fixed-width poster
 //  kept off-screen for Export Image, so an export looks the same from
 //  any screen. Cards are size containers: inside them, cqw units and
-//  @container rules follow the card's width, not the screen's.
+//  @container rules follow the card's width, not the screen's. Long
+//  posters are cut into Reddit-shaped pages (PosterPages).
 // ============================================================
 
 import type { CSSProperties } from 'react';
@@ -41,6 +42,18 @@ export async function exportNodeAsPng(node: HTMLElement, filename: string): Prom
     link.href = dataUrl;
     link.download = filename;
     link.click();
+}
+
+// Saves a poster's pages (PosterPages), one image each: name.png for one
+// page, name-1.png, name-2.png… for more (in order, for a Reddit gallery).
+// A poster without pages is saved as one image.
+export async function exportPosterPages(node: HTMLElement, name: string): Promise<void> {
+    const found = Array.from(node.querySelectorAll<HTMLElement>('[data-poster-page]'));
+    const pages = found.length > 0 ? found : [node];
+    for (let i = 0; i < pages.length; i++) {
+        if (i > 0) await new Promise(r => setTimeout(r, 400));   // browsers drop downloads fired all at once
+        await exportNodeAsPng(pages[i], pages.length > 1 ? `${name}-${i + 1}.png` : `${name}.png`);
+    }
 }
 
 // Wrapper that holds the poster root. Positioned far off-screen so

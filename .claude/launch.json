@@ -4,16 +4,45 @@
     {
       "name": "towerforge-client",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "cwd": "towerforge.client",
       "port": 58132
     },
     {
       "name": "towerforge-preview",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["http-server", "dist", "-p", "4174", "-c-1", "--proxy", "http://localhost:4174?"],
+      "runtimeArgs": [
+        "http-server",
+        "dist",
+        "-p",
+        "4174",
+        "-c-1",
+        "--proxy",
+        "http://localhost:4174?"
+      ],
       "cwd": "towerforge.client",
       "port": 4174
+    },
+    {
+      "name": "towerforge-server-local",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": [
+        "run",
+        "--project",
+        "TowerForge.Server",
+        "--no-launch-profile",
+        "--",
+        "--urls",
+        "http://localhost:5099",
+        "--webroot",
+        "../towerforge.client/dist",
+        "--Data:Directory",
+        "bin/local-test-data"
+      ],
+      "port": 5099
     }
   ]
 }

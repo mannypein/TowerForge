@@ -10,7 +10,7 @@ import NumericInput from '../common/NumericInput';
 import { milestoneReached } from '../../engine/statHelpers';
 import { presetLabel } from '../../constants/gameData';
 import CardsShareCard from '../share/CardsShareCard';
-import { exportNodeAsPng, SHARE_OFFSCREEN_STYLE } from '../share/shareTheme';
+import { exportPosterPages, SHARE_OFFSCREEN_STYLE } from '../share/shareTheme';
 
 const RARITY_LABELS = ['Common', 'Rare', 'Epic'];
 const RARITY_COLORS = ['var(--text-dim)', 'var(--blue)', 'var(--purple)'];
@@ -74,9 +74,10 @@ export default function CardsTab() {
 
     // ── Share image export ──
     const shareRef = useRef<HTMLDivElement>(null);
+    const [sharePages, setSharePages] = useState(1);
     function handleExport() {
         if (!shareRef.current) return;
-        exportNodeAsPng(shareRef.current, 'towerforge-cards.png')
+        exportPosterPages(shareRef.current, 'towerforge-cards')
             .catch(() => alert('Image export failed. Please try again.'));
     }
 
@@ -105,7 +106,7 @@ export default function CardsTab() {
                 <div>
                     {/* Off-screen share card (rendered for export only) */}
                     <div style={SHARE_OFFSCREEN_STYLE} aria-hidden="true">
-                        <CardsShareCard ref={shareRef} poster preset={activePreset} presetName={presetLabel(profile.presetNames, activePreset)} />
+                        <CardsShareCard ref={shareRef} poster preset={activePreset} presetName={presetLabel(profile.presetNames, activePreset)} onPages={setSharePages} />
                     </div>
 
                     {/* Card slots */}
@@ -138,8 +139,9 @@ export default function CardsTab() {
                             Clear All
                         </button>
                         <span style={{ flex: 1 }} />
-                        <button className="btn btn-accent" onClick={handleExport}>
-                            📸 Export Image
+                        <button className="btn btn-accent" onClick={handleExport}
+                            title={sharePages > 1 ? 'Saves your cards as one image per page, sized for a Reddit post' : undefined}>
+                            📸 {sharePages > 1 ? `Export ${sharePages} Images` : 'Export Image'}
                         </button>
                         <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
                             {ownedCards} owned · {maxedCards} at 7★

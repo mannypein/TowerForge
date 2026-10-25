@@ -4276,13 +4276,20 @@
     padding: 6px 10px;
 }
 
-/* Modules: the board, and the modules by name beside it (under it when narrow) */
+/* Modules: the board, then each type's primary beside its assist (one
+   column when narrow). The poster (.shr-mod-poster) in bigger type. */
 .shr-mod {
-    display: grid;
-    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
-    gap: 16px;
-    align-items: center;
+    --shr-badge: 44px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
     font-family: var(--font-ui);
+}
+
+.shr-mod-pairs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
 }
 
     .shr-mod .modg-board {
@@ -4394,69 +4401,71 @@
     border-radius: 4px;
     font-size: 11px;
     line-height: 1.4;
+    white-space: nowrap;
     background: var(--bg2);
 }
 
-/* Modules: each type's assist slot — tier, efficiencies, what it gives */
-.shr-assists {
-    margin-top: 18px;
-    font-family: var(--font-ui);
-}
+    .shr-mod-row.empty {
+        opacity: 0.6;
+    }
 
-.shr-assists-title {
-    margin-bottom: 8px;
-    font-size: 18px;
-    font-weight: 700;
+/* An assist's slot: unique-effect tier, Main and Substat efficiency */
+.shr-mod-slot {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 10px;
+    font-size: 12px;
     color: var(--text-bright);
 }
 
-.shr-assist-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
-    gap: 8px;
-}
-
-.shr-assist {
-    padding: 8px 10px;
-    background: var(--inset);
-    border: 1px solid var(--panel-line);
-    border-radius: 8px;
-}
-
-.shr-assist-head {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 4px;
-    font-size: 14px;
-    color: var(--text-bright);
-}
-
-    .shr-assist-head span {
-        font-family: var(--font-mono);
-        font-size: 13px;
+    .shr-mod-slot span + span::before {
+        content: "·";
+        margin-right: 10px;
+        color: var(--text-dim);
     }
 
-.shr-assist-row {
-    display: flex;
-    justify-content: space-between;
-    font-size: 13px;
-    color: var(--text-dim);
+.shr-mod-poster {
+    --shr-badge: 58px;
 }
 
-    .shr-assist-row strong {
-        color: var(--text-bright);
+    .shr-mod-poster .modg-board {
+        --slot-big: 88px;
+        --slot-small: 66px;
+        --tower-w: 118px;
+        padding: 16px 6px;
     }
 
-.shr-assist-mod {
-    margin-top: 4px;
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--text-dim);
-}
+    .shr-mod-poster .modg-slot-lv {
+        font-size: 15px;
+    }
+
+    .shr-mod-poster .shr-mod-row {
+        gap: 12px;
+        padding: 10px 12px;
+    }
+
+    .shr-mod-poster .shr-mod-name {
+        font-size: 20px;
+    }
+
+    .shr-mod-poster .shr-mod-meta,
+    .shr-mod-poster .shr-mod-slot,
+    .shr-mod-poster .shr-mod-lv {
+        font-size: 15px;
+    }
+
+    .shr-mod-poster .shr-mod-unique {
+        font-size: 15px;
+        line-height: 1.35;
+    }
+
+    .shr-mod-poster .shr-mod-sub {
+        font-size: 14px;
+    }
 
 /* By the card's width (its root is a size container) */
 @container (max-width: 760px) {
-    .shr-mod {
+    .shr-mod-pairs {
         grid-template-columns: minmax(0, 1fr);
     }
 }

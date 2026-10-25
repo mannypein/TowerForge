@@ -3,13 +3,17 @@
 //  A share card of named values in groups — Profile, Workshop, Labs,
 //  Relics, Guardian (components/share/shareSections.ts builds them):
 //  each group a heading and a grid of tiles, maxed values in gold.
-//  Fluid on the shared-stats page, fixed width as the Export Image
-//  poster (shareTheme).
+//  Fluid on the shared-stats page. As the Export Image poster the
+//  tiles are bigger, `columns` across with the level beside the
+//  value, and a long section goes on over Reddit-shaped pages
+//  (PosterPages), a cut group repeating its heading.
 // ============================================================
 
 import type { Ref } from 'react';
 import { SHARE_COLORS, shareRootStyle } from './shareTheme';
 import { ShareHeader, ShareFooter } from './shareCommon';
+import PosterPages from './PosterPages';
+import type { PosterBlock } from './PosterPages';
 
 export interface StatTile {
     name: string;
@@ -24,37 +28,90 @@ export interface StatGroup {
     tiles: StatTile[];
 }
 
-export default function StatsShareCard({ ref, title, subtitle, groups, empty, poster }: {
+function GroupHeading({ label, note, poster }: { label: string; note?: string; poster?: boolean }) {
+    return (
+        <div style={{ display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', gap: '2px 10px', marginBottom: poster ? 0 : 8, paddingTop: poster ? 8 : 0 }}>
+            <span style={{ fontSize: poster ? 23 : 18, fontWeight: 700, color: SHARE_COLORS.accent }}>{label}</span>
+            {note && <span style={{ fontSize: poster ? 16 : 13, color: SHARE_COLORS.dim }}>{note}</span>}
+        </div>
+    );
+}
+
+const tileBox = (t: StatTile) => ({
+    background: SHARE_COLORS.panel,
+    border: `1px solid ${t.maxed ? SHARE_COLORS.gold : SHARE_COLORS.border}`,
+    borderRadius: 8,
+    minWidth: 0,
+});
+
+// The poster's tile: name, then the value with its level beside it.
+function PosterTile({ t }: { t: StatTile }) {
+    return (
+        <div style={{ ...tileBox(t), padding: '10px 12px' }}>
+            <div style={{ fontSize: 16, color: SHARE_COLORS.dim, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {t.name}
+            </div>
+            <div style={{ marginTop: 3, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0 8px' }}>
+                <span style={{ fontSize: 22, fontWeight: 700, color: t.maxed ? SHARE_COLORS.gold : SHARE_COLORS.text, overflowWrap: 'anywhere' }}>
+                    {t.value}
+                </span>
+                {t.note && <span style={{ fontSize: 14, color: SHARE_COLORS.dim, whiteSpace: 'nowrap' }}>{t.note}</span>}
+            </div>
+        </div>
+    );
+}
+
+// The groups as poster blocks: a heading, then its tiles a row at a time.
+function statBlocks(groups: StatGroup[], columns: number): PosterBlock[] {
+    return groups.filter(g => g.tiles.length > 0).flatMap(group => {
+        const rows: StatTile[][] = [];
+        for (let i = 0; i < group.tiles.length; i += columns) rows.push(group.tiles.slice(i, i + columns));
+        return [
+            { key: `${group.label}:h`, node: <GroupHeading label={group.label} note={group.note} poster />, keepWithNext: true },
+            ...rows.map((row, r): PosterBlock => ({
+                key: `${group.label}:${r}`,
+                node: (
+                    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gap: 10 }}>
+                        {row.map(t => <PosterTile key={t.name} t={t} />)}
+                    </div>
+                ),
+                cont: <GroupHeading label={group.label} note="continued" poster />,
+            })),
+        ];
+    });
+}
+
+export default function StatsShareCard({ ref, title, subtitle, groups, empty, poster, columns = 4, onPages }: {
     ref?: Ref<HTMLDivElement>;
     title: string;
     subtitle: string;
     groups: StatGroup[];
     empty?: string;      // shown when no group has a tile
     poster?: boolean;
+    columns?: number;    // tiles across on the poster
+    onPages?: (count: number) => void;
 }) {
     const shown = groups.filter(g => g.tiles.length > 0);
+    const emptyNote = <div style={{ fontSize: poster ? 20 : 16, color: SHARE_COLORS.dim }}>{empty ?? 'Nothing to show yet.'}</div>;
+
+    if (poster) {
+        const blocks = statBlocks(shown, columns);
+        return (
+            <PosterPages ref={ref} title={title} subtitle={subtitle} onPages={onPages}
+                blocks={blocks.length > 0 ? blocks : [{ key: 'empty', node: emptyNote }]} />
+        );
+    }
+
     return (
-        <div ref={ref} style={shareRootStyle(poster)}>
+        <div ref={ref} style={shareRootStyle(false)}>
             <ShareHeader title={title} subtitle={subtitle} />
 
             {shown.map(group => (
                 <div key={group.label} style={{ marginBottom: 20 }}>
-                    <div style={{ display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', gap: '2px 10px', marginBottom: 8 }}>
-                        <span style={{ fontSize: 18, fontWeight: 700, color: SHARE_COLORS.accent }}>{group.label}</span>
-                        {group.note && <span style={{ fontSize: 13, color: SHARE_COLORS.dim }}>{group.note}</span>}
-                    </div>
+                    <GroupHeading label={group.label} note={group.note} />
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 200px), 1fr))', gap: 8 }}>
                         {group.tiles.map(t => (
-                            <div
-                                key={t.name}
-                                style={{
-                                    background: SHARE_COLORS.panel,
-                                    border: `1px solid ${t.maxed ? SHARE_COLORS.gold : SHARE_COLORS.border}`,
-                                    borderRadius: 8,
-                                    padding: '8px 10px',
-                                    minWidth: 0,
-                                }}
-                            >
+                            <div key={t.name} style={{ ...tileBox(t), padding: '8px 10px' }}>
                                 <div style={{ fontSize: 13, color: SHARE_COLORS.dim, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                     {t.name}
                                 </div>
@@ -68,7 +125,7 @@ export default function StatsShareCard({ ref, title, subtitle, groups, empty, po
                 </div>
             ))}
 
-            {shown.length === 0 && <div style={{ fontSize: 16, color: SHARE_COLORS.dim }}>{empty ?? 'Nothing to show yet.'}</div>}
+            {shown.length === 0 && emptyNote}
 
             <ShareFooter />
         </div>

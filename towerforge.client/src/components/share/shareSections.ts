@@ -46,13 +46,15 @@ export function workshopGroups(w: SharedWorkshop, preset: number): StatGroup[] {
             .filter(s => s.lv > 0)
             .map(s => ({ name: s.name, value: `Lv ${s.lv.toLocaleString()}`, note: s.lv >= s.max ? 'Max' : `of ${s.max.toLocaleString()}`, maxed: s.lv >= s.max })),
     }));
-    const enhTiles = Object.entries(WS_ENH).flatMap(([cat, list]) => list
-        .map(([name, max, , step], i) => ({ name, max, step, cat, lv: enh.d?.[cat]?.[i] ?? 0 }))
-        .filter(e => e.lv > 0)
-        .map((e): StatTile => ({
-            name: `${e.name} (${CATEGORY[e.cat] ?? e.cat})`, value: fmtMult(1 + e.step * e.lv), note: level(e.lv, e.max), maxed: e.lv >= e.max,
-        })));
-    return [...groups, { label: 'Enhancements', tiles: enhTiles }];
+    // Enhancements by category, like the workshop's (the names alone fit a tile).
+    const enhGroups = Object.entries(WS_ENH).map(([cat, list]): StatGroup => ({
+        label: `${CATEGORY[cat] ?? cat} Enhancements`,
+        tiles: list
+            .map(([name, max, , step], i) => ({ name, max, step, lv: enh.d?.[cat]?.[i] ?? 0 }))
+            .filter(e => e.lv > 0)
+            .map(e => ({ name: e.name, value: fmtMult(1 + e.step * e.lv), note: level(e.lv, e.max), maxed: e.lv >= e.max })),
+    }));
+    return [...groups, ...enhGroups];
 }
 
 export function labsGroups(l: SharedLabs): StatGroup[] {

@@ -27,10 +27,10 @@ describe('share sections', () => {
         const p0 = workshopGroups(ws, 0);
         expect(tile(p0, 'Attack', 'Damage')!.value).toBe('Lv 3,000');
         expect(tile(p0, 'Attack', 'Attack Speed')!.maxed).toBe(true);            // 99 of 99
-        expect(tile(p0, 'Enhancements', 'Damage (Attack)')!.value).toBe('×1.50');
+        expect(tile(p0, 'Attack Enhancements', 'Damage')!.value).toBe('×1.50');
         const p1 = workshopGroups(ws, 1);
         expect(tile(p1, 'Attack', 'Damage')!.value).toBe('Lv 10');
-        expect(tile(p1, 'Enhancements', 'Damage (Attack)')!.value).toBe('×1.05');   // the preset's own enhancement levels
+        expect(tile(p1, 'Attack Enhancements', 'Damage')!.value).toBe('×1.05');   // the preset's own enhancement levels
     });
 
     it('Labs and Relics: only what’s there', () => {

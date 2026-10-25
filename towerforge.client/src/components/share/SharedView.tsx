@@ -4,7 +4,8 @@
 //  Replaces the app shell, so it never touches the viewer's data.
 //  Each section is drawn to fit the screen (phones included); Export
 //  Image saves it as the fixed-width poster kept off-screen next to
-//  it, so an export looks the same from any screen (shareTheme).
+//  it, so an export looks the same from any screen (shareTheme) — a
+//  long section as several Reddit-shaped images (PosterPages).
 //  Cards, Bots, Modules, Workshop and Guardian switch between the
 //  sender's presets, like their tabs. Sections show in the order of
 //  SHARE_SECTIONS; older shares just have fewer of them.
@@ -21,7 +22,7 @@ import ModulesShareCard from './ModulesShareCard';
 import StatsShareCard from './StatsShareCard';
 import type { StatGroup } from './StatsShareCard';
 import { guardianGroups, labsGroups, profileGroups, relicsGroups, workshopGroups } from './shareSections';
-import { exportNodeAsPng, SHARE_OFFSCREEN_STYLE } from './shareTheme';
+import { exportPosterPages, SHARE_OFFSCREEN_STYLE } from './shareTheme';
 import { BOTS_CONFIG, botsForPreset, getPresetBots, isBotEntryOwned } from '../../constants/botData';
 import { presetLabel } from '../../constants/gameData';
 
@@ -29,17 +30,18 @@ interface Props {
     code: string;
 }
 
-function exportCard(node: HTMLDivElement | null, filename: string) {
+function exportCard(node: HTMLDivElement | null, name: string) {
     if (!node) return;
-    exportNodeAsPng(node, filename).catch(() => alert('Image export failed. Please try again.'));
+    exportPosterPages(node, name).catch(() => alert('Image export failed. Please try again.'));
 }
 
 // One section: its preset buttons, Export Image, the on-page card, and
-// the off-screen poster that Export Image saves.
-function ShareSection({ controls, onExport, poster, children }: {
+// the off-screen poster that Export Image saves (`pages` images).
+function ShareSection({ controls, onExport, poster, pages = 1, children }: {
     controls?: ReactNode;
     onExport: () => void;
     poster: ReactNode;
+    pages?: number;
     children: ReactNode;
 }) {
     return (
@@ -47,7 +49,10 @@ function ShareSection({ controls, onExport, poster, children }: {
             <div className="shr-toolbar">
                 {controls}
                 <span className="shr-spacer" />
-                <button className="btn btn-accent" onClick={onExport}>📸 Export Image</button>
+                <button className="btn btn-accent" onClick={onExport}
+                    title={pages > 1 ? 'Saves the section as one image per page, sized for a Reddit post' : undefined}>
+                    📸 {pages > 1 ? `Export ${pages} Images` : 'Export Image'}
+                </button>
             </div>
             {children}
             <div style={SHARE_OFFSCREEN_STYLE} aria-hidden="true">{poster}</div>
@@ -71,16 +76,19 @@ function PresetButtons({ count, names, value, onChange }: {
     );
 }
 
-// A Stats card section (Profile, Workshop, Labs, Relics, Guardian).
-function StatsSection({ title, subtitle, groups, file, empty, controls }: {
-    title: string; subtitle: string; groups: StatGroup[]; file: string; empty?: string; controls?: ReactNode;
+// A Stats card section (Profile, Workshop, Labs, Relics, Guardian);
+// `columns`: tiles across on the poster.
+function StatsSection({ title, subtitle, groups, file, empty, controls, columns }: {
+    title: string; subtitle: string; groups: StatGroup[]; file: string; empty?: string; controls?: ReactNode; columns?: number;
 }) {
     const ref = useRef<HTMLDivElement>(null);
+    const [pages, setPages] = useState(1);
     return (
         <ShareSection
             controls={controls}
-            onExport={() => exportCard(ref.current, `towerforge-shared-${file}.png`)}
-            poster={<StatsShareCard ref={ref} title={title} subtitle={subtitle} groups={groups} empty={empty} poster />}
+            pages={pages}
+            onExport={() => exportCard(ref.current, `towerforge-shared-${file}`)}
+            poster={<StatsShareCard ref={ref} title={title} subtitle={subtitle} groups={groups} empty={empty} columns={columns} onPages={setPages} poster />}
         >
             <StatsShareCard title={title} subtitle={subtitle} groups={groups} empty={empty} />
         </ShareSection>
@@ -99,6 +107,8 @@ export default function SharedView({ code }: Props) {
     const cardsRef = useRef<HTMLDivElement>(null);
     const botsRef = useRef<HTMLDivElement>(null);
     const modulesRef = useRef<HTMLDivElement>(null);
+    const [cardPages, setCardPages] = useState(1);
+    const [modulePages, setModulePages] = useState(1);
 
     useEffect(() => {
         let cancelled = false;
@@ -185,7 +195,7 @@ export default function SharedView({ code }: Props) {
 
                 {payload?.uw && (
                     <ShareSection
-                        onExport={() => exportCard(uwRef.current, 'towerforge-shared-uws.png')}
+                        onExport={() => exportCard(uwRef.current, 'towerforge-shared-uws')}
                         poster={<UWShareCard ref={uwRef} snapshot={payload.uw} poster />}
                     >
                         <UWShareCard snapshot={payload.uw} />
@@ -195,9 +205,10 @@ export default function SharedView({ code }: Props) {
                 {sharedCards && (
                     <ShareSection
                         controls={<PresetButtons count={cardPresetCount} names={sharedCards.presetNames} value={cardPreset} onChange={setCardPreset} />}
-                        onExport={() => exportCard(cardsRef.current, 'towerforge-shared-cards.png')}
+                        pages={cardPages}
+                        onExport={() => exportCard(cardsRef.current, 'towerforge-shared-cards')}
                         poster={<CardsShareCard ref={cardsRef} snapshot={sharedCards} preset={cardPreset}
-                            presetName={presetLabel(sharedCards.presetNames, cardPreset)} poster />}
+                            presetName={presetLabel(sharedCards.presetNames, cardPreset)} onPages={setCardPages} poster />}
                     >
                         <CardsShareCard snapshot={sharedCards} preset={cardPreset} presetName={presetLabel(sharedCards.presetNames, cardPreset)} />
                     </ShareSection>
@@ -206,7 +217,7 @@ export default function SharedView({ code }: Props) {
                 {botProps && (
                     <ShareSection
                         controls={<PresetButtons count={botPresetCount} names={sharedBots?.presetNames} value={botPreset} onChange={setBotPreset} />}
-                        onExport={() => exportCard(botsRef.current, 'towerforge-shared-bots.png')}
+                        onExport={() => exportCard(botsRef.current, 'towerforge-shared-bots')}
                         poster={<BotsShareCard ref={botsRef} {...botProps} poster />}
                     >
                         <BotsShareCard {...botProps} />
@@ -229,8 +240,9 @@ export default function SharedView({ code }: Props) {
                                 ))}
                             </div>
                         )}
-                        onExport={() => exportCard(modulesRef.current, 'towerforge-shared-modules.png')}
-                        poster={<ModulesShareCard ref={modulesRef} {...moduleProps} poster />}
+                        pages={modulePages}
+                        onExport={() => exportCard(modulesRef.current, 'towerforge-shared-modules')}
+                        poster={<ModulesShareCard ref={modulesRef} {...moduleProps} onPages={setModulePages} poster />}
                     >
                         <ModulesShareCard {...moduleProps} />
                     </ShareSection>
@@ -239,7 +251,7 @@ export default function SharedView({ code }: Props) {
                 {ws && (
                     <StatsSection title="Workshop" file="workshop" subtitle={presetLabel(ws.presetNames, wsPreset)}
                         controls={<PresetButtons count={ws.presetCount} names={ws.presetNames} value={wsPreset} onChange={setWsPreset} />}
-                        groups={workshopGroups(ws, wsPreset)} empty="No workshop upgrades yet." />
+                        groups={workshopGroups(ws, wsPreset)} empty="No workshop upgrades yet." columns={5} />
                 )}
 
                 {payload?.labs && (
@@ -253,7 +265,7 @@ export default function SharedView({ code }: Props) {
                 {guardian && (
                     <StatsSection title="Guardian" file="guardian" subtitle={presetLabel(guardian.presetNames, guardianPresetIdx)}
                         controls={<PresetButtons count={guardian.presetCount} names={guardian.presetNames} value={guardianPresetIdx} onChange={setGuardianPreset} />}
-                        groups={guardianGroups(guardian, guardianPresetIdx)} empty="No Guardian chips equipped." />
+                        groups={guardianGroups(guardian, guardianPresetIdx)} empty="No Guardian chips equipped." columns={3} />
                 )}
             </main>
         </div>
