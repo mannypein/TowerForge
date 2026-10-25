@@ -5,8 +5,9 @@
 //  Each section is drawn to fit the screen (phones included); Export
 //  Image saves it as the fixed-width poster kept off-screen next to
 //  it, so an export looks the same from any screen (shareTheme).
-//  Bots and Modules switch between the sender's presets, like the
-//  Bots and Modules tabs.
+//  Cards, Bots, Modules, Workshop and Guardian switch between the
+//  sender's presets, like their tabs. Sections show in the order of
+//  SHARE_SECTIONS; older shares just have fewer of them.
 // ============================================================
 
 import { useEffect, useRef, useState } from 'react';
@@ -17,6 +18,9 @@ import UWShareCard from './UWShareCard';
 import CardsShareCard from './CardsShareCard';
 import BotsShareCard from './BotsShareCard';
 import ModulesShareCard from './ModulesShareCard';
+import StatsShareCard from './StatsShareCard';
+import type { StatGroup } from './StatsShareCard';
+import { guardianGroups, labsGroups, profileGroups, relicsGroups, workshopGroups } from './shareSections';
 import { exportNodeAsPng, SHARE_OFFSCREEN_STYLE } from './shareTheme';
 import { BOTS_CONFIG, botsForPreset, getPresetBots, isBotEntryOwned } from '../../constants/botData';
 import { presetLabel } from '../../constants/gameData';
@@ -51,10 +55,45 @@ function ShareSection({ controls, onExport, poster, children }: {
     );
 }
 
+// The sender's presets as buttons (none for one preset).
+function PresetButtons({ count, names, value, onChange }: {
+    count: number; names?: string[]; value: number; onChange: (i: number) => void;
+}) {
+    if (count <= 1) return null;
+    return (
+        <div className="preset-tabs shr-presets">
+            {Array.from({ length: count }, (_, idx) => (
+                <button key={idx} className={`preset-btn ${value === idx ? 'active' : ''}`} onClick={() => onChange(idx)}>
+                    {presetLabel(names, idx)}
+                </button>
+            ))}
+        </div>
+    );
+}
+
+// A Stats card section (Profile, Workshop, Labs, Relics, Guardian).
+function StatsSection({ title, subtitle, groups, file, empty, controls }: {
+    title: string; subtitle: string; groups: StatGroup[]; file: string; empty?: string; controls?: ReactNode;
+}) {
+    const ref = useRef<HTMLDivElement>(null);
+    return (
+        <ShareSection
+            controls={controls}
+            onExport={() => exportCard(ref.current, `towerforge-shared-${file}.png`)}
+            poster={<StatsShareCard ref={ref} title={title} subtitle={subtitle} groups={groups} empty={empty} poster />}
+        >
+            <StatsShareCard title={title} subtitle={subtitle} groups={groups} empty={empty} />
+        </ShareSection>
+    );
+}
+
 export default function SharedView({ code }: Props) {
     const [payload, setPayload] = useState<SharePayload | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [botPreset, setBotPreset] = useState(0);
+    const [cardPreset, setCardPreset] = useState(0);
+    const [wsPreset, setWsPreset] = useState(0);
+    const [guardianPresetIdx, setGuardianPreset] = useState(0);
     const [loadoutId, setLoadoutId] = useState<string | null>(null);
     const uwRef = useRef<HTMLDivElement>(null);
     const cardsRef = useRef<HTMLDivElement>(null);
@@ -70,6 +109,13 @@ export default function SharedView({ code }: Props) {
             });
         return () => { cancelled = true; };
     }, [code]);
+
+    // Cards: each preset's loadout. Older shares carry the loadouts but not
+    // the preset count — count the presets they hold.
+    const sharedCards = payload?.cards;
+    const cardPresetCount = sharedCards
+        ? sharedCards.presetCount ?? Math.max(1, ...Object.keys(sharedCards.presets ?? {}).map(k => Number(k) + 1))
+        : 0;
 
     // Bots: the sender's presets, each with its own levels and active bots.
     // Older shares without loadouts show one set of levels.
@@ -95,7 +141,8 @@ export default function SharedView({ code }: Props) {
         ?? loadouts.find(l => l.id === equippedId) ?? loadouts[0];
     // Assist slots show when the sender uses them anywhere.
     const showAssists = loadouts.some(l => Object.values(l.slots).some(s => s?.assist))
-        || Object.values(sharedModules?.slotLevels ?? {}).some(s => (s?.assist ?? 0) > 0);
+        || Object.values(sharedModules?.slotLevels ?? {}).some(s => (s?.assist ?? 0) > 0)
+        || Object.values(sharedModules?.assistData ?? {}).some(a => a && a.rarity !== 'locked');
     const moduleProps = sharedModules && loadout ? {
         loadout,
         library: sharedModules.library ?? [],
@@ -104,6 +151,11 @@ export default function SharedView({ code }: Props) {
         equipped: loadout.id === equippedId,
         showAssists,
     } : null;
+
+    const ws = payload?.workshop;
+    const guardian = payload?.guardian;
+    const labGroups = payload?.labs ? labsGroups(payload.labs) : [];
+    const labCount = labGroups.reduce((s, g) => s + g.tiles.length, 0);
 
     return (
         <div className="shr-page">
@@ -125,6 +177,12 @@ export default function SharedView({ code }: Props) {
 
                 {!error && !payload && <p className="shr-loading">Loading shared stats…</p>}
 
+                {payload?.profile && (
+                    <StatsSection title="Profile" file="profile"
+                        subtitle={[payload.profile.build, payload.profile.highestTier ? `T${payload.profile.highestTier}` : ''].filter(Boolean).join(' · ') || 'Account'}
+                        groups={profileGroups(payload.profile)} />
+                )}
+
                 {payload?.uw && (
                     <ShareSection
                         onExport={() => exportCard(uwRef.current, 'towerforge-shared-uws.png')}
@@ -134,30 +192,20 @@ export default function SharedView({ code }: Props) {
                     </ShareSection>
                 )}
 
-                {payload?.cards && (
+                {sharedCards && (
                     <ShareSection
+                        controls={<PresetButtons count={cardPresetCount} names={sharedCards.presetNames} value={cardPreset} onChange={setCardPreset} />}
                         onExport={() => exportCard(cardsRef.current, 'towerforge-shared-cards.png')}
-                        poster={<CardsShareCard ref={cardsRef} snapshot={payload.cards} poster />}
+                        poster={<CardsShareCard ref={cardsRef} snapshot={sharedCards} preset={cardPreset}
+                            presetName={presetLabel(sharedCards.presetNames, cardPreset)} poster />}
                     >
-                        <CardsShareCard snapshot={payload.cards} />
+                        <CardsShareCard snapshot={sharedCards} preset={cardPreset} presetName={presetLabel(sharedCards.presetNames, cardPreset)} />
                     </ShareSection>
                 )}
 
                 {botProps && (
                     <ShareSection
-                        controls={botPresetCount > 1 && (
-                            <div className="preset-tabs shr-presets">
-                                {Array.from({ length: botPresetCount }, (_, idx) => (
-                                    <button
-                                        key={idx}
-                                        className={`preset-btn ${botPreset === idx ? 'active' : ''}`}
-                                        onClick={() => setBotPreset(idx)}
-                                    >
-                                        {presetLabel(sharedBots?.presetNames, idx)}
-                                    </button>
-                                ))}
-                            </div>
-                        )}
+                        controls={<PresetButtons count={botPresetCount} names={sharedBots?.presetNames} value={botPreset} onChange={setBotPreset} />}
                         onExport={() => exportCard(botsRef.current, 'towerforge-shared-bots.png')}
                         poster={<BotsShareCard ref={botsRef} {...botProps} poster />}
                     >
@@ -186,6 +234,26 @@ export default function SharedView({ code }: Props) {
                     >
                         <ModulesShareCard {...moduleProps} />
                     </ShareSection>
+                )}
+
+                {ws && (
+                    <StatsSection title="Workshop" file="workshop" subtitle={presetLabel(ws.presetNames, wsPreset)}
+                        controls={<PresetButtons count={ws.presetCount} names={ws.presetNames} value={wsPreset} onChange={setWsPreset} />}
+                        groups={workshopGroups(ws, wsPreset)} empty="No workshop upgrades yet." />
+                )}
+
+                {payload?.labs && (
+                    <StatsSection title="Labs" file="labs" subtitle={`${labCount} researched`} groups={labGroups} empty="No labs researched yet." />
+                )}
+
+                {payload?.relics && (
+                    <StatsSection title="Relics" file="relics" subtitle="Bonus totals" groups={relicsGroups(payload.relics)} empty="No relic bonuses yet." />
+                )}
+
+                {guardian && (
+                    <StatsSection title="Guardian" file="guardian" subtitle={presetLabel(guardian.presetNames, guardianPresetIdx)}
+                        controls={<PresetButtons count={guardian.presetCount} names={guardian.presetNames} value={guardianPresetIdx} onChange={setGuardianPreset} />}
+                        groups={guardianGroups(guardian, guardianPresetIdx)} empty="No Guardian chips equipped." />
                 )}
             </main>
         </div>

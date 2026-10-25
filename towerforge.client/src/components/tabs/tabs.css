@@ -4321,7 +4321,7 @@
 
 .shr-mod-row {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 10px;
     background: var(--inset);
     border: 1px solid var(--panel-line);
@@ -4357,6 +4357,101 @@
     font-size: 13px;
     color: var(--text-bright);
     white-space: nowrap;
+}
+
+    .shr-mod-row .shr-mod-lv {
+        align-self: flex-start;
+        padding-top: 4px;
+    }
+
+.shr-mod-main {
+    color: var(--text);
+}
+
+.shr-mod-unique {
+    margin-top: 2px;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--text-bright);
+}
+
+.shr-mod-subs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+.shr-mod-sub-note {
+    align-self: center;
+    font-size: 11px;
+    color: var(--text-dim);
+}
+
+.shr-mod-sub {
+    padding: 1px 6px;
+    border: 1px solid;
+    border-radius: 4px;
+    font-size: 11px;
+    line-height: 1.4;
+    background: var(--bg2);
+}
+
+/* Modules: each type's assist slot — tier, efficiencies, what it gives */
+.shr-assists {
+    margin-top: 18px;
+    font-family: var(--font-ui);
+}
+
+.shr-assists-title {
+    margin-bottom: 8px;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-bright);
+}
+
+.shr-assist-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+    gap: 8px;
+}
+
+.shr-assist {
+    padding: 8px 10px;
+    background: var(--inset);
+    border: 1px solid var(--panel-line);
+    border-radius: 8px;
+}
+
+.shr-assist-head {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+    font-size: 14px;
+    color: var(--text-bright);
+}
+
+    .shr-assist-head span {
+        font-family: var(--font-mono);
+        font-size: 13px;
+    }
+
+.shr-assist-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    color: var(--text-dim);
+}
+
+    .shr-assist-row strong {
+        color: var(--text-bright);
+    }
+
+.shr-assist-mod {
+    margin-top: 4px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-dim);
 }
 
 /* By the card's width (its root is a size container) */

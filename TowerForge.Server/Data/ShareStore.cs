@@ -14,8 +14,10 @@ public sealed class ShareStore
 {
     public static readonly TimeSpan Lifetime = TimeSpan.FromDays(90);
 
-    // Top-level payload keys the client knows how to render.
-    private static readonly string[] KnownSections = ["uw", "cards", "bots", "modules"];
+    // Top-level payload keys the client knows how to render (the client's
+    // SHARE_SECTIONS, engine/shareApi.ts).
+    private static readonly string[] KnownSections =
+        ["profile", "uw", "cards", "bots", "modules", "workshop", "labs", "relics", "guardian"];
 
     // No 0/O or 1/I so codes are easy to read aloud and type.
     private const string CodeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";

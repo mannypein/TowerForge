@@ -18,8 +18,11 @@ import TowerArt from '../common/TowerArt';
 import { BOARD } from '../../constants/moduleBoard';
 import type { SlotKey } from '../../constants/moduleBoard';
 import { RARITIES, moduleMaxLevel, rarityColor, rarityStars } from '../../constants/moduleRarities';
-import { SUB_RARITIES, UNIQUE_MODULES, SUB_EFFECTS, UNIQUE_EFFECT_MODEL } from '../../constants/moduleData';
-import type { SubRarity, RarityProgression, SubEffectDef } from '../../constants/moduleData';
+import {
+    SUB_RARITIES, UNIQUE_MODULES, SUB_EFFECTS, UNIQUE_EFFECT_MODEL, MAIN_EFFECT_LABELS, RARITY_TIER,
+    subEffectValue as getSubEffectValue, uniqueDescription,
+} from '../../constants/moduleData';
+import type { SubRarity, SubEffectDef } from '../../constants/moduleData';
 import { calcModuleDamageMult, primaryMainMult } from '../../engine/towerDamage';
 import { activeLoadout, milestoneReached } from '../../engine/statHelpers';
 import { assistPart, nextAssistTier } from '../../engine/assistModules';
@@ -37,13 +40,6 @@ const TYPE_LABELS: Record<ModuleType, string> = {
     core: 'Core',
 };
 
-// What each module type's main effect multiplies (the ×value on the card).
-const MAIN_EFFECT_LABELS: Record<ModuleType, string> = {
-    cannon: 'Tower Damage',
-    armor: 'Tower Health',
-    generator: 'Coin Bonus',
-    core: 'Ultimate Weapon Damage',
-};
 
 const MAX_PRESETS = 5;
 
@@ -74,19 +70,6 @@ function getSubRarityIdx(rar: SubRarity): number {
     return SUB_RARITIES.indexOf(rar);
 }
 
-// Get value for a sub-effect at a given rarity
-function getSubEffectValue(
-    type: ModuleType,
-    effect: string,
-    rar: SubRarity,
-): string | null {
-    const def = SUB_EFFECTS[type]?.find(([name]) => name === effect);
-    if (!def) return null;
-    const idx = getSubRarityIdx(rar);
-    const val = def[2][idx];
-    if (val === null || val === undefined) return null;
-    return `${val}${def[1]}`;
-}
 
 // Get available sub-effects for a type at a given rarity
 function getAvailableSubEffects(type: ModuleType, rar: SubRarity): SubEffectDef[] {
@@ -94,12 +77,6 @@ function getAvailableSubEffects(type: ModuleType, rar: SubRarity): SubEffectDef[
     return SUB_EFFECTS[type]?.filter(def => def[2][idx] !== null) ?? [];
 }
 
-// Map module rarity codes to the unique-effect tier they run at.
-const RARITY_TIER: Record<ModuleRarity, keyof RarityProgression> = {
-    C: 'Epic', R: 'Epic', Rp: 'Epic',
-    E: 'Epic', Ep: 'Epic', L: 'Legendary', Lp: 'Legendary', M: 'Mythic', Mp: 'Mythic',
-    A: 'Ancestral', A1: 'Ancestral', A2: 'Ancestral', A3: 'Ancestral', A4: 'Ancestral', A5: 'Ancestral',
-};
 
 // Get unique effect value at module rarity
 function getUniqueEffectValue(type: ModuleType, name: string, rar: ModuleRarity): string | null {
@@ -110,13 +87,6 @@ function getUniqueEffectValue(type: ModuleType, name: string, rar: ModuleRarity)
     return `${val}${def[3]}`;
 }
 
-// The unique effect's description with its value filled in.
-function uniqueDescription(type: ModuleType, name: string, rar: ModuleRarity): string | null {
-    const def = UNIQUE_MODULES[type]?.find(([n]) => n === name);
-    if (!def) return null;
-    const val = def[2][RARITY_TIER[rar] ?? 'Epic'];
-    return def[1].replace('[x]', val == null ? '?' : String(val));
-}
 
 const rarityLabel = (r: ModuleRarity) => RARITIES.find(x => x.k === r)?.label ?? r;
 const fmtMult = (v: number) => (v >= 10 ? v.toFixed(2) : v.toFixed(3));

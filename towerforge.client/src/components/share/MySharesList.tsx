@@ -11,10 +11,15 @@ import { deleteShare, shareUrl } from '../../engine/shareApi';
 import { useAccountStore } from '../../store/useAccountStore';
 
 const SECTION_LABELS: Record<string, string> = {
+    profile: 'Profile',
     uw: 'UWs',
     cards: 'Cards',
     bots: 'Bots',
     modules: 'Modules',
+    workshop: 'Workshop',
+    labs: 'Labs',
+    relics: 'Relics',
+    guardian: 'Guardian',
 };
 
 function daysLeft(expiresAt: string): number {

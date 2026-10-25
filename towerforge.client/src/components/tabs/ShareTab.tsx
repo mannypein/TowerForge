@@ -1,24 +1,30 @@
 // ============================================================
 //  TowerForge Companion — Share Tab
 //  Creates a read-only share link from selected stats, and
-//  opens a share code someone else sent you.
+//  opens a share code someone else sent you. Never shares the player's
+//  name (Profile shares the build, leagues, tiers and best waves).
 // ============================================================
 
 import { useState } from 'react';
 import { useGameStore } from '../../store/useGameStore';
 import { createShare, shareUrl } from '../../engine/shareApi';
-import type { SharePayload } from '../../engine/shareApi';
+import type { SharePayload, ShareSectionKey } from '../../engine/shareApi';
 import { useAccountStore } from '../../store/useAccountStore';
 import MySharesList from '../share/MySharesList';
 import { activeLoadout } from '../../engine/statHelpers';
 
-type SectionKey = 'uw' | 'cards' | 'bots' | 'modules';
+type SectionKey = ShareSectionKey;
 
 const SECTIONS: { key: SectionKey; label: string; hint: string }[] = [
+    { key: 'profile', label: 'Profile', hint: 'Build, leagues, highest tier and best wave on each tier' },
     { key: 'uw', label: 'Ultimate Weapons', hint: 'Levels, UW+ status' },
-    { key: 'cards', label: 'Card Library', hint: 'Stars, mastery levels' },
+    { key: 'cards', label: 'Cards', hint: 'Card loadout per preset, stars, mastery levels' },
     { key: 'bots', label: 'Bots', hint: 'Medal levels, Bot+ and active bots per preset' },
-    { key: 'modules', label: 'Modules', hint: 'Presets, equipped modules and slot levels' },
+    { key: 'modules', label: 'Modules', hint: 'Presets, modules with their effects, assist tiers and efficiencies' },
+    { key: 'workshop', label: 'Workshop', hint: 'Levels and enhancements per preset' },
+    { key: 'labs', label: 'Labs', hint: 'Every lab you’ve researched' },
+    { key: 'relics', label: 'Relics', hint: 'Your relics’ bonus totals' },
+    { key: 'guardian', label: 'Guardian', hint: 'Chips equipped per preset, their levels, skins' },
 ];
 
 export default function ShareTab() {
@@ -29,12 +35,19 @@ export default function ShareTab() {
     const presetCount = useGameStore(s => s.profile.presets || 2);
     const presetNames = useGameStore(s => s.profile.presetNames);
     const moduleState = useGameStore(s => s.moduleState);
+    const profile = useGameStore(s => s.profile);
+    const tierWaves = useGameStore(s => s.tierWaves);
+    const wsData = useGameStore(s => s.wsData);
+    const enhData = useGameStore(s => s.enhData);
+    const labData = useGameStore(s => s.labData);
+    const relicData = useGameStore(s => s.relicData);
+    const guardianData = useGameStore(s => s.guardianData);
     const accountStatus = useAccountStore(s => s.status);
     const sharesChanged = useAccountStore(s => s.sharesChanged);
     const setActiveTab = useGameStore(s => s.setActiveTab);
 
     const [selected, setSelected] = useState<Record<SectionKey, boolean>>({
-        uw: true, cards: true, bots: true, modules: true,
+        profile: true, uw: true, cards: true, bots: true, modules: true, workshop: true, labs: true, relics: true, guardian: true,
     });
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -46,8 +59,14 @@ export default function ShareTab() {
 
     async function handleCreate() {
         const payload: SharePayload = {};
+        if (selected.profile) {
+            payload.profile = {
+                build: profile.build, league: profile.league, currentLeague: profile.currentLeague,
+                highestTier: profile.highestTier, completedTier: profile.completedTier, tierWaves,
+            };
+        }
         if (selected.uw) payload.uw = uwData;
-        if (selected.cards) payload.cards = cardData;
+        if (selected.cards) payload.cards = { ...cardData, presetCount, presetNames };
         if (selected.bots) payload.bots = { current: botData, loadouts: botLoadouts, presetCount, presetNames };
         if (selected.modules) {
             payload.modules = {
@@ -58,6 +77,10 @@ export default function ShareTab() {
                 assistData: moduleState.assistData,
             };
         }
+        if (selected.workshop) payload.workshop = { presets: wsData.slice(0, presetCount), enh: enhData, presetCount, presetNames };
+        if (selected.labs) payload.labs = { levels: labData };
+        if (selected.relics) payload.relics = { totals: relicData };
+        if (selected.guardian && guardianData?.unlocked) payload.guardian = { guardian: guardianData, presetCount, presetNames };
 
         setBusy(true);
         setError(null);
@@ -111,7 +134,7 @@ export default function ShareTab() {
                         </p>
                     )}
 
-                    {SECTIONS.map(s => (
+                    {SECTIONS.filter(s => s.key !== 'guardian' || guardianData?.unlocked).map(s => (
                         <label key={s.key} className="field-row" style={{ cursor: 'pointer' }}>
                             <span className="field-label">
                                 {s.label}

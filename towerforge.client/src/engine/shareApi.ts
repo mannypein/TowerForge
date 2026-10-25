@@ -5,7 +5,10 @@
 //  to anyone else's saved data.
 // ============================================================
 
-import type { AssistData, BotData, BotLoadouts, CardData, Loadout, ModuleEntry, SlotLevels, UWData } from '../types/gameTypes';
+import type {
+    AssistData, BotData, BotLoadouts, CardData, EnhData, GuardianData, LabData, Loadout, ModuleEntry, RelicData, SlotLevels,
+    TierWaves, UWData, WSPreset,
+} from '../types/gameTypes';
 import { apiRequest } from './http';
 
 // Keep in sync with SharesController.MaxPayloadBytes on the server.
@@ -34,12 +37,62 @@ export interface SharedModules {
     assistData?: AssistData;    // each type's assist tier and efficiencies (shares from 1.25+)
 }
 
+// Cards: the library plus each preset's card loadout (CardData.presets and
+// slots); the preset count and names so viewers can flip through them
+// (shares from 2026-10-24 on).
+export interface SharedCards extends CardData {
+    presetCount?: number;
+    presetNames?: string[];
+}
+
+// Shares from 2026-10-24 on can also hold these. Never the player's name.
+export interface SharedProfile {
+    build: string;
+    league: string;
+    currentLeague?: string;
+    highestTier: number;
+    completedTier: number;
+    tierWaves: TierWaves;
+}
+
+// Workshop levels and enhancements, per preset like in game.
+export interface SharedWorkshop {
+    presets: WSPreset[];
+    enh: EnhData;
+    presetCount: number;
+    presetNames?: string[];
+}
+
+export interface SharedLabs {
+    levels: LabData;
+}
+
+export interface SharedRelics {
+    totals: RelicData;      // each bonus's total (the Relics tab)
+}
+
+export interface SharedGuardian {
+    guardian: GuardianData;
+    presetCount: number;
+    presetNames?: string[];
+}
+
 export interface SharePayload {
+    profile?: SharedProfile;
     uw?: UWData;
-    cards?: CardData;
+    cards?: SharedCards;
     bots?: SharedBots;
     modules?: SharedModules;
+    workshop?: SharedWorkshop;
+    labs?: SharedLabs;
+    relics?: SharedRelics;
+    guardian?: SharedGuardian;
 }
+
+// Payload keys in the order the viewer shows them (the server keeps the
+// same list, ShareStore.KnownSections).
+export const SHARE_SECTIONS = ['profile', 'uw', 'cards', 'bots', 'modules', 'workshop', 'labs', 'relics', 'guardian'] as const;
+export type ShareSectionKey = typeof SHARE_SECTIONS[number];
 
 // Anonymous shares come back with a claim token. We keep them on this
 // device so they can be attached to an account when the player signs up.

@@ -4,7 +4,7 @@
 //  Shared by the Modules tab, the engine and the game import.
 // ============================================================
 
-import type { ModuleType } from '../types/gameTypes';
+import type { ModuleRarity, ModuleType } from '../types/gameTypes';
 
 // ── Rarities ──────────────────────────────────────────────────
 // Sub-effect rarities (what you can roll on a sub slot)
@@ -178,3 +178,37 @@ export const UNIQUE_EFFECT_MODEL: Record<string, { counted: string; how: string 
     'Magnetic Hook': { counted: 'eDPS', how: 'Fires Inner Land Mines at bosses, fleets and a quarter of elites — rates from your battle report.' },
     'Primordial Collapse': { counted: 'eDPS · eHP', how: 'An extra Black Hole, and enemies inside holes deal less damage.' },
 };
+
+// ── Display helpers (Modules tab, share card) ─────────────────
+// What each module type's main effect multiplies (the ×value on the card).
+export const MAIN_EFFECT_LABELS: Record<ModuleType, string> = {
+    cannon: 'Tower Damage',
+    armor: 'Tower Health',
+    generator: 'Coin Bonus',
+    core: 'Ultimate Weapon Damage',
+};
+
+// Module rarity codes → the unique-effect tier they run at.
+export const RARITY_TIER: Record<ModuleRarity, keyof RarityProgression> = {
+    C: 'Epic', R: 'Epic', Rp: 'Epic',
+    E: 'Epic', Ep: 'Epic', L: 'Legendary', Lp: 'Legendary', M: 'Mythic', Mp: 'Mythic',
+    A: 'Ancestral', A1: 'Ancestral', A2: 'Ancestral', A3: 'Ancestral', A4: 'Ancestral', A5: 'Ancestral',
+};
+
+// A sub-effect's value at a rarity, with its unit ("+12%"-style text without
+// the sign); null when that rarity can't roll it.
+export function subEffectValue(type: ModuleType, effect: string, rar: SubRarity): string | null {
+    const def = SUB_EFFECTS[type]?.find(([name]) => name === effect);
+    if (!def) return null;
+    const val = def[2][SUB_RARITIES.indexOf(rar)];
+    if (val === null || val === undefined) return null;
+    return `${val}${def[1]}`;
+}
+
+// The unique effect's description with its value filled in.
+export function uniqueDescription(type: ModuleType, name: string, rar: ModuleRarity): string | null {
+    const def = UNIQUE_MODULES[type]?.find(([n]) => n === name);
+    if (!def) return null;
+    const val = def[2][RARITY_TIER[rar] ?? 'Epic'];
+    return def[1].replace('[x]', val == null ? '?' : String(val));
+}
