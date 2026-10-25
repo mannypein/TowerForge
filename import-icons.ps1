@@ -23,6 +23,7 @@ Add-Type -AssemblyName System.Drawing
 
 $Aliases = @{
     'restorative-boost' = 'restorative-bonus'
+    'death-penanty'     = 'death-penalty'      # the asset's file name is misspelled
 }
 
 $Targets = @{
