@@ -23,7 +23,7 @@ reports set the baseline, so even unmodeled effects are already in it; only
 | Guardian Attack chip | ◐ | From the run's GuardianDamage (2026-10-20): scales with Percentage × Targets ÷ Cooldown and with the health the rest of the damage takes off (it hits a share of lost health), so it counts for damage and run length. Assumes its targets are about as hurt as in the run; the boss half-damage mix stays as in the run |
 | Electrons, Spotlight damage | ◐ | Read from runs and shown, kept fixed |
 | Guardian (2026-10-19) | ◐ | Gear → Guardian; imported from the export (chips, presets, slots, skins). Scout → tower shots through Damage/Meter; Attack → its share of the run's damage (row above); Bounty, Summon → kill coins; Fetch → its coins and loot by finds per second; skins +0.6% coins each. Ally (overheal past Max Recovery) not counted — how it combines with the usual cap isn't confirmed |
-| Orbs, thorns, land mines | ◐ | Fixed share for damage; orbs and thorns modeled for coins / survival. Waves (2026-10-22): orbs and Death Ray stopping more of the run-ending enemies they can touch (Tank, Ranged…) as enemies stay in range longer; orb count, speed and size since 2026-10-23 (orbs.ts, wiki values), for eHP too (fewer enemies reach the tower). Vault orbs and Sentry Protocol not counted |
+| Orbs, thorns, land mines | ◐ | Fixed share for damage; orbs and thorns modeled for coins / survival. Waves (2026-10-22): orbs and Death Ray stopping more of the run-ending enemies they can touch (Tank, Ranged…) as enemies stay in range longer; orb count, speed and size since 2026-10-23 (orbs.ts, wiki values), for eHP too (fewer enemies reach the tower). Vault Orbs (Power, +1/+2) and Sentry Protocol not counted |
 | Demon Mode, Plasma Cannon, Berserker, Super Tower | ◐ | Berserker and Super Tower in the model; Demon Mode and Plasma Cannon aren't |
 | Protectors' damage reduction (55%) | ◐ | Inside the calibration; the Protector labs aren't valued |
 
@@ -73,7 +73,7 @@ reports set the baseline, so even unmodeled effects are already in it; only
 | Gems: card slots | ✅ | Card pulls random; lab slots and rushes not ranked |
 | Elite Cells: lab boosts | ◐ | Boost table; your cells per day now visible in run drops |
 | Bits: Guardian chips | ✅ | Optimizer Bits panel: each equipped chip's next level per Bit (wiki and SDK tables; 2026-10-19). Which chips to equip: every owned set that fits the slots, scored for the goal (2026-10-23; swapping is free). Slots aren't ranked |
-| Keys (Vault), Guild Tokens | ◐ | Vault levels imported (2026-10-22); only Bot Range (id 1810, 2 m a level — checked on the owner's Bots screen) is used. The rest of TheTowerSDK's vault data is marked unverified |
+| Keys (Vault), Guild Tokens | ◐ | The whole Vault on Upgrades → Vault (2026-10-25): Harmony, Power and Enemy, every upgrade's effect and key costs, the levels and unlocked sections imported and editable, keys spent and left — costs checked against the owner's TotalKeysSpent. Counted in the models: Bot Range (bots) and Additional Card Slot (card slots). **Not counted yet:** the Power tab's stat bonuses (damage, health, UW damage, coins…) and the Enemy tab's weaker enemies — how each combines with the workshop, labs and relics needs one in-game stat checked per kind |
 
 ## What it would take to close the biggest gaps
 

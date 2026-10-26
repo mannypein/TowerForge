@@ -4513,6 +4513,169 @@
     }
 }
 
+/* ── Vault ──────────────────────────────────────────────────── */
+/* Keys at the top, then each section's upgrades: name and effect on the
+   left, the level on the right (stacked on phones). */
+.vlt-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr));
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.vlt-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 12px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+}
+
+    .vlt-stat span {
+        font-size: 12px;
+        color: var(--text-dim);
+    }
+
+    .vlt-stat strong {
+        font-family: var(--font-mono);
+        font-size: 18px;
+        color: var(--text-bright);
+    }
+
+.vlt-about {
+    margin: 0 0 10px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text);
+}
+
+.vlt-dim {
+    color: var(--text-dim);
+}
+
+.vlt-section {
+    margin-bottom: 10px;
+}
+
+.vlt-head {
+    flex-wrap: wrap;
+    gap: 6px 10px;
+}
+
+.vlt-spacer {
+    flex: 1;
+}
+
+.vlt-open {
+    font-size: 12px;
+    color: var(--text-dim);
+}
+
+.vlt-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-bright);
+    cursor: pointer;
+}
+
+    .vlt-check input:disabled {
+        cursor: default;
+    }
+
+.vlt-enemy + .vlt-enemy {
+    margin-top: 10px;
+}
+
+.vlt-enemy-name {
+    margin-bottom: 4px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent);
+}
+
+.vlt-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+    .vlt-row:last-child {
+        border-bottom: none;
+    }
+
+    .vlt-row.maxed .vlt-name,
+    .vlt-row.maxed .vlt-effect strong {
+        color: var(--gold);
+    }
+
+.vlt-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.vlt-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-bright);
+}
+
+.vlt-effect {
+    margin-top: 1px;
+    font-size: 13px;
+    color: var(--text);
+}
+
+.vlt-next {
+    color: var(--text-dim);
+}
+
+.vlt-cost {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 10px;
+    margin-top: 1px;
+    font-size: 12px;
+    color: var(--text-dim);
+}
+
+.vlt-note {
+    font-style: italic;
+}
+
+.vlt-used {
+    color: var(--accent);
+}
+
+.vlt-level {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.vlt-of {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-dim);
+}
+
+@media (max-width: 520px) {
+    .vlt-row {
+        flex-wrap: wrap;
+    }
+
+    .vlt-level {
+        width: 100%;
+        justify-content: flex-end;
+    }
+}
+
 /* Export Images window: progress, then the images and how to save them */
 .expd-body {
     display: flex;

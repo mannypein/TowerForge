@@ -32,6 +32,8 @@ import type {
 import { BOTS_CONFIG } from '../constants/botData';
 import { RELIC_CATALOG } from '../constants/relicCatalog';
 import { CHIPS } from '../constants/guardianData';
+import { vaultGroupKey } from '../constants/vaultData';
+import { vaultCardSlots } from './vault';
 
 type Raw = Record<string, unknown>;
 
@@ -561,6 +563,7 @@ export function parseGameExport(raw: Raw): GameImport {
 
     const labs = parseLabs(raw);
     const workshop = parseWorkshop(raw);
+    const vault = parseVault(raw);
 
     return {
         gameVersion: num(raw.VersionNumber),
@@ -574,7 +577,8 @@ export function parseGameExport(raw: Raw): GameImport {
         workshop,
         enhancements: parseEnhancements(raw),
         uws: parseUWs(raw),
-        cardSlots: clamp(num(raw.SlotsUnlocked), 0, 28),
+        // SlotsUnlocked is the slots bought with gems; the Vault adds up to 6.
+        cardSlots: clamp(num(raw.SlotsUnlocked) + vaultCardSlots(vault ?? undefined), 0, 28),
         fivePresets: usesFivePresets(raw),
         cards: parseCards(raw),
         bannedPerks: parseBannedPerks(raw),
@@ -592,13 +596,14 @@ export function parseGameExport(raw: Raw): GameImport {
         labsRunning: parseLabsRunning(raw),
         tourneyRecords: parseTourneyRecords(raw),
         relics: parseRelics(raw),
-        vault: parseVault(raw),
+        vault,
     };
 }
 
 // The Vault (v29): UpgradesLevel maps each vault id to its level (a JSON
-// object in the export; key/value pairs in some saves). Only Bot Range
-// (1810) is used so far — constants/botData.ts vaultBotRange.
+// object in the export; key/value pairs in some saves), UnlockedGroups
+// lists the sections unlocked, kept as "g<group>" = 1 beside the levels.
+// Ids and groups: constants/vaultData.ts (the Vault tab, card slots, Bot Range).
 function parseVault(raw: Raw): Record<string, number> | null {
     const v = raw.Vault;
     if (!isObj(v)) return null;
@@ -614,6 +619,7 @@ function parseVault(raw: Raw): Record<string, number> | null {
     } else {
         return null;
     }
+    for (const g of arr(v.UnlockedGroups)) if (typeof g === 'number') out[vaultGroupKey(g)] = 1;
     return out;
 }
 

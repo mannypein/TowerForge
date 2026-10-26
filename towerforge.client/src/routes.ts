@@ -21,6 +21,7 @@ export const TAB_PATHS: Record<TabName, string> = {
     labs: '/labs',
     cards: '/cards',
     perks: '/perks',
+    vault: '/vault',
     uw: '/ultimate-weapons',
     puws: '/permanent-uws',
     modules: '/modules',

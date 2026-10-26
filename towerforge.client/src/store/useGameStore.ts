@@ -266,6 +266,10 @@ interface GameStore extends AppState {
     // ── Relics ───────────────────────────────────────────────────
     setRelic: (key: string, value: number) => void;
 
+    // ── Vault ────────────────────────────────────────────────────
+    // An upgrade's level by vault id, or a section's unlock ("g<group>", 0/1).
+    setVaultLevel: (key: string, value: number) => void;
+
     // ── Bots ─────────────────────────────────────────────────────
     setBotOwned: (botName: string, owned: boolean, presetIdx?: number) => void;
     setBotMedal: (botName: string, presetIdx: number, medalIdx: number, value: number) => void;
@@ -718,6 +722,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
         const relicData = { ...get().relicData, [key]: value };
         set({ relicData });
         saveKey(KEYS.relics, relicData);
+    },
+
+    // ── Vault ─────────────────────────────────────────────────────
+    setVaultLevel: (key, value) => {
+        const vaultLevels = { ...get().vaultLevels };
+        if (value > 0) vaultLevels[key] = value;
+        else delete vaultLevels[key];
+        set({ vaultLevels });
+        saveKey(KEYS.vault, vaultLevels);
     },
 
     // ── Bots ──────────────────────────────────────────────────────

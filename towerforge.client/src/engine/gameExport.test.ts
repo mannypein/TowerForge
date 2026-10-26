@@ -454,6 +454,18 @@ describe('29.1.3 exports (ExportVersion 1)', () => {
         expect(parseGameExport(makeExport()).vault).toBeNull();
     });
 
+    // The owner's export: SlotsUnlocked 21 and the Vault's Additional Card
+    // Slot (1200) at level 4 — 25 slots, the 25 cards the loadout holds.
+    it('adds the Vault’s card slots and keeps the unlocked sections', () => {
+        const imp = parseGameExport(makeExport({
+            SlotsUnlocked: 21,
+            Vault: { UnlockedGroups: [100, 110, 1030], UpgradesLevel: { 1200: 4, 600: 5 } },
+        }));
+        expect(imp.cardSlots).toBe(25);
+        expect(imp.vault).toEqual({ 1200: 4, 600: 5, g100: 1, g110: 1, g1030: 1 });
+        expect(parseGameExport(makeExport({ SlotsUnlocked: 21 })).cardSlots).toBe(21);   // no Vault in the file
+    });
+
     it('takes the higher of the bought and picked level, up to the stat’s max', () => {
         const imp = parseGameExport(makeExport({
             ...noBots,

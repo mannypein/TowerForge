@@ -33,7 +33,7 @@ export type TabName =
     | 'profile' | 'perks' | 'tiers' | 'workshop'
     | 'labs' | 'cards' | 'uw' | 'puws' | 'relics'
     | 'bots' | 'modules' | 'guardian' | 'optimizer' | 'enemies' | 'runcoins' | 'runlength' | 'whatif' | 'tournament' | 'creators' | 'share' | 'account'
-    | 'ai' | 'tourneyhistory' | 'importguide';
+    | 'ai' | 'tourneyhistory' | 'importguide' | 'vault';
 
 // ── Workshop Types ────────────────────────────────────────────
 export type WSCategory = 'attack' | 'defense' | 'utility';
@@ -379,7 +379,7 @@ export interface AppState {
     labsRunning: LabRunning[];    // labs being researched at the last import (29.1.3+ exports)
     tourneyLog: TourneyLog;       // each tournament run's battle conditions, as the player ticked them
     tourneyRecords: TourneyRecord[];   // every tournament played (TournamentRecords, 29.1.3+), oldest first
-    vaultLevels: Record<string, number>;   // Vault upgrade levels by the game's vault id (Vault.UpgradesLevel)
+    vaultLevels: Record<string, number>;   // Vault upgrade levels by the game's vault id (Vault.UpgradesLevel); "g<group>" = 1 for an unlocked section (constants/vaultData.ts)
 }
 
 // A tournament run's league and battle conditions (HeatKey names from

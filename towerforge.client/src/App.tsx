@@ -31,6 +31,7 @@ import CardsTab from './components/tabs/CardsTab';
 import UWTab from './components/tabs/UWTab';
 import PUWsTab from './components/tabs/pUWsTab';
 import RelicsTab from './components/tabs/RelicsTab';
+import VaultTab from './components/tabs/VaultTab';
 import BotsTab from './components/tabs/BotsTab';
 import GuardianTab from './components/tabs/GuardianTab';
 import ModulesTab from './components/tabs/ModulesTab';
@@ -82,6 +83,7 @@ const TAB_GROUPS: TabGroup[] = [
             { id: 'labs', label: 'Labs' },
             { id: 'cards', label: 'Cards' },
             { id: 'perks', label: 'Perks' },
+            { id: 'vault', label: 'Vault' },
         ],
     },
     {
@@ -316,6 +318,9 @@ export default function App() {
                         ? ` (${imp.relics.unknown} newer relic${imp.relics.unknown === 1 ? ' isn’t' : 's aren’t'} known to TowerForge yet — compare the Relics tab with the game’s ⓘ totals)`
                         : ''}`,
                 ] : []),
+                ...(imp.vault && Object.keys(imp.vault).some(k => !k.startsWith('g')) ? [
+                    `• Vault: ${Object.keys(imp.vault).filter(k => !k.startsWith('g')).length} upgrades and the sections you've unlocked`,
+                ] : []),
                 ...(imp.guardian?.unlocked ? [
                     `• Guardian: chips, presets and skins${imp.guardian.inGuild === false
                         ? ' (the file says you weren’t in a guild — the Guardian only fights in one; the game also says this if your guild hadn’t loaded yet)'
@@ -365,6 +370,7 @@ export default function App() {
             case 'uw': return <UWTab />;
             case 'puws': return <PUWsTab />;
             case 'relics': return <RelicsTab />;
+            case 'vault': return <VaultTab />;
             case 'bots': return <BotsTab />;
             case 'guardian': return <GuardianTab />;
             case 'modules': return <ModulesTab />;

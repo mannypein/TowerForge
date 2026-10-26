@@ -9,6 +9,7 @@ import { CARDS, CARD_MASTERY_VALS } from '../../constants/gameData';
 import NumericInput from '../common/NumericInput';
 import { milestoneReached } from '../../engine/statHelpers';
 import { presetLabel } from '../../constants/gameData';
+import { vaultCardSlots } from '../../engine/vault';
 import CardsShareCard from '../share/CardsShareCard';
 import { SHARE_OFFSCREEN_STYLE } from '../share/shareTheme';
 import { openExportDialog } from '../share/exportImages';
@@ -23,6 +24,7 @@ export default function CardsTab() {
     const activePreset = useGameStore(s => s.activePreset);
     const setActivePreset = useGameStore(s => s.setActivePreset);
     const cardData = useGameStore(s => s.cardData);
+    const vaultSlots = vaultCardSlots(useGameStore(s => s.vaultLevels));
     const setCardStars = useGameStore(s => s.setCardStars);
     const setCardMastery = useGameStore(s => s.setCardMastery);
     const setCardMasteryUnlocked = useGameStore(s => s.setCardMasteryUnlocked);
@@ -112,7 +114,9 @@ export default function CardsTab() {
                             <div className="field-row">
                                 <label className="field-label">
                                     Card Slots
-                                    <span className="field-sub">Total active card slots (1–28)</span>
+                                    <span className="field-sub">
+                                        Total active card slots (1–28){vaultSlots > 0 ? `, ${vaultSlots} of them from the Vault` : ''}
+                                    </span>
                                 </label>
                                 <NumericInput
                                     value={cardData.slots ?? 1}
