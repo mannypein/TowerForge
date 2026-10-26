@@ -152,6 +152,23 @@ BlueStacks notes (5.22):
   one runs at a time; a name is added to the source only when instances use
   different ports.
 
+Installed somewhere else (Link 0.4.2, 2026-10-26): a player's MuMu
+Player ran on screen while Link said "No Android emulator found yet" — Link
+looked only in the usual folders, and the installers let players pick any
+folder or drive. `InstallSearch.cs` also asks Windows' list of installed apps
+(the registry's Uninstall entries: InstallLocation, DisplayIcon's folder,
+for names containing MuMu / LDPlayer / 雷电模拟器 / MEmu / Nox) and the
+emulator's running programs (their full path, `QueryFullProcessImageName`,
+no admin needed), then looks for the emulator's own adb in those folders and
+a few above. MuMu's install folder is the one with `MuMuManager.exe` beside
+its adb — not just adb and `vms`: MuMu 6's `nx_device\15.0` has both (a base
+image) and its device runs from there. Link's window now prints each
+emulator's folder ("Found MuMu Player (running) — …\nx_main"), so a
+screenshot shows which install it uses. Checked on the owner's PC with
+`TOWERFORGE_LINK_NO_DEFAULTS=1` (skip the usual folders) and `=2` (also skip
+the app list: running programs only): MuMu found in the right folder and its
+export read, both ways and with the usual folders.
+
 MuMu Player 6.8.5 notes (the owner's PC, 2026-10-25):
 - Running (`MuMuNxDevice`, `MuMuManager.exe info -v all` →
   `player_state: start_finished`, `adb_port: 16384`), yet nothing listened on

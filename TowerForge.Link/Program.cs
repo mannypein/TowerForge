@@ -53,6 +53,7 @@ internal static class Program
         {
             Console.WriteLine("No Android emulator found yet. Supported: BlueStacks, MuMu, LDPlayer, MEmu, Nox,");
             Console.WriteLine("an Android phone over Wi-Fi, or an iPhone backed up to this PC: see \"Get from emulator or phone\" on towerforge.net.");
+            Console.WriteLine("Using one? Open it, then click \"Get from emulator or phone\" — Link looks again every time, wherever it's installed.");
         }
         foreach (var b in iphones.Take(3))
         {
@@ -72,7 +73,9 @@ internal static class Program
                 false => " — Android Debug Bridge OFF: turn it on in Settings → Advanced, then restart BlueStacks",
                 null => "",
             };
-            Console.WriteLine($"Found {e.Name}{(e.Running ? " (running)" : "")}{adb}");
+            // Where it is, so a screenshot of this window says which install Link uses.
+            var folder = Path.GetDirectoryName(e.AdbPath);
+            Console.WriteLine($"Found {e.Name}{(e.Running ? " (running)" : "")}{adb} — {folder}");
         }
         Console.WriteLine();
         Console.WriteLine("Ready. In the game, export your data; then on towerforge.net click \"Get from emulator or phone\".");

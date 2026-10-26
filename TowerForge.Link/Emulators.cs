@@ -19,6 +19,8 @@
 //   • LDPlayer 9, MEmu, Nox: their usual install folders and default
 //     ports (from their docs and community guides — not checked on a
 //     real install yet).
+//   Installed in another folder or drive: Windows' list of installed apps
+//   and the emulator's running programs say where (InstallSearch.cs).
 //   • Android's own platform-tools adb (PATH or the Android SDK
 //     folder), which also reaches phones plugged in by USB.
 //  adb itself also finds any emulator on ports 5555–5585 by itself.
@@ -57,13 +59,13 @@ internal static class Emulators
         found.AddRange(FindBlueStacks());
         var mumu = FindMuMu();
         if (mumu != null) found.Add(mumu);
-        AddIfPresent(found, "LDPlayer", [5555, 5557, 5559, 5561], ["dnplayer", "Ld9BoxHeadless"],
+        AddIfPresent(found, "LDPlayer", [5555, 5557, 5559, 5561], ["dnplayer", "Ld9BoxHeadless"], ["LDPlayer", "雷电模拟器"], "adb.exe",
             @"C:\LDPlayer\LDPlayer9\adb.exe",
             @"C:\LDPlayer\LDPlayer4.0\adb.exe",
             Path.Combine(ProgramFiles, "LDPlayer", "LDPlayer9", "adb.exe"));
-        AddIfPresent(found, "MEmu", [21503, 21513, 21523], ["MEmu", "MEmuHeadless"],
+        AddIfPresent(found, "MEmu", [21503, 21513, 21523], ["MEmu", "MEmuHeadless"], ["MEmu"], "adb.exe",
             Path.Combine(ProgramFiles, "Microvirt", "MEmu", "adb.exe"));
-        AddIfPresent(found, "Nox", [62001, 62025, 62026], ["Nox", "NoxVMHandle"],
+        AddIfPresent(found, "Nox", [62001, 62025, 62026], ["Nox", "NoxVMHandle"], ["Nox"], "nox_adb.exe",
             Path.Combine(ProgramFilesX86, "Nox", "bin", "nox_adb.exe"),
             Path.Combine(ProgramFiles, "Nox", "bin", "nox_adb.exe"));
         var tools = FindPlatformTools();
@@ -105,21 +107,36 @@ internal static class Emulators
         }
     }
 
-    // MuMu Player: the install folder (6.x) or MuMu 12's; its instances'
-    // adb ports and names from their configs, else MuMu 12's default ports.
+    private static readonly string[] MuMuProcesses = ["MuMuNxDevice", "MuMuNxMain", "MuMuPlayer", "MuMuVMMHeadless", "NemuPlayer"];
+
+    // MuMu Player: the install folder (6.x) or MuMu 12's — in the usual
+    // place, or wherever Windows says it is; its instances' adb ports and
+    // names from their configs, else MuMu 12's default ports.
     private static EmulatorInfo? FindMuMu()
     {
-        var roots = new[]
+        string[] usual = InstallSearch.SkipDefaultFolders ? [] : new[]
         {
             Path.Combine(ProgramFiles, "Netease", "MuMuPlayer"),
             Path.Combine(ProgramFiles, "Netease", "MuMuPlayer-12.0"),
             Path.Combine(ProgramFiles, "Netease", "MuMu Player 12"),
             Path.Combine(ProgramFiles, "Netease", "MuMuPlayerGlobal-12.0"),
         };
-        foreach (var root in roots)
+        // The install folder: MuMu's manager beside its adb. Not just adb and
+        // vms — MuMu 6's nx_device\15.0 has both (a base image), and its
+        // device runs from there. An older MuMu without the manager: adb and vms.
+        static string? AdbIn(string root) =>
+            new[] { Path.Combine(root, "nx_main", "adb.exe"), Path.Combine(root, "shell", "adb.exe") }.FirstOrDefault(File.Exists);
+        static bool HasManager(string dir) => AdbIn(dir) != null
+            && (File.Exists(Path.Combine(dir, "nx_main", "MuMuManager.exe")) || File.Exists(Path.Combine(dir, "shell", "MuMuManager.exe")));
+        static bool HasInstances(string dir) => AdbIn(dir) != null && Directory.Exists(Path.Combine(dir, "vms"));
+        var found = InstallSearch.Folders(["MuMu"], MuMuProcesses);
+        var root = usual.FirstOrDefault(HasManager)
+            ?? InstallSearch.FindRoot(found, 4, HasManager)
+            ?? usual.FirstOrDefault(HasInstances)
+            ?? InstallSearch.FindRoot(found, 4, HasInstances);
+        if (root != null)
         {
-            var adb = new[] { Path.Combine(root, "nx_main", "adb.exe"), Path.Combine(root, "shell", "adb.exe") }.FirstOrDefault(File.Exists);
-            if (adb == null) continue;
+            var adb = AdbIn(root)!;
             var names = new Dictionary<int, string>();
             var indexes = new Dictionary<int, int>();
             var vms = Path.Combine(root, "vms");
@@ -137,8 +154,7 @@ internal static class Emulators
             int[] ports = names.Count > 0 ? [.. names.Keys.Order()] : [16384, 16416, 16448, 16480, 7555];
             var manager = new[] { Path.Combine(root, "nx_main", "MuMuManager.exe"), Path.Combine(root, "shell", "MuMuManager.exe") }
                 .FirstOrDefault(File.Exists);
-            return new EmulatorInfo("MuMu Player", adb, ports, null,
-                new[] { "MuMuNxDevice", "MuMuVMMHeadless", "MuMuPlayer", "NemuPlayer" }.Any(IsRunning), names, manager, indexes);
+            return new EmulatorInfo("MuMu Player", adb, ports, null, MuMuProcesses.Any(IsRunning), names, manager, indexes);
         }
         return null;
     }
@@ -179,9 +195,12 @@ internal static class Emulators
         return conf;
     }
 
-    private static void AddIfPresent(List<EmulatorInfo> found, string name, int[] ports, string[] processes, params string[] adbPaths)
+    // `adbName` sits next to the emulator's own program: in its folder or the one above.
+    private static void AddIfPresent(List<EmulatorInfo> found, string name, int[] ports, string[] processes,
+        string[] appNames, string adbName, params string[] adbPaths)
     {
-        var adb = adbPaths.FirstOrDefault(File.Exists);
+        var adb = (InstallSearch.SkipDefaultFolders ? null : adbPaths.FirstOrDefault(File.Exists))
+            ?? InstallSearch.FindUnder(InstallSearch.Folders(appNames, processes), 1, adbName);
         if (adb != null) found.Add(new EmulatorInfo(name, adb, ports, null, processes.Any(IsRunning)));
     }
 
