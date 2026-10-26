@@ -16,6 +16,8 @@
 //   4. Copy one out with `adb pull` into a temp file, read it, delete
 //      it: the one the player picked on the site (?source=, from
 //      /sources — Link 0.4), else the newest.
+//  MuMu Player with its ADB port shut (MuMuShell.cs): its own
+//  MuMuManager.exe reads the file instead, with fixed commands.
 //  iPhones (IPhoneBackups.cs): the export is read out of the newest
 //  iPhone backup on this PC instead; it's one more source to pick, and
 //  without a pick the newest export of all wins.
@@ -52,7 +54,9 @@ internal static class Exporter
 
     // A device adb listed, with what was found on it. Two serials can name
     // one emulator (emulator-5554 and 127.0.0.1:5555): one Id for both.
-    private sealed record Device(string Serial, string AdbState, string Id, string Name, string Kind, string Status, LsEntry? Export);
+    // Manager / VmIndex: a MuMu instance read through MuMuManager.exe, not adb.
+    private sealed record Device(string Serial, string AdbState, string Id, string Name, string Kind, string Status, LsEntry? Export,
+        string? Manager = null, int VmIndex = 0);
 
     private sealed record Scan(Adb Adb, List<EmulatorInfo> Emulators, List<EmulatorInfo> Running, bool PhoneAdb, List<Device> Devices);
 
@@ -193,6 +197,22 @@ internal static class Exporter
             }
             devices.Add(new Device(serial, state, id, name, phone ? "phone" : "emulator", status, file));
         }
+        // MuMu instances adb couldn't reach: ask MuMu's own manager.
+        foreach (var e in running.Where(e => e.MuMuManager != null && e.VmIndexes != null))
+        {
+            foreach (var (port, index) in e.VmIndexes!)
+            {
+                if (devices.Any(d => PortOf(d.Serial) == port && d.AdbState == "device")) continue;
+                var stat = await MuMuShell.StatAsync(e.MuMuManager!, index);
+                if (stat == null) continue;   // that instance isn't running, or MuMu can't reach it either
+                var id = $"{Slug(e.Name)}:{port}";
+                devices.RemoveAll(d => d.Id == id);
+                var file = stat == MuMuShell.NoFile ? null : new LsEntry(FileName, stat.Value.Size, stat.Value.Modified);
+                devices.Add(new Device($"127.0.0.1:{port}", "device", id, e.NameFor(port), "emulator",
+                    file != null ? "ready" : "no_export", file, e.MuMuManager, index));
+            }
+        }
+
         // One entry per emulator: the serial with the export (newest), the
         // 127.0.0.1 one when they tie.
         devices = [.. devices
@@ -247,6 +267,17 @@ internal static class Exporter
 
         if (newerThan is long seen && best.Export!.Modified <= seen)
             return new ExportFile([], best.Export.Modified, best.Name, best.Id);
+        if (best.Manager != null)
+        {
+            var bytes = await MuMuShell.ReadAsync(best.Manager, best.VmIndex)
+                ?? throw new ExportProblem("copy_failed", "Found your export in MuMu Player but couldn't copy it. Try again; if it keeps failing, restart MuMu.");
+            if (!LooksLikeJson(bytes))
+            {
+                throw new ExportProblem("bad_file",
+                    "The export file doesn't look right. Export your data again in the game, then try again.");
+            }
+            return new ExportFile(bytes, best.Export!.Modified, best.Name, best.Id);
+        }
         var temp = Path.Combine(Path.GetTempPath(), "TowerForgeLink");
         Directory.CreateDirectory(temp);
         var local = Path.Combine(temp, $"{Guid.NewGuid():N}.json");
@@ -313,8 +344,8 @@ internal static class Exporter
     // A running emulator adb couldn't reach at all.
     private static string OfflineMessage(EmulatorInfo e) => e.Name switch
     {
-        "MuMu Player" => "MuMu Player is running but isn't letting TowerForge Link connect. In MuMu, open Settings → Other "
-            + "and set ADB debugging to local connection, then close MuMu fully and open it again. If it just started, wait a minute and try again.",
+        "MuMu Player" => "MuMu Player is running but isn't letting TowerForge Link connect. In MuMu, open Settings → Developer options "
+            + "and set ADB debug to Enable local connection, then close MuMu fully and open it again. If it just started, wait a minute and try again.",
         "BlueStacks" => e.AdbEnabled == false
             ? "BlueStacks is blocking the connection. In BlueStacks open Settings → Advanced and turn on "
               + "Android Debug Bridge (ADB), then close BlueStacks fully and open it again."

@@ -12,8 +12,10 @@
 //     C:\Program Files\Netease\MuMuPlayer, adb in nx_main; each
 //     instance's adb port and name in vms\<instance>\configs
 //     (vm_config.json vm.nat.port_forward.adb.host_port — 16384 for the
-//     first — and extra_config.json playerName). MuMu 12's folders and
-//     default ports (16384 + 32 an instance, 7555) as a fallback.
+//     first — and extra_config.json playerName), the instance's number
+//     from its folder (MuMuPlayerGlobal-15.0-0 → 0) for MuMuManager.exe.
+//     MuMu 12's folders and default ports (16384 + 32 an instance, 7555)
+//     as a fallback.
 //   • LDPlayer 9, MEmu, Nox: their usual install folders and default
 //     ports (from their docs and community guides — not checked on a
 //     real install yet).
@@ -32,7 +34,9 @@ internal sealed record EmulatorInfo(
     int[] Ports,
     bool? AdbEnabled,     // BlueStacks: its "Android Debug Bridge" setting; null = not known
     bool Running,
-    Dictionary<int, string>? Instances = null)   // adb port → the instance's name, when known
+    Dictionary<int, string>? Instances = null,   // adb port → the instance's name, when known
+    string? MuMuManager = null,                   // MuMu: its MuMuManager.exe (MuMuShell.cs)
+    Dictionary<int, int>? VmIndexes = null)       // MuMu: adb port → the instance's number
 {
     // "MuMu Player", or "MuMu Player — Work" when it has instances on
     // more than one port and this one has a name.
@@ -117,18 +121,24 @@ internal static class Emulators
             var adb = new[] { Path.Combine(root, "nx_main", "adb.exe"), Path.Combine(root, "shell", "adb.exe") }.FirstOrDefault(File.Exists);
             if (adb == null) continue;
             var names = new Dictionary<int, string>();
+            var indexes = new Dictionary<int, int>();
             var vms = Path.Combine(root, "vms");
             if (Directory.Exists(vms))
             {
                 foreach (var dir in Directory.GetDirectories(vms))
                 {
                     var port = ReadMuMuAdbPort(Path.Combine(dir, "configs", "vm_config.json"));
-                    if (port > 0) names[port] = ReadMuMuName(Path.Combine(dir, "configs", "extra_config.json")) ?? Path.GetFileName(dir);
+                    if (port <= 0) continue;
+                    names[port] = ReadMuMuName(Path.Combine(dir, "configs", "extra_config.json")) ?? Path.GetFileName(dir);
+                    var folder = Path.GetFileName(dir);
+                    if (int.TryParse(folder[(folder.LastIndexOf('-') + 1)..], out var index)) indexes[port] = index;
                 }
             }
             int[] ports = names.Count > 0 ? [.. names.Keys.Order()] : [16384, 16416, 16448, 16480, 7555];
+            var manager = new[] { Path.Combine(root, "nx_main", "MuMuManager.exe"), Path.Combine(root, "shell", "MuMuManager.exe") }
+                .FirstOrDefault(File.Exists);
             return new EmulatorInfo("MuMu Player", adb, ports, null,
-                new[] { "MuMuNxDevice", "MuMuVMMHeadless", "MuMuPlayer", "NemuPlayer" }.Any(IsRunning), names);
+                new[] { "MuMuNxDevice", "MuMuVMMHeadless", "MuMuPlayer", "NemuPlayer" }.Any(IsRunning), names, manager, indexes);
         }
         return null;
     }

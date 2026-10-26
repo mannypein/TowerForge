@@ -24,7 +24,9 @@
 //     only — the browser blocks every other site from reading it;
 //   • checks the Host header, so a site that points its own name at
 //     127.0.0.1 (DNS rebinding) gets nothing;
-//   • reads that one file and nothing else; the phone actions only pair
+//   • reads that one file and nothing else (MuMu with its ADB port shut:
+//     through MuMu's own MuMuManager.exe, two fixed commands on that
+//     file — MuMuShell.cs); the phone actions only pair
 //     or connect with an address on a home network (10.x, 172.16–31.x,
 //     192.168.x) and a 6-digit code. No other adb command can be sent
 //     through it.

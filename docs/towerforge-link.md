@@ -133,7 +133,7 @@ on BlueStacks: 204 for the same time, the file for an older one.
 | Emulator | adb | Port(s) | Checked |
 |---|---|---|---|
 | BlueStacks 5 (and MSI / CN builds) | `HD-Adb.exe` in the install folder (registry `HKLM\SOFTWARE\BlueStacks_nxt` → `InstallDir`) | `bst.instance.*.adb_port` in `bluestacks.conf` (`UserDefinedDir`), usually 5555 | ✅ 5.22, Pie64 (Android 9), 2026-10-19 |
-| MuMu Player 6 (and 12) | `nx_main\adb.exe` in `C:\Program Files\Netease\MuMuPlayer` (MuMu 12: `MuMuPlayer-12.0\shell`) | each instance's `vms\<instance>\configs\vm_config.json` → `vm.nat.port_forward.adb.host_port` (16384 for the first), name in `extra_config.json` `playerName`; else 16384 (+32 per instance), 7555 | ✅ install, config and port on 6.8.5 (Android 15, Hyper-V), 2026-10-25; reading a file through it not yet (its ADB wasn't up, below) |
+| MuMu Player 6 (and 12) | `nx_main\adb.exe` in `C:\Program Files\Netease\MuMuPlayer` (MuMu 12: `MuMuPlayer-12.0\shell`); `MuMuManager.exe` beside it when adb can't reach an instance | each instance's `vms\<instance>\configs\vm_config.json` → `vm.nat.port_forward.adb.host_port` (16384 for the first), name in `extra_config.json` `playerName`, number from the folder (`…-0`); else 16384 (+32 per instance), 7555 | ✅ 6.8.5 (Android 15, Hyper-V), 2026-10-25: install, config, port, and the export read through `MuMuManager.exe` (Link 0.4.1) — 134,366 bytes, the file's own size; through adb not yet (its port stayed shut, below) |
 | LDPlayer 9 | `C:\LDPlayer\LDPlayer9\adb.exe` | 5555, 5557, … | from guides |
 | MEmu | `Microvirt\MEmu\adb.exe` | 21503, 21513, … | from guides |
 | Nox | `Nox\bin\nox_adb.exe` | 62001, 62025, … | from guides |
@@ -159,12 +159,26 @@ MuMu Player 6.8.5 notes (the owner's PC, 2026-10-25):
   answered "vm not ready, can not connect adb". The instance's
   `customer_config.json` had ADB debugging on "local connect"; whether a
   restart after the setting or another switch is needed isn't known yet.
-  Link reports it as `offline` with "MuMu Player is running but isn't letting
-  TowerForge Link connect…" (turn on ADB debugging, restart MuMu).
+  The owner then set Settings → **Developer options** → **ADB debug** to
+  "Enable local & remote connection" (the setting's real name; the instance
+  restarted, `shell_config.json` `adb_debug.mode` 0 → 2): still nothing on
+  16384, the manager still "vm not ready" — yet inside, `sys.boot_completed`
+  1 and `init.svc.adbd` running. MuMu's host side never opened the port.
+- **Link 0.4.1 reads it anyway** (`MuMuShell.cs`): `MuMuManager.exe sh -v <n>
+  -c <command>` reaches the instance without adb (it runs as root inside).
+  When an instance gives adb no device, Link runs `stat -c '%s %Y'` on the
+  export for its size and time, and `cat <export> | base64` to read it —
+  base64 because the manager passes text, and the decoded bytes were the
+  file exactly (size for size, `{`…`}`; a plain `base64 <file>` printed
+  nothing there, `cat … | base64` works). Fixed commands on that one path; no
+  input from the site reaches them. Only when MuMu's manager can't reach the
+  instance either does Link say "MuMu Player is running but isn't letting
+  TowerForge Link connect…".
 - MuMu's adb is 1.0.41, BlueStacks' HD-Adb 1.0.36: running one kills the
   other's server ("adb server version doesn't match"). Link uses one adb (the
   first running emulator's) for every emulator, which connects to both.
-- Link reads MuMu's config files; it doesn't run `MuMuManager.exe`.
+- Link reads MuMu's config files for ports and names, and runs
+  `MuMuManager.exe` only for the two commands above.
 
 ## Building and shipping
 
