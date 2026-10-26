@@ -4,9 +4,11 @@
 //  game's data export (tool_export.json) off an Android emulator with
 //  the emulator's own adb, off an Android phone over Wi-Fi with
 //  Google's adb, or out of an iPhone backup on the PC (Link 0.3+;
-//  TowerForge.Link/, docs/towerforge-link.md). The helper only listens
-//  on this PC; the file goes from there to this browser and is never
-//  uploaded.
+//  TowerForge.Link/, docs/towerforge-link.md). With more than one
+//  emulator or phone, the player picks where to import from (Link
+//  0.4+: /sources), remembered per browser for Auto import too. The
+//  helper only listens on this PC; the file goes from there to this
+//  browser and is never uploaded.
 // ============================================================
 
 export const LINK_URL = 'http://localhost:47821';
@@ -39,7 +41,7 @@ export function forgetPhoneLink(): void {
 }
 
 export type LinkResult =
-    | { ok: true; text: string; modified: number | null; source: string }
+    | { ok: true; text: string; modified: number | null; source: string; sourceId: string | null }
     | { ok: false; reason: 'unreachable' }                         // helper not running (or blocked)
     | { ok: false; reason: 'unchanged'; modified: number | null }  // not newer than `newerThan` (Link 0.2+)
     | { ok: false; reason: 'problem'; code: string; message: string };
@@ -58,10 +60,15 @@ function linkFetch(path: string, timeoutMs: number, method: 'GET' | 'POST' = 'GE
 // newerThan (the file time of an export already read, unix seconds): Link
 // 0.2+ answers 204 without the file when there's nothing newer; older
 // versions ignore it and send the file anyway.
-export async function linkExport(newerThan?: number): Promise<LinkResult> {
+// source: an id from linkSources() (older Links ignore it and send the newest).
+export async function linkExport(newerThan?: number, source?: string | null): Promise<LinkResult> {
+    const query = new URLSearchParams();
+    if (newerThan) query.set('newerThan', String(Math.floor(newerThan)));
+    if (source) query.set('source', source);
+    const qs = query.toString();
     let res: Response;
     try {
-        res = await linkFetch(newerThan ? `/export?newerThan=${Math.floor(newerThan)}` : '/export', 90_000);
+        res = await linkFetch(`/export${qs ? `?${qs}` : ''}`, 90_000);
     } catch {
         return { ok: false, reason: 'unreachable' };
     }
@@ -75,6 +82,7 @@ export async function linkExport(newerThan?: number): Promise<LinkResult> {
             text: await res.text(),
             modified: Number.isFinite(modified) && modified > 0 ? modified : null,
             source: res.headers.get('X-Export-Source') || 'your emulator',
+            sourceId: res.headers.get('X-Export-Source-Id'),
         };
     }
     try {
@@ -83,6 +91,50 @@ export async function linkExport(newerThan?: number): Promise<LinkResult> {
     } catch {
         return { ok: false, reason: 'problem', code: 'failed', message: 'TowerForge Link couldn’t get your export.' };
     }
+}
+
+// ── Where to import from (Link 0.4+) ─────────────────────────
+// Every emulator, phone and iPhone backup Link sees, newest export first.
+// state: ready (has an export) or what's in the way, with `message`.
+export interface LinkSource {
+    id: string;
+    name: string;
+    kind: 'emulator' | 'phone' | 'iphone';
+    state: 'ready' | 'no_export' | 'no_game' | 'blocked' | 'offline' | 'unauthorized' | 'encrypted';
+    modified?: number;
+    message?: string;
+}
+
+// null: Link isn't running, or is older than 0.4 (no list — it takes the newest).
+export async function linkSources(): Promise<LinkSource[] | null> {
+    try {
+        const res = await linkFetch('/sources', 60_000);
+        if (!res.ok) return null;
+        const body = await res.json() as { sources?: LinkSource[] };
+        return Array.isArray(body.sources) ? body.sources : null;
+    } catch {
+        return null;
+    }
+}
+
+const SOURCE_KEY = 'tc_link_source';
+
+// The source the player picked last (Auto import reads from it too).
+export function rememberedSource(): string | null {
+    try { return localStorage.getItem(SOURCE_KEY); } catch { return null; }
+}
+export function rememberSource(id: string | null): void {
+    try {
+        if (id) localStorage.setItem(SOURCE_KEY, id);
+        else localStorage.removeItem(SOURCE_KEY);
+    } catch { /* not remembered */ }
+}
+
+// Which source to offer first: the remembered one when it has an export,
+// else the newest export.
+export function defaultSource(sources: LinkSource[], remembered: string | null): string | null {
+    const ready = sources.filter(s => s.state === 'ready');
+    return ready.find(s => s.id === remembered)?.id ?? ready.sort((a, b) => (b.modified ?? 0) - (a.modified ?? 0))[0]?.id ?? null;
 }
 
 // "2 hours ago", for an export's file time (unix seconds).

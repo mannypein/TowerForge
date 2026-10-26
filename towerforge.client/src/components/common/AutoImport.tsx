@@ -14,7 +14,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useGameStore } from '../../store/useGameStore';
 import { useAccountStore } from '../../store/useAccountStore';
 import { isGameExport } from '../../engine/gameExport';
-import { exportAge, linkExport } from '../../engine/linkClient';
+import { exportAge, linkExport, rememberedSource } from '../../engine/linkClient';
 import {
     askNewerThan, AUTO_OFF, AUTO_POLL_MS, newestRunInExport, shouldImport,
 } from '../../engine/autoImport';
@@ -72,7 +72,8 @@ export default function AutoImport({ onImport, onNeedsLink }: Props) {
             if (document.visibilityState === 'visible') {
                 const s = load();
                 const now = Date.now();
-                const r = await linkExport(askNewerThan(s, now));
+                // From the emulator or phone picked last (with more than one), else the newest.
+                const r = await linkExport(askNewerThan(s, now), rememberedSource());
                 if (stopped) return;
                 if (r.ok) {
                     let raw: unknown = null;

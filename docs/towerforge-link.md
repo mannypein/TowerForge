@@ -51,10 +51,33 @@ was rewritten to get more of them through setup.
 3. `adb connect 127.0.0.1:<port>` for each running emulator.
 4. For each device adb lists: `adb ls` the game's folder (the file-transfer
    channel — gives size and modified time; no shell needed).
-5. The newest `tool_export.json`: `adb pull` into a temp file, read, delete.
+5. The newest `tool_export.json` — or the one from the source the player
+   picked (`?source=`, below): `adb pull` into a temp file, read, delete.
 6. The file goes back to the page with its time and emulator
-   (`X-Export-Modified`, `X-Export-Source`); the page imports it exactly like
-   a chosen file and says how old the export is.
+   (`X-Export-Modified`, `X-Export-Source`, and `X-Export-Source-Id` from
+   0.4); the page imports it exactly like a chosen file and says how old the
+   export is.
+
+### More than one emulator or phone (Link 0.4, 2026-10-25)
+
+Before 0.4 the newest export always won, so a player with BlueStacks and
+MuMu both open couldn't choose (the owner's report). Now the page first asks
+`GET /sources`: one adb scan, nothing copied, every emulator, phone and
+iPhone backup Link sees — `id` (`bluestacks:5555`, `mumuplayer:16384`,
+`phone:<serial>`, `iphone-backup`), `name`, `kind`, `state` (`ready` with
+`modified`, else `no_export`, `no_game`, `blocked`, `offline`,
+`unauthorized`, `encrypted`) and Link's `message` for what's in the way. A
+running emulator that gave adb no device at all (ADB off) is listed too, as
+`offline`. With more than one, the site shows **Import from…**
+(`components/LinkSourcePicker.tsx`): each with its export's age or the
+message, the remembered or newest one picked; **Import** asks
+`/export?source=<id>`. The pick is kept per browser (`tc_link_source`) and
+Auto import passes it on every check. Older Links answer `/sources` with
+404 and ignore `source` — the site falls back to the newest. Ids are the
+emulator's name and adb port, so `emulator-5554` and `127.0.0.1:5555` (one
+BlueStacks) are one source. Checked on the owner's PC: BlueStacks listed
+ready, MuMu offline with its message, `?source=` honoured, `newerThan` still
+answering 204.
 
 Problems come back as a message for the player (HTTP 409 with `error` and
 `message`), shown in the dialog: emulator not running, ADB off (BlueStacks
@@ -110,7 +133,7 @@ on BlueStacks: 204 for the same time, the file for an older one.
 | Emulator | adb | Port(s) | Checked |
 |---|---|---|---|
 | BlueStacks 5 (and MSI / CN builds) | `HD-Adb.exe` in the install folder (registry `HKLM\SOFTWARE\BlueStacks_nxt` → `InstallDir`) | `bst.instance.*.adb_port` in `bluestacks.conf` (`UserDefinedDir`), usually 5555 | ✅ 5.22, Pie64 (Android 9), 2026-10-19 |
-| MuMu 12 | `shell\adb.exe` / `nx_main\adb.exe` | 16384 (+32 per instance), 7555 | install paths and ports from guides |
+| MuMu Player 6 (and 12) | `nx_main\adb.exe` in `C:\Program Files\Netease\MuMuPlayer` (MuMu 12: `MuMuPlayer-12.0\shell`) | each instance's `vms\<instance>\configs\vm_config.json` → `vm.nat.port_forward.adb.host_port` (16384 for the first), name in `extra_config.json` `playerName`; else 16384 (+32 per instance), 7555 | ✅ install, config and port on 6.8.5 (Android 15, Hyper-V), 2026-10-25; reading a file through it not yet (its ADB wasn't up, below) |
 | LDPlayer 9 | `C:\LDPlayer\LDPlayer9\adb.exe` | 5555, 5557, … | from guides |
 | MEmu | `Microvirt\MEmu\adb.exe` | 21503, 21513, … | from guides |
 | Nox | `Nox\bin\nox_adb.exe` | 62001, 62025, … | from guides |
@@ -125,6 +148,23 @@ BlueStacks notes (5.22):
   restart.
 - adb also finds it as `emulator-5554` on its own; both serials are the same
   emulator.
+- Instances (`bst.instance.<id>.display_name`) can share one adb port — only
+  one runs at a time; a name is added to the source only when instances use
+  different ports.
+
+MuMu Player 6.8.5 notes (the owner's PC, 2026-10-25):
+- Running (`MuMuNxDevice`, `MuMuManager.exe info -v all` →
+  `player_state: start_finished`, `adb_port: 16384`), yet nothing listened on
+  16384: `adb connect` was refused, and `MuMuManager.exe adb -v 0 -c connect`
+  answered "vm not ready, can not connect adb". The instance's
+  `customer_config.json` had ADB debugging on "local connect"; whether a
+  restart after the setting or another switch is needed isn't known yet.
+  Link reports it as `offline` with "MuMu Player is running but isn't letting
+  TowerForge Link connect…" (turn on ADB debugging, restart MuMu).
+- MuMu's adb is 1.0.41, BlueStacks' HD-Adb 1.0.36: running one kills the
+  other's server ("adb server version doesn't match"). Link uses one adb (the
+  first running emulator's) for every emulator, which connects to both.
+- Link reads MuMu's config files; it doesn't run `MuMuManager.exe`.
 
 ## Building and shipping
 

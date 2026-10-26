@@ -3,7 +3,12 @@
 //  A tiny HTTP server on this PC only (127.0.0.1). towerforge.net,
 //  open in a browser on the same PC, calls
 //    GET  /status                 what the helper found (emulators, phones)
-//    GET  /export                 the game's export file
+//    GET  /sources                every emulator, phone and iPhone backup
+//                                 seen, with its export's time or what's
+//                                 wrong (Link 0.4) — for players with more
+//                                 than one, to pick where to import from
+//    GET  /export                 the game's export file: the newest, or
+//         ?source=<id>            the one from that source (/sources)
 //         ?newerThan=<unix s>     only if it's newer: 204 (no body) when it
 //                                 isn't — the site's auto import asks this
 //                                 every 30 s
@@ -125,7 +130,7 @@ internal sealed class LinkServer(int port, Action<string> log)
         {
             cors["Access-Control-Allow-Origin"] = origin;
             cors["Vary"] = "Origin";
-            cors["Access-Control-Expose-Headers"] = "X-Export-Modified, X-Export-Source";
+            cors["Access-Control-Expose-Headers"] = "X-Export-Modified, X-Export-Source, X-Export-Source-Id";
         }
 
         if (req.Method == "OPTIONS")
@@ -157,8 +162,12 @@ internal sealed class LinkServer(int port, Action<string> log)
             case "/status":
                 await WriteAsync(stream, 200, await StatusAsync(), cors);
                 return;
+            case "/sources":
+                await SourcesAsync(stream, cors);
+                return;
             case "/export":
-                await ExportAsync(stream, cors, NewerThan(req.Query));
+                var source = QueryValue(req.Query, "source");
+                await ExportAsync(stream, cors, NewerThan(req.Query), source.Length > 0 ? source : null);
                 return;
             default:
                 await WriteAsync(stream, 404, Error("not_found", "Nothing here."), cors);
@@ -320,16 +329,52 @@ internal sealed class LinkServer(int port, Action<string> log)
         return null;
     }
 
-    private async Task ExportAsync(NetworkStream stream, Dictionary<string, string> cors, long? newerThan)
+    // Where an export can come from: one adb scan, nothing copied.
+    private async Task SourcesAsync(NetworkStream stream, Dictionary<string, string> cors)
+    {
+        await _oneAtATime.WaitAsync();
+        try
+        {
+            var sources = await Exporter.ListAsync();
+            await WriteAsync(stream, 200, Json(w =>
+            {
+                w.WriteStartArray("sources");
+                foreach (var s in sources)
+                {
+                    w.WriteStartObject();
+                    w.WriteString("id", s.Id);
+                    w.WriteString("name", s.Name);
+                    w.WriteString("kind", s.Kind);
+                    w.WriteString("state", s.State);
+                    if (s.Modified is long m) w.WriteNumber("modified", m);
+                    if (s.Message != null) w.WriteString("message", s.Message);
+                    w.WriteEndObject();
+                }
+                w.WriteEndArray();
+            }), cors);
+        }
+        catch (Exception ex)
+        {
+            log($"Something went wrong: {ex.Message}");
+            await WriteAsync(stream, 500, Error("failed", "TowerForge Link hit an error: " + ex.Message), cors);
+        }
+        finally
+        {
+            _oneAtATime.Release();
+        }
+    }
+
+    private async Task ExportAsync(NetworkStream stream, Dictionary<string, string> cors, long? newerThan, string? sourceId)
     {
         await _oneAtATime.WaitAsync();
         try
         {
             // Auto import asks every 30 s: say nothing unless there's a new file.
             if (newerThan is null) log("Getting your export…");
-            var file = await Exporter.ReadAsync(newerThan);
+            var file = await Exporter.ReadAsync(newerThan, sourceId);
             cors["X-Export-Modified"] = file.ModifiedUnix.ToString();
             cors["X-Export-Source"] = file.Source;
+            cors["X-Export-Source-Id"] = file.SourceId;
             if (file.Data.Length == 0)
             {
                 await WriteAsync(stream, 204, null, cors);

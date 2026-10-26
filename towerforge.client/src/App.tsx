@@ -18,11 +18,13 @@ import CurrencyBar from './components/common/CurrencyBar';
 // ── Tab Components (stubs for now — filled in one by one) ────
 import ProfileTab from './components/tabs/ProfileTab';
 import LinkModal from './components/LinkModal';
+import LinkSourcePicker from './components/LinkSourcePicker';
 import AutoImport from './components/common/AutoImport';
 import ThemePicker from './components/common/ThemePicker';
 import DiscordLink from './components/common/DiscordLink';
 import WelcomeGuide from './components/common/WelcomeGuide';
-import { exportAge, linkExport, phoneLinkRemembered } from './engine/linkClient';
+import { exportAge, linkExport, linkSources, phoneLinkRemembered, rememberSource } from './engine/linkClient';
+import type { LinkSource } from './engine/linkClient';
 import PerksTab from './components/tabs/PerksTab';
 import TiersTab from './components/tabs/TiersTab';
 import WorkshopTab from './components/tabs/WorkshopTab';
@@ -135,6 +137,7 @@ export default function App() {
     // "Get from emulator or phone": TowerForge Link's setup dialog (with its message, if it answered).
     const [linkBusy, setLinkBusy] = useState(false);
     const [linkModal, setLinkModal] = useState<{ problem: string | null } | null>(null);
+    const [linkChoices, setLinkChoices] = useState<LinkSource[] | null>(null);
     // The tab last opened in each section, so going back to a section returns to it.
     const [lastInGroup, setLastInGroup] = useState<Record<string, TabName>>(() => {
         const tab = useGameStore.getState().activeTab;
@@ -261,13 +264,23 @@ export default function App() {
     }
 
     // The export straight off an emulator, through TowerForge Link (a
-    // small helper on this PC — engine/linkClient.ts). If the helper isn't
-    // running or reports a problem, the setup dialog says what to do.
-    async function getFromEmulator() {
+    // small helper on this PC — engine/linkClient.ts). With more than one
+    // emulator or phone (Link 0.4+), the player picks one first; `source`
+    // is that pick. If the helper isn't running or reports a problem, the
+    // setup dialog says what to do.
+    async function getFromEmulator(source?: string) {
         setLinkBusy(true);
         try {
-            const r = await linkExport();
+            if (source === undefined) {
+                const sources = await linkSources();
+                if (sources && sources.length > 1) {
+                    setLinkChoices(sources);
+                    return;
+                }
+            }
+            const r = await linkExport(undefined, source);
             if (r.ok) {
+                if (r.sourceId) rememberSource(r.sourceId);
                 let json: unknown;
                 try {
                     json = JSON.parse(r.text);
@@ -510,6 +523,18 @@ export default function App() {
             <main className="tab-content">
                 <Suspense fallback={null}>{renderTab()}</Suspense>
             </main>
+
+            {linkChoices && (
+                <LinkSourcePicker
+                    sources={linkChoices}
+                    onPick={id => {
+                        rememberSource(id);
+                        setLinkChoices(null);
+                        void getFromEmulator(id);
+                    }}
+                    onClose={() => setLinkChoices(null)}
+                />
+            )}
 
             {linkModal && (
                 <LinkModal

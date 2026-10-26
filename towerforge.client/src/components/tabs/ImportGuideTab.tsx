@@ -214,7 +214,12 @@ export default function ImportGuideTab() {
                             debugging</strong> → <strong>Open local connection</strong> → <strong>Save</strong>, then restart LDPlayer.
                         </li>
                         <li>
-                            <strong>MuMu, MEmu, Nox:</strong> ADB is usually on already. If Link says the emulator refused the
+                            <strong>MuMu Player:</strong> menu (≡) → <strong>Settings</strong> → <strong>Other</strong> → <strong>ADB
+                            debugging</strong> → <strong>local connection</strong>, then close MuMu completely and open it again.
+                            Link finds each MuMu instance’s own ADB port by itself.
+                        </li>
+                        <li>
+                            <strong>MEmu, Nox:</strong> ADB is usually on already. If Link says the emulator refused the
                             connection, look in the emulator’s settings for an <strong>ADB</strong> option, turn it on and restart it.
                         </li>
                     </ul>
@@ -227,6 +232,11 @@ export default function ImportGuideTab() {
                         <li>
                             The first time, the browser asks something like <Says>towerforge.net wants to access other apps and
                             services on this device</Says> — click <strong>Allow</strong>. (That’s how the page talks to Link.)
+                        </li>
+                        <li>
+                            More than one emulator running (say BlueStacks and MuMu), or a phone too? Link (0.4 and newer) asks
+                            <Says>Import from…</Says> and lists each with when it last exported, or what’s in the way. Pick one and
+                            click <strong>Import</strong> — the site remembers it, and Auto import reads from it too.
                         </li>
                         <li>
                             Done: the message says where it came from, for example <Says>Read from BlueStacks, exported 2 minutes
@@ -553,6 +563,9 @@ export default function ImportGuideTab() {
                             <tr><td><Says>BlueStacks is blocking the connection</Says></td><td>BlueStacks → Settings → Advanced → <strong>Android Debug Bridge (ADB)</strong> on → Save, then close BlueStacks fully and reopen it.</td></tr>
                             <tr><td><Says>BlueStacks has Android Debug Bridge turned on but hasn’t applied it yet</Says></td><td>Wait a minute, or close BlueStacks fully and open it again.</td></tr>
                             <tr><td><Says>The emulator refused the connection</Says></td><td>Turn on ADB in the emulator’s settings and restart it (<Go to="emulator">Part 2</Go>).</td></tr>
+                            <tr><td><Says>MuMu Player is running but isn’t letting TowerForge Link connect</Says></td><td>MuMu → menu (≡) → Settings → Other → <strong>ADB debugging</strong> → local connection, then close MuMu fully and reopen it. Just started? Wait a minute and try again.</td></tr>
+                            <tr><td>It reads the wrong emulator (BlueStacks instead of MuMu…)</td><td>Get TowerForge Link 0.4 or newer: with more than one, it asks <Says>Import from…</Says>. An emulator listed but greyed out says why it can’t be read.</td></tr>
+                            <tr><td><Says>The emulator or phone you picked isn’t answering</Says></td><td>Start it (or reconnect the phone), then try again — or click <strong>Get from emulator or phone</strong> and pick another.</td></tr>
                             <tr><td><Says>… has no data export yet</Says> / <Says>The Tower hasn’t exported your data yet</Says></td><td>In the game: Settings → External Tools Export → export, or turn on Auto (<Go to="export">step 0</Go>).</td></tr>
                             <tr><td><Says>The Tower isn’t installed on …, or hasn’t been opened yet</Says></td><td>Open The Tower once on that device, then export.</td></tr>
                             <tr><td><Says>Your phone isn’t connected</Says></td><td>On the phone, turn Wireless debugging back on (it turns off after a restart or a Wi-Fi change), same Wi-Fi as the PC. Still nothing? Use <strong>Connect</strong> in the ⚙ setup (<Go to="android-pc">tip</Go>).</td></tr>
