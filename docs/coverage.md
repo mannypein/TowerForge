@@ -73,6 +73,7 @@ reports set the baseline, so even unmodeled effects are already in it; only
 | Gems: card slots | ✅ | Card pulls random; lab slots and rushes not ranked |
 | Elite Cells: lab boosts | ◐ | Boost table; your cells per day now visible in run drops |
 | Bits: Guardian chips | ✅ | Optimizer Bits panel: each equipped chip's next level per Bit (wiki and SDK tables; 2026-10-19). Which chips to equip: every owned set that fits the slots, scored for the goal (2026-10-23; swapping is free). Slots aren't ranked |
+| Unlock progress (what a newer account can buy) | ✅ | Workshop groups bought, the Labs (T1 W30) and each lab's milestone, enhancements (Workshop Enhancement lab): the Optimizer offers only what's open and says what it leaves out (engine/unlocks.ts, 2026-10-26). Not yet: UW unlock costs in the stone path, card unlocks by milestone in the gem panel |
 | Keys (Vault), Guild Tokens | ◐ | The whole Vault on Upgrades → Vault (2026-10-25): Harmony, Power and Enemy, every upgrade's effect and key costs, the levels and unlocked sections imported and editable, keys spent and left — costs checked against the owner's TotalKeysSpent. Counted in the models: Bot Range (bots) and Additional Card Slot (card slots). **Not counted yet:** the Power tab's stat bonuses (damage, health, UW damage, coins…) and the Enemy tab's weaker enemies — how each combines with the workshop, labs and relics needs one in-game stat checked per kind |
 
 ## What it would take to close the biggest gaps

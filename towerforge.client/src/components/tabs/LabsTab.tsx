@@ -8,7 +8,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useGameStore } from '../../store/useGameStore';
 import { LABS } from '../../constants/gameData';
 import NumericInput from '../common/NumericInput';
-import { milestoneReached } from '../../engine/statHelpers';
+import { labOpen, labsOpen } from '../../engine/unlocks';
 import type { LabRunning } from '../../types/gameTypes';
 import { labFinishAt, labTimerLeft } from '../../engine/labTimer';
 
@@ -74,19 +74,21 @@ export default function LabsTab() {
 
     const completedTier = profile.completedTier || 0;
 
-    // A lab is unlocked once its Tier / Wave milestone is reached.
+    // A lab is open once the Labs are (Tier 1, wave 30) and its own milestone
+    // is reached, or it has levels (engine/unlocks.ts — the Optimizer's rule too).
+    const progress = useMemo(() => ({ tierWaves, completedTier }), [tierWaves, completedTier]);
+    const ilmOwned = useGameStore(s => !!s.uwData.data.ILM?.own);
     const isUnlocked = useCallback(
-        (unlockTier: number, unlockWave: number): boolean =>
-            milestoneReached(unlockTier, unlockWave, completedTier, tierWaves),
-        [completedTier, tierWaves],
+        (labName: string): boolean => labOpen(labName, labData[labName] ?? 0, progress, ilmOwned),
+        [labData, progress, ilmOwned],
     );
 
     // Max all unlocked labs
     function maxAllUnlocked() {
         const next = { ...labData };
         for (const group of LABS) {
-            for (const [labName, maxLv, unlockTier, unlockWave] of group.l) {
-                if (isUnlocked(unlockTier, unlockWave)) {
+            for (const [labName, maxLv] of group.l) {
+                if (isUnlocked(labName)) {
                     next[labName] = maxLv;
                 }
             }
@@ -103,8 +105,8 @@ export default function LabsTab() {
         let total = 0;
         let done = 0;
         for (const group of LABS) {
-            for (const [labName, maxLv, unlockTier, unlockWave] of group.l) {
-                if (!isUnlocked(unlockTier, unlockWave)) continue;
+            for (const [labName, maxLv] of group.l) {
+                if (!isUnlocked(labName)) continue;
                 total++;
                 if ((labData[labName] ?? 0) >= maxLv) done++;
             }
@@ -124,6 +126,13 @@ export default function LabsTab() {
 
     return (
         <div>
+            {!labsOpen(progress) && (
+                <div className="relics-note">
+                    🔒 <strong>The Labs open at Tier 1, wave 30</strong> (a milestone). Reach it in a run, then
+                    import again — each lab below opens at its own milestone after that.
+                </div>
+            )}
+
             {/* ── Search + Actions ── */}
             <input
                 type="text"
@@ -150,19 +159,19 @@ export default function LabsTab() {
 
             {/* ── Lab Groups ── */}
             {filteredGroups.filter(group =>
-                group.l.some(([, , ut, uw]) => isUnlocked(ut, uw)),
+                group.l.some(([n]) => isUnlocked(n)),
             ).map(group => (
                 <div key={group.c} className="section" style={{ marginBottom: '10px' }}>
                     <div className="section-head">
                         <h3>{group.c}</h3>
                         <span className="s-badge">
-                            {group.l.filter(([n, max, ut, uw]) => isUnlocked(ut, uw) && (labData[n] ?? 0) >= max).length}
+                            {group.l.filter(([n, max]) => isUnlocked(n) && (labData[n] ?? 0) >= max).length}
                             {' / '}
-                            {group.l.filter(([, , ut, uw]) => isUnlocked(ut, uw)).length} maxed
+                            {group.l.filter(([n]) => isUnlocked(n)).length} maxed
                         </span>
                     </div>
                     <div className="section-body">
-                        {group.l.filter(([, , unlockTier, unlockWave]) => isUnlocked(unlockTier, unlockWave)).map(([labName, maxLv, , , isUnlockLab]) => {
+                        {group.l.filter(([n]) => isUnlocked(n)).map(([labName, maxLv, , , isUnlockLab]) => {
                             const curLv = labData[labName] ?? 0;
                             const isMaxed = curLv >= maxLv;
                             const pct = maxLv > 1

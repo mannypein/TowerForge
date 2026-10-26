@@ -127,7 +127,7 @@ export default function CardsShareCard({ ref, snapshot, poster, preset, presetNa
     // The slot count only when it holds the loadout (a count the export
     // doesn't fully give would read "25 equipped · 21 slots").
     const slots = cardData.slots ?? 0;
-    const loadoutNote = loadout ? `${loadout.length} equipped${slots >= loadout.length ? ` · ${slots} slots` : ''}` : '';
+    const loadoutNote = loadout ? `${loadout.length} equipped${slots >= loadout.length ? ` · ${slots} slot${slots === 1 ? '' : 's'}` : ''}` : '';
     const groups = RARITY_SECTIONS
         .map(s => ({ ...s, cards: owned.filter(([, r]) => r === s.rarity).map(([n]) => n) }))
         .filter(s => s.cards.length > 0);

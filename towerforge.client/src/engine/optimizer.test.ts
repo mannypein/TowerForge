@@ -388,10 +388,34 @@ describe('every currency', () => {
     });
 
     it('prices enhancements from the game table, 10 levels a step on the 400-level ones', () => {
-        const snap = snapshot(null, s => { s.enhData = { d: { attack: [0] }, u: { attack: [true] } }; });
+        const snap = snapshot(null, s => {
+            s.enhData = { d: { attack: [0] }, u: { attack: [true] } };
+            s.labData['Workshop Enhancement'] = 1;    // enhancements open with this lab
+        });
         const dmg = find(snap, 'enhancements', 'Enh Attack — Damage')!;
         expect(dmg.toLv).toBe(10);
         expect(dmg.cost / 55.54e9).toBeCloseTo(1, 3);        // levels 1–10: 5B, 5.04B, … (wiki)
+    });
+
+    // A new account (engine/unlocks): only the workshop groups it bought, no
+    // labs before Tier 1 wave 30, no enhancements before the lab.
+    it('offers only what the account has unlocked', () => {
+        const snap = snapshot(null, s => {
+            s.enhData = { d: { attack: [0] }, u: { attack: [true] } };
+            s.labData = {};
+            s.wsData[s.presetIdx].attack = s.wsData[s.presetIdx].attack.map(() => 0);
+        });
+        snap.wsUnlocked = { attack: 1, defense: 1, utility: 2 };
+        snap.progress = { tierWaves: { 1: 26 }, completedTier: 0 };
+        const ws = buildCandidates(snap, 'workshop').filter(c => c.label.startsWith('WS Attack')).map(c => c.label.replace('WS Attack — ', ''));
+        expect(ws).toContain('Range');
+        expect(ws).not.toContain('Multishot Chance');
+        expect(buildCandidates(snap, 'labs')).toEqual([]);
+        expect(buildCandidates(snap, 'enhancements')).toEqual([]);
+        snap.progress = { tierWaves: { 1: 30 }, completedTier: 0 };
+        const labs = buildCandidates(snap, 'labs').map(c => c.label);
+        expect(labs).toContain('Damage Lab');
+        expect(labs).not.toContain('Labs Speed');              // Tier 1, wave 150
     });
 
     it('blends coins and push by the coin weight', () => {

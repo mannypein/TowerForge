@@ -121,6 +121,8 @@
 //     RARITIES maxLv may need revisiting alongside the dmg tables.
 // ============================================================
 
+import { enhancementsOpen, labOpen, workshopOpen } from './unlocks';
+import type { Progress } from './unlocks';
 import {
     UWS,
     UW_STONE_COSTS,
@@ -167,7 +169,7 @@ import type {
     CardData,
     ModBonuses,
     PerkData,
-    ModuleType, GuardianData } from '../types/gameTypes';
+    ModuleType, GuardianData, WsUnlocked } from '../types/gameTypes';
 import { conditioned, conditionedSkip, conditionHealth } from './battleConditions';
 import type { TourneyConditions } from './battleConditions';
 import { activeChips, guardianPreset, withChipLevel } from './guardian';
@@ -195,6 +197,10 @@ export interface OptimizerSnapshot {
     // purpose (an orb build's Range at 0), so buying it back isn't advice.
     excludedWorkshop?: string[];
     vault?: Record<string, number>;   // Vault upgrade levels by vault id (Bot Range)
+    // What's open yet (engine/unlocks.ts): best waves per tier and tiers beaten,
+    // and the workshop groups bought. Omitted = not known: everything open.
+    progress?: Progress;
+    wsUnlocked?: WsUnlocked;
     // What upgrades are scored on: tower eDPS (Glass Cannon), coins per
     // hour (Farming, calibrated by `farm`) or survival (eHP, calibrated by
     // `ehp`). Defaults to eDPS.
@@ -740,6 +746,8 @@ export function buildCandidates(
                 if (excludedWs.has(workshopKey(wsCat, statName))) return;
                 const curLv = snap.wsData[snap.presetIdx]?.[wsCat]?.[idx] ?? 0;
                 if (curLv >= maxLv) return;
+                // Not bought in the game's workshop yet (its group is locked).
+                if (!workshopOpen(wsCat, statName, curLv, snap.wsUnlocked)) return;
                 const toLv = Math.min(maxLv, curLv + wsStep(maxLv));
 
                 // Simulate the step and score the gain in the goal's score.
@@ -772,10 +780,13 @@ export function buildCandidates(
 
     // ── Labs ───────────────────────────────────────────────────
     if (cat === 'labs') {
+        const ilmOwned = !!snap.uwData.data.ILM?.own;
         for (const group of LABS) {
             for (const [labName, maxLv] of group.l) {
                 const curLv = snap.labData[labName] ?? 0;
                 if (curLv >= maxLv) continue;
+                // The Labs, or this lab's milestone, not reached yet.
+                if (!labOpen(labName, curLv, snap.progress, ilmOwned)) continue;
 
                 const after = cloneSnapshot(snap);
                 after.labData[labName] = curLv + 1;
@@ -822,7 +833,7 @@ export function buildCandidates(
                 candidates.push({
                     category: 'cards',
                     label: `${cardName} Card`,
-                    subLabel: free ? 'Into an empty card slot' : `In card slot ${slots + 1}`,
+                    subLabel: free ? 'Into an empty card slot' : `Buy card slot ${slots + 1}`,
                     fromLv: free ? slots : slots,
                     toLv: free ? slots : slots + 1,
                     cost,
@@ -837,7 +848,8 @@ export function buildCandidates(
     }
 
     // ── Enhancements ───────────────────────────────────────────
-    if (cat === 'enhancements') {
+    // Not before the Workshop Enhancement lab.
+    if (cat === 'enhancements' && enhancementsOpen(snap.labData, snap.enhData)) {
         const cats = ['attack', 'defense', 'utility'] as const;
         for (const enhCat of cats) {
             const enhs = WS_ENH[enhCat] ?? [];

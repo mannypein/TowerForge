@@ -27,7 +27,7 @@ import type {
     Currencies, TierWaves, WSPreset, WSCategory, EnhData, EnhCategoryData, UWData,
     CardData, CardEntry, LabData, ModuleState, ModuleEntry, ModuleType, ModuleRarity,
     SubSlot, Loadout, LoadoutSlots, AssistData, League, GuardianData, GuardianPreset,
-    BotLoadouts, LabRunning, TourneyRecord,
+    BotLoadouts, LabRunning, TourneyRecord, WsUnlocked,
 } from '../types/gameTypes';
 import { BOTS_CONFIG } from '../constants/botData';
 import { RELIC_CATALOG } from '../constants/relicCatalog';
@@ -57,6 +57,7 @@ export interface GameImport {
     modules: ModuleImport | null;
     league: League;                    // highest league reached ('' = unknown)
     wallUnlocked: boolean;             // a workshop preset has Wall Health
+    wsUnlocked: WsUnlocked | null;     // workshop groups bought per section (Upgrade…TierUnlocked)
     presetNames: string[];             // per app preset ('' = keep the default name)
     guardian: GuardianData | null;     // null when the file has no Guardian fields
     // 29.1.3+ exports (ExportVersion 1) — null / '' on older files.
@@ -162,6 +163,18 @@ function usesFivePresets(raw: Raw): boolean {
         if (CATS.some(cat => presetLevels(raw, WS_FIELDS[cat], ws).some(v => v > 0))) return true;
     }
     return false;
+}
+
+// Workshop groups bought: UpgradeTierUnlocked (attack), UpgradeDefense… and
+// UpgradeUtility…, [k] = group k + 1 (constants/gameData WS_UNLOCK_GROUPS).
+function parseWsUnlocked(raw: Raw): WsUnlocked | null {
+    const count = (v: unknown) => arr(v).filter(x => x === true).length;
+    if (!Array.isArray(raw.UpgradeTierUnlocked)) return null;
+    return {
+        attack: count(raw.UpgradeTierUnlocked),
+        defense: count(raw.UpgradeDefenseTierUnlocked),
+        utility: count(raw.UpgradeUtilityTierUnlocked),
+    };
 }
 
 function parseEnhancements(raw: Raw): EnhData | null {
@@ -587,6 +600,7 @@ export function parseGameExport(raw: Raw): GameImport {
         // A file without the field keeps the player's league ('' = unknown), not Copper.
         league: typeof raw.HighestLeague === 'number' ? GAME_LEAGUES[raw.HighestLeague] ?? '' : '',
         wallUnlocked: (workshop ?? []).some(p => (p.defense[WS_STATS.defense.findIndex(([n]) => n === 'Wall Health')] ?? 0) > 0),
+        wsUnlocked: parseWsUnlocked(raw),
         presetNames: parsePresetNames(raw),
         guardian: parseGuardian(raw),
         exportVersion: typeof raw.ExportVersion === 'number' ? raw.ExportVersion : null,

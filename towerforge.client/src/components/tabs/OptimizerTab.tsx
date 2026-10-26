@@ -33,6 +33,8 @@ import { buildRunLengthModel, pathRunGains, pathSkipGains } from '../../engine/r
 import { conditionedSkip } from '../../engine/battleConditions';
 import { formatLabTime } from '../../engine/upgradeCosts';
 import { SKIP_NAMES, skipSources, skipUpgradePath } from '../../engine/levelSkip';
+import { labOpen, lockedNotes, workshopOpen } from '../../engine/unlocks';
+import type { LockedNotes } from '../../engine/unlocks';
 import type { SkipKind, SkipUpgrade } from '../../engine/levelSkip';
 import { formatGameNumber } from '../../engine/gameNumbers';
 import type { StepRunGain } from '../../engine/runLength';
@@ -96,6 +98,8 @@ export default function OptimizerTab() {
     const [coinWeight, setCoinWeight] = useState<number>(loadWeight);
     const [resultsGoal, setResultsGoal] = useState<OptGoal | null>(null);
     const [skipPath, setSkipPath] = useState<SkipUpgrade[]>([]);
+    // What's left out for now (not unlocked in the game yet) — a note per panel.
+    const [locked, setLocked] = useState<LockedNotes>({});
     const [chipSets, setChipSets] = useState<ChipSet[]>([]);
     useEffect(() => {
         try {
@@ -192,11 +196,21 @@ export default function OptimizerTab() {
                 // Pushing waves: the Enemy Health Level Skip coin upgrades, most skip per
                 // coin first; pushing survival (eHP), the Enemy Attack Level Skip ones.
                 const skipKind = pushingWaves ? 'health' : pushingSurvival && snap.skipWorth ? 'attack' : null;
-                setSkipPath(skipKind
-                    ? skipUpgradePath(skipSources(
+                if (skipKind) {
+                    const sources = skipSources(
                         skipKind, snap.wsData[snap.presetIdx], snap.labData, snap.enhData, snap.relicData, snap.modBonuses.subs ?? {},
-                    ), SKIP_PATH_STEPS)
-                    : []);
+                    );
+                    // Only what the account can buy yet (engine/unlocks.ts).
+                    const names = SKIP_NAMES[skipKind];
+                    sources.closed = {
+                        workshop: !workshopOpen('utility', names.workshop, sources.workshop, snap.wsUnlocked),
+                        lab: !labOpen(names.lab, sources.lab, snap.progress),
+                    };
+                    setSkipPath(skipUpgradePath(sources, SKIP_PATH_STEPS));
+                } else {
+                    setSkipPath([]);
+                }
+                setLocked(lockedNotes(snap));
                 // Which Guardian chips to equip for the goal (free to swap).
                 setChipSets(bestGuardianChips(snap));
                 setFarmCalib(snap.farm ?? null);
@@ -827,6 +841,7 @@ export default function OptimizerTab() {
                             key={panel.cat}
                             panel={panel}
                             candidates={results[panel.cat] ?? []}
+                            locked={locked[panel.cat as keyof LockedNotes]}
                             runGains={runGains(panel.cat)}
                             blend={blendMode ? (pushWaves ? 'waves' : 'survival') : undefined}
                             showAll={showMore[panel.cat] ?? false}
@@ -853,6 +868,7 @@ export default function OptimizerTab() {
                                     key={panel.cat}
                                     panel={panel}
                                     candidates={results[panel.cat] ?? []}
+                                    locked={locked[panel.cat as keyof LockedNotes]}
                                     runGains={runGains(panel.cat)}
                                     blend={blendMode ? (pushWaves ? 'waves' : 'survival') : undefined}
                                     showAll={showMore[panel.cat] ?? false}
@@ -862,7 +878,7 @@ export default function OptimizerTab() {
                                     onApply={applyCandidate}
                                 />
                             ))}
-                            {group.currency === 'research' && (
+                            {group.currency === 'research' && results.labs.length > 0 && (
                                 <CellsPanel topLab={results.labs[0]} cells={currencies.cells ?? 0} />
                             )}
                             {group.currency === 'medals' && (
@@ -933,6 +949,7 @@ function CellsPanel({ topLab, cells }: { topLab?: OptCandidate; cells: number })
 interface OptPanelProps {
     panel: typeof OPT_PANELS[number];
     candidates: OptCandidate[];
+    locked?: string;              // what's left out until it's unlocked in the game
     showAll: boolean;
     onShowMore: () => void;
     gainColor: (score: number) => string;
@@ -1044,7 +1061,7 @@ function SkipPanel({ path, runModel, coinsAt, skipScale }: {
 }
 
 function OptPanel({
-    panel, candidates, showAll, onShowMore, gainColor, catStyle, onApply, runGains, blend,
+    panel, candidates, locked, showAll, onShowMore, gainColor, catStyle, onApply, runGains, blend,
 }: OptPanelProps) {
     const totalWaves = runGains?.reduce((s, g) => s + g.waves, 0) ?? 0;
     const visible = showAll
@@ -1060,9 +1077,10 @@ function OptPanel({
                 </span>
             </div>
 
+            {locked && candidates.length > 0 && <div className="opt-locked">🔒 {locked}</div>}
             {candidates.length === 0 ? (
                 <div className="opt-empty">
-                    No upgrades available — all maxed or no data entered.
+                    {locked ? `🔒 ${locked}` : 'No upgrades available — all maxed or no data entered.'}
                 </div>
             ) : (
                 <>

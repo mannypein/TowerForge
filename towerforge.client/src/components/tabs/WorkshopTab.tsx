@@ -8,6 +8,7 @@ import { useGameStore } from '../../store/useGameStore';
 import { WS_STATS, WS_ENH, presetLabel } from '../../constants/gameData';
 import NumericInput from '../common/NumericInput';
 import { enhForPreset } from '../../engine/statHelpers';
+import { workshopOpen } from '../../engine/unlocks';
 
 type WSCat = 'attack' | 'defense' | 'utility';
 
@@ -123,11 +124,15 @@ export default function WorkshopTab() {
                                 {WS_STATS[cat].map(([statName, maxLv], idx) => {
                                     const curLv = wsData[activePreset]?.[cat]?.[idx] ?? 0;
                                     const pct = Math.min(100, Math.round((curLv / maxLv) * 100));
+                                    // Not bought in the game's workshop yet (Import Game Data says).
+                                    const locked = !workshopOpen(cat, statName, curLv, profile.wsUnlocked);
                                     return (
                                         <div key={statName} className="field-row">
                                             <label className="field-label">
                                                 {statName}
-                                                <span className="field-sub">Max {maxLv.toLocaleString()}</span>
+                                                <span className="field-sub">
+                                                    {locked ? '🔒 Not unlocked in your workshop yet' : `Max ${maxLv.toLocaleString()}`}
+                                                </span>
                                             </label>
                                             <div className="ws-stat-input">
                                                 <NumericInput

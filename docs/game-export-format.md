@@ -133,7 +133,7 @@ never read them.
 | `UpgradeWorkshopLevel[20]`, `UpgradeWorkshopDefenseLevel[20]`, `UpgradeWorkshopUtilityLevel[20]` | ✅ | Workshop levels of the loaded workshop preset, same order as the site's `WS_STATS` (17/18/13 used of 20). Confirmed on a real account: every maxed stat sits exactly at its max. Read for the loaded preset in case it has unsaved changes. |
 | `PresetUpgradeWorkshopLevel[100]` (+ Defense, Utility) | ✅ | 5 workshop presets × 20 stats. Site preset i ← the workshop preset of `GlobalPresets[i]`. |
 | `CurrentWorkshopPreset`, `WorkshopPresetName[5]` | ✅ | Loaded workshop preset (used). Any upgrades in workshop presets 3–5 set the profile to 5 presets; any Wall Health sets Wall Unlocked. Preset names: site preset i takes its global preset's name if the player set one, else that preset's workshop name; repeats stay on the default. |
-| `UpgradeTierUnlocked[20]` (+ Defense, Utility), `Upgrade…TierEverUnlocked[20]` | ❓ | Probably which workshop stats are unlocked (bought). |
+| `UpgradeTierUnlocked[20]` (+ Defense, Utility), `Upgrade…TierEverUnlocked[20]` | ✅ | The workshop groups bought with coins: `[k]` = group k + 1 (`WS_UNLOCK_GROUPS` in constants/gameData — the wiki's unlock order: attack Range+Damage/Meter, Multishot, Rapid Fire, Bounce Shot, Super Critical, Rend Armor; defense Defense %+Absolute, Thorn, Lifesteal, Knockback, Orbs, Shockwave, Land Mines, Death Defy, Wall; utility Cash, Coins, Free Upgrades, Interest, Recovery Packages, Enemy Level Skip). Imported as the profile's `wsUnlocked` (a count per section); the Optimizer offers only open stats (engine/unlocks.ts). **Checked on two accounts (2026-10-26):** the owner's maxed one has 6 / 9 / 6 flags on — every group — and Rend Armor at 299; a new one (Tier 1, best wave 26) has 1 / 1 / 2 and levels only in groups it has (Defense Absolute 2, Coins/Kill 1, Coins/Wave 2). `…EverUnlocked` matched the live flags on both. |
 | `UpgradeLevel[20]`, `UpgradeDefenseLevel[20]`, `UpgradeUtilityLevel[20]` | ❓ | Probably the in-run (cash) upgrade levels of the current/last run. |
 | `AttackBuyMultiplier`, `DefenseBuyMultiplier`, `UtilityBuyMultiplier`, `WorkshopBuyMultiplier`, `EnhancementBuyMultiplier` | ⚪ | Buy ×1/×10/max settings. |
 
@@ -153,7 +153,7 @@ never read them.
 | `ResearchPercentComplete[260]` | 📊 | Progress of labs currently researching. |
 | Primary module efficiency labs | 🔜 | One per module type (Cannon, Armor, Generator, Core), unlocked at T23 W500, +1% primary-module efficiency per level (100% → 130%). Added to the site as `Primary-<Type> Mult`; their lab numbers aren't known yet, so the import keeps what the player enters. Probably at the end of `ResearchLevel` once an account has them. |
 | `ResearchesComplete`, `TotalCoinsSpentOnResearch` | 📊 | Lifetime lab stats. |
-| `LabsUnlocked`, `LabLevel[5]`, `CompletedLabs[]` | ❓ | Possibly lab slots (5) and their state. |
+| `LabsUnlocked`, `LabLevel[5]`, `CompletedLabs[]` | ❓ | Possibly lab slots bought (the owner's 4 with 5 labs running; a new account 0 — its Labs not open yet, T1 W26 < W30). Not used: whether the Labs are open comes from the best wave on Tier 1 (the W30 milestone). |
 
 ## Cards
 

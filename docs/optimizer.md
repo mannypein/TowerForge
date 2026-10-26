@@ -340,6 +340,31 @@ Death Ray for runs that end to enemies they can touch.
 - **Not counted yet:** per-type speed (tanks spend
   longer among the orbs than fast enemies), Sentry Protocol's mini orbs.
 
+## What a newer account is offered (2026-10-26)
+
+The owner's new MuMu account (Tier 1, best wave 26, 224 coins) was offered
+Multishot, Rapid Fire, Damage Lab and a 0 → 400 Damage enhancement it can't
+buy. `engine/unlocks.ts` now decides what's open, and the Optimizer (and
+its skip panel) offers only that:
+- **Workshop:** a stat's group must be bought (`UpgradeTierUnlocked`, import
+  notes) — group 0 is free; a stat with levels is open.
+- **Labs:** the Labs open at Tier 1, wave 30 (a milestone — TheTowerSDK's
+  `data/milestones`), then each lab at its own milestone (the LABS table's
+  tier/wave, compared with the best wave on that tier). Checked against the
+  game's milestone lists, 25 labs' milestones in that table were wrong and
+  fixed (gameData.ts LABS header). Inner Land Mine's Chrono Jump also needs
+  Inner Land Mine. The Labs tab uses the same rule and says when the Labs
+  open.
+- **Enhancements:** need the Workshop Enhancement lab (Tier 12, wave 60).
+- Nothing is hidden when it isn't known (an account typed in by hand: no
+  tier waves, no workshop groups).
+Each panel says what it leaves out (`lockedNotes`): the next workshop group
+per section to buy in the game, the Labs' or Enhancements' milestone, and
+why Stones, Modules (Tier 2, wave 90), Bots or the Guardian are empty. The
+card slot step reads "Buy card slot N". Checked on that account's export in
+the browser (desktop and 375 px) and on the owner's maxed one (nothing
+left out there).
+
 ## Paths
 
 - **Stone path** (`simulateStonePath`): UW stats, UW+, card mastery unlocks

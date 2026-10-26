@@ -69,6 +69,49 @@ export const WS_STATS: Record<string, [string, number][]> = {
     ],
 };
 
+// The workshop opens its stats in groups, each bought once with coins after
+// the one before; group 0 is free from the start (utility has none). The
+// export's Upgrade(Defense|Utility)TierUnlocked flag [k] = group k + 1 is
+// bought. Order and coins from the wiki's workshop pages: attack 50 / 400 /
+// 1,500 / 10,000 / 100M / 500B; defense 75 / 500 / 2,000 / 5,000 / 15,000 /
+// 100,000 / 400,000 / 1.5M / 500M; utility 40 / 100 / … / 5,000 (Interest) /
+// 1.5M (Recovery Packages) / 1B (Enemy Level Skip). Checked on two accounts
+// (2026-10-26): a maxed one has every flag on; a new one has the first
+// attack and defense groups and two utility ones, and levels only in
+// groups it has (Defense Absolute, Coins/Kill and Coins/Wave).
+export const WS_UNLOCK_GROUPS: Record<'attack' | 'defense' | 'utility', { label: string; stats: string[] }[]> = {
+    attack: [
+        { label: 'the start', stats: ['Damage', 'Attack Speed', 'Critical Chance', 'Critical Factor'] },
+        { label: 'Range and Damage/Meter', stats: ['Range', 'Damage/Meter'] },
+        { label: 'Multishot', stats: ['Multishot Chance', 'Multishot Targets'] },
+        { label: 'Rapid Fire', stats: ['Rapid Fire Chance', 'Rapid Fire Duration'] },
+        { label: 'Bounce Shot', stats: ['Bounce Shot Chance', 'Bounce Shot Targets', 'Bounce Shot Range'] },
+        { label: 'Super Critical', stats: ['Super Critical Chance', 'Super Critical Mult'] },
+        { label: 'Rend Armor', stats: ['Rend Armor Chance', 'Rend Armor Mult'] },
+    ],
+    defense: [
+        { label: 'the start', stats: ['Health', 'Health Regen'] },
+        { label: 'Defense % and Defense Absolute', stats: ['Defense %', 'Defense Absolute'] },
+        { label: 'Thorn Damage', stats: ['Thorn Damage'] },
+        { label: 'Lifesteal', stats: ['Lifesteal'] },
+        { label: 'Knockback', stats: ['Knockback Chance', 'Knockback Force'] },
+        { label: 'Orbs', stats: ['Orb Speed', 'Orbs'] },
+        { label: 'Shockwave', stats: ['Shockwave Size', 'Shockwave Frequency'] },
+        { label: 'Land Mines', stats: ['Land Mine Chance', 'Land Mine Damage', 'Land Mine Radius'] },
+        { label: 'Death Defy', stats: ['Death Defy'] },
+        { label: 'Wall', stats: ['Wall Health', 'Wall Rebuild'] },
+    ],
+    utility: [
+        { label: 'the start', stats: [] },
+        { label: 'Cash', stats: ['Cash Bonus', 'Cash/Wave'] },
+        { label: 'Coins', stats: ['Coin/Kill Bonus', 'Coin/Wave'] },
+        { label: 'Free Upgrades', stats: ['Free Atk Upgrade', 'Free Def Upgrade', 'Free Util Upgrade'] },
+        { label: 'Interest', stats: ['Interest/Wave'] },
+        { label: 'Recovery Packages', stats: ['Recovery Amount', 'Max Amount', 'Package Chance'] },
+        { label: 'Enemy Level Skip', stats: ['Enemy Atk Level Skip', 'Enemy HP Level Skip'] },
+    ],
+};
+
 // ── Workshop Enhancements ─────────────────────────────────────
 // [name, maxLevel, isFreeUnlock, stepPerLevel]
 export const WS_ENH: Record<string, [string, number, boolean, number][]> = {
@@ -528,16 +571,20 @@ export const STONE_SYMBOL = '💎';
 export const MEDAL_SYMBOL = '🎖️';
 
 // ── Labs ───────────────────────────────────────────────────────
-// [labName, maxLevel, unlockTier, unlockWave, isUnlock?]
-// ── Labs ───────────────────────────────────────────────────────
 // Order matches in-game exactly.
-// [labName, maxLevel, unlockTier, unlockWave, isUnlock?]
+// [labName, maxLevel, unlockTier, unlockWave, isUnlock?] — the milestone a
+// lab opens at (that wave on that tier; 1/30 = when the Labs open). Checked
+// against the game's milestone lists (TheTowerSDK data/milestones, 2026-10-26):
+// WS Atk Discount T2, Reroll Daily Missions T4 W30, Ban Perks T5 W40, Wall
+// Fortification W40, Swamp Rend W60, the bot Burn Stack / Duration labs W60,
+// the enemy labs T9 W30–60 (Protector Dmg Reduction W400) and the fleet ones
+// T22 W60 were corrected then. Bot Bot's labs aren't in those lists (kept).
 export const LABS: { c: string; l: [string, number, number, number, number?][] }[] = [
     {
         c: 'Main Research', l: [
             ['Game Speed', 7, 1, 30],
             ['Starting Cash', 99, 1, 30],
-            ['WS Atk Discount', 99, 1, 40],
+            ['WS Atk Discount', 99, 2, 40],
             ['WS Def Discount', 99, 2, 50],
             ['WS Util Discount', 99, 2, 60],
             ['Labs Coin Discount', 99, 1, 30],
@@ -547,7 +594,7 @@ export const LABS: { c: string; l: [string, number, number, number, number?][] }
             ['Target Priority', 2, 4, 150],
             ['Card Presets', 5, 1, 400],
             ['Workshop Respec', 1, 4, 30, 1],
-            ['Reroll Daily Missions', 1, 1, 250, 1],
+            ['Reroll Daily Missions', 1, 4, 30, 1],
             ['Workshop Enhancement', 1, 12, 60, 1],
             ['Enh Atk Discount', 100, 21, 60],
             ['Enh Def Discount', 100, 21, 60],
@@ -588,7 +635,7 @@ export const LABS: { c: string; l: [string, number, number, number, number?][] }
             ['Wall Regen', 30, 10, 70],
             ['Wall Thorns', 20, 10, 70],
             ['Wall Invincibility', 10, 12, 10],
-            ['Wall Fortification', 60, 14, 60],
+            ['Wall Fortification', 60, 14, 40],
             ['Garlic Thorns', 10, 2, 1000],
         ]
     },
@@ -641,8 +688,8 @@ export const LABS: { c: string; l: [string, number, number, number, number?][] }
             ['SL-Missiles', 18, 3, 400],
             ['BH-Disable Ranged(unlock)', 1, 14, 20, 1],
             ['SM-Recharge Barrage', 7, 14, 60],
-            ['PS-Swamp Rend', 30, 16, 50],
-            ['PS-Swamp Rend Extra', 11, 16, 50],
+            ['PS-Swamp Rend', 30, 16, 60],
+            ['PS-Swamp Rend Extra', 11, 16, 60],
             ['CL-Chain Thunder', 30, 16, 60],
             ['CL-Lightning Amp', 30, 16, 60],
             ['DW-Cell Bonus', 20, 3, 250],
@@ -675,7 +722,7 @@ export const LABS: { c: string; l: [string, number, number, number, number?][] }
             ['Standard Perk Bonus', 25, 2, 150],
             ['Perk Option Qty', 2, 4, 80],
             ['First Perk Choice', 1, 2, 250, 1],
-            ['Ban Perks', 8, 2, 150],
+            ['Ban Perks', 8, 5, 40],
             ['Improve Tradeoff Perks', 10, 2, 400],
             ['Auto Pick Ranking', 32, 6, 10],
         ]
@@ -687,10 +734,10 @@ export const LABS: { c: string; l: [string, number, number, number, number?][] }
             ['Golden Bot Cooldown', 25, 5, 80],
             ['Amplify Bot Cooldown', 25, 5, 90],
             ['Bot Bot Cooldown', 25, 6, 90],
-            ['Flame Bot Burn Stack', 5, 10, 50],
+            ['Flame Bot Burn Stack', 5, 10, 60],
             ['Thunder Bot Linger', 20, 10, 60],
-            ['Golden Bot Duration', 20, 10, 50],
-            ['Amplify Bot Duration', 20, 10, 50],
+            ['Golden Bot Duration', 20, 10, 60],
+            ['Amplify Bot Duration', 20, 10, 60],
             ['Bot Bot Duration', 20, 6, 90],
         ]
     },
@@ -701,15 +748,15 @@ export const LABS: { c: string; l: [string, number, number, number, number?][] }
             ['Fast Enemy Health', 30, 9, 20],
             ['Fast Enemy Attack', 30, 9, 20],
             ['Fast Enemy Speed', 30, 9, 300],
-            ['Tank Enemy Health', 30, 9, 20],
-            ['Tank Enemy Attack', 30, 9, 20],
-            ['Ranged Enemy Health', 30, 9, 20],
-            ['Ranged Enemy Attack', 30, 9, 20],
-            ['Boss Health', 30, 9, 20],
-            ['Boss Attack', 30, 9, 20],
-            ['Protector Health', 30, 9, 20],
-            ['Protector Radius', 30, 9, 20],
-            ['Protector Dmg Reduction', 20, 9, 20],
+            ['Tank Enemy Health', 30, 9, 30],
+            ['Tank Enemy Attack', 30, 9, 30],
+            ['Ranged Enemy Health', 30, 9, 40],
+            ['Ranged Enemy Attack', 30, 9, 40],
+            ['Boss Health', 30, 9, 50],
+            ['Boss Attack', 30, 9, 50],
+            ['Protector Health', 30, 9, 60],
+            ['Protector Radius', 30, 9, 60],
+            ['Protector Dmg Reduction', 20, 9, 400],
             ['Ranged Enemy Range', 30, 13, 80],
             ['Vampire Attack', 30, 19, 60],
             ['Vampire Health', 30, 19, 60],
@@ -719,13 +766,13 @@ export const LABS: { c: string; l: [string, number, number, number, number?][] }
             ['Scatter Health', 30, 19, 60],
             // Newer enemy labs — not on the wiki yet; max level assumed 30 like the
             // others and the unlock tier approximate.
-            ['Overcharge Enemy Health', 30, 22, 0],
-            ['Overcharge Enemy Damage', 30, 22, 0],
-            ['Commander Enemy Health', 30, 22, 0],
-            ['Saboteur Enemy Health', 30, 22, 0],
-            ['Overcharge Exponent Reducer', 30, 22, 0],
-            ['Commander Radius', 30, 22, 0],
-            ['Saboteur Attack Speed', 30, 22, 0],
+            ['Overcharge Enemy Health', 30, 22, 60],
+            ['Overcharge Enemy Damage', 30, 22, 60],
+            ['Commander Enemy Health', 30, 22, 60],
+            ['Saboteur Enemy Health', 30, 22, 60],
+            ['Overcharge Exponent Reducer', 30, 22, 60],
+            ['Commander Radius', 30, 22, 60],
+            ['Saboteur Attack Speed', 30, 22, 60],
         ]
     },
     {

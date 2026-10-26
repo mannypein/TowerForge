@@ -2187,6 +2187,15 @@
     font-size: 13px;
 }
 
+/* What a panel leaves out until it's unlocked in the game (engine/unlocks). */
+.opt-locked {
+    padding: 6px 12px;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--text-dim);
+    border-bottom: 1px solid var(--border);
+}
+
 .opt-row {
     display: flex;
     align-items: flex-start;

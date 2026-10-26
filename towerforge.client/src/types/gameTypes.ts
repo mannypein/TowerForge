@@ -74,6 +74,15 @@ export interface Profile {
     excludedUWs?: string[];   // UW abbrs the optimizer should not suggest upgrades for
     excludedWorkshop?: string[];   // workshop stats it should not suggest ("attack|Range" — kept low on purpose)
     presetNames?: string[];   // custom preset names (from the game import or typed in); blank = default
+    // Workshop groups bought, per section (the export's Upgrade…TierUnlocked;
+    // constants/gameData WS_UNLOCK_GROUPS). Absent = not known: everything open.
+    wsUnlocked?: WsUnlocked;
+}
+
+export interface WsUnlocked {
+    attack: number;
+    defense: number;
+    utility: number;
 }
 
 // ── Perks ─────────────────────────────────────────────────────

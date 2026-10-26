@@ -50,6 +50,8 @@ export interface SkipSources {
     // Omitted = no discounts.
     labs?: LabData;
     relics?: Record<string, number>;
+    // Not bought or reached yet in the game (engine/unlocks.ts): not offered.
+    closed?: { workshop?: boolean; lab?: boolean };
 }
 
 const wsIdx = (kind: SkipKind) => WS_STATS.utility.findIndex(([n]) => n === SKIP_NAMES[kind].workshop);
@@ -100,7 +102,7 @@ export function nextSkipUpgrades(s: SkipSources): SkipUpgrade[] {
     const names = SKIP_NAMES[s.kind ?? 'health'];
     const labs = s.labs ?? {};
     const out: SkipUpgrade[] = [];
-    if (s.workshop < WORKSHOP_MAX) {
+    if (s.workshop < WORKSHOP_MAX && !s.closed?.workshop) {
         const to = Math.min(WORKSHOP_MAX, s.workshop + WORKSHOP_STEP);
         out.push({
             source: 'workshop', from: s.workshop, to,
@@ -108,7 +110,7 @@ export function nextSkipUpgrades(s: SkipSources): SkipUpgrade[] {
             cost: workshopCost(names.workshop, s.workshop, to, workshopDiscount(labs, 'utility')) ?? 0,
         });
     }
-    const lab = s.lab < LAB_MAX ? labLevelCost(names.lab, s.lab + 1, labs, s.relics ?? {}) : null;
+    const lab = s.lab < LAB_MAX && !s.closed?.lab ? labLevelCost(names.lab, s.lab + 1, labs, s.relics ?? {}) : null;
     if (lab) {
         out.push({
             source: 'lab', from: s.lab, to: s.lab + 1,
