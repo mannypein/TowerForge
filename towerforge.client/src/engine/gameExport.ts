@@ -559,6 +559,14 @@ export function parseGameExport(raw: Raw): GameImport {
             generatorShards: num(raw.ModuleGeneratorShards),
             coreShards: num(raw.ModuleCoreShards),
         } : {}),
+        // Earned in total — spent and saved (docs/game-export-format.md).
+        ...(typeof raw.ModuleCannonShardsLifetime === 'number' ? {
+            rerollShardsLifetime: num(raw.ModuleRerollCurrencyLifetime),
+            cannonShardsLifetime: num(raw.ModuleCannonShardsLifetime),
+            armorShardsLifetime: num(raw.ModuleArmorShardsLifetime),
+            generatorShardsLifetime: num(raw.ModuleGeneratorShardsLifetime),
+            coreShardsLifetime: num(raw.ModuleCoreShardsLifetime),
+        } : {}),
     };
 
     // HighestWaveThisTier is indexed by tier number (index 0 is unused).

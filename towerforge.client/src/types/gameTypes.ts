@@ -23,6 +23,13 @@ export interface Currencies {
     armorShards?: number;
     generatorShards?: number;
     coreShards?: number;
+    // Each one earned in total, spent and saved together (the export's
+    // Module…Lifetime). Absent in older saves and for hand-entered accounts.
+    rerollShardsLifetime?: number;
+    cannonShardsLifetime?: number;
+    armorShardsLifetime?: number;
+    generatorShardsLifetime?: number;
+    coreShardsLifetime?: number;
 }
 
 // ── Build Types ───────────────────────────────────────────────

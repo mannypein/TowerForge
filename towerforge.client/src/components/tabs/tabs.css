@@ -1657,6 +1657,97 @@
     stroke-linejoin: round;
 }
 
+/* Shards earned in total (lifetime): a line that opens to each type */
+.modg-totals {
+    margin: 0 0 10px;
+    padding: 6px 10px;
+    border: 1px solid var(--panel-line);
+    border-radius: var(--radius-md);
+    background: var(--inset);
+    font-size: 13px;
+}
+
+    .modg-totals summary {
+        cursor: pointer;
+        color: var(--text);
+    }
+
+        .modg-totals summary strong {
+            font-family: var(--font-mono);
+            color: var(--text-bright);
+        }
+
+        .modg-totals summary span {
+            color: var(--text-dim);
+        }
+
+    .modg-totals table {
+        width: 100%;
+        margin-top: 8px;
+        border-collapse: collapse;
+        font-size: 12px;
+    }
+
+    .modg-totals th,
+    .modg-totals td {
+        padding: 4px 6px;
+        text-align: right;
+        border-bottom: 1px solid var(--border);
+        white-space: nowrap;
+    }
+
+        .modg-totals th:first-child,
+        .modg-totals td:first-child {
+            text-align: left;
+        }
+
+    .modg-totals th {
+        font-weight: 600;
+        color: var(--text-dim);
+    }
+
+    .modg-totals td {
+        font-family: var(--font-mono);
+        color: var(--text-bright);
+    }
+
+        .modg-totals td:first-child {
+            font-family: var(--font-ui);
+        }
+
+    .modg-totals-name {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+    }
+
+        .modg-totals td .modg-shard {
+            width: 15px;
+            height: 15px;
+        }
+
+    .modg-totals .modg-totals-sum td {
+        font-weight: 700;
+        border-bottom: none;
+    }
+
+    .modg-totals p {
+        margin: 6px 0 0;
+        font-size: 11px;
+        color: var(--text-dim);
+    }
+
+@media (max-width: 420px) {
+    .modg-totals th,
+    .modg-totals td {
+        padding: 4px 3px;
+    }
+
+        .modg-totals td:first-child {
+            white-space: normal;
+        }
+}
+
 .modg-tabs {
     display: flex;
     background: var(--tab-bg);

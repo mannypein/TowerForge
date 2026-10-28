@@ -148,6 +148,46 @@ function ShardIcon({ kind }: { kind: 'reroll' | ModuleType }) {
     return <svg className="modg-shard" viewBox="0 0 24 24" aria-hidden="true">{shape}</svg>;
 }
 
+// Shards earned in total — spent and saved — from the game's lifetime
+// counts (imported); spent is what was earned less what's saved now.
+function ShardTotals({ currencies }: { currencies: Currencies }) {
+    const rows = MODULE_CURRENCIES.map(c => {
+        const earned = currencies[`${c.key}Lifetime` as keyof Currencies] ?? 0;
+        const saved = currencies[c.key] ?? 0;
+        return { ...c, earned, saved, spent: Math.max(0, earned - saved) };
+    }).filter(r => r.earned > 0);
+    if (rows.length === 0) return null;
+    const shards = rows.filter(r => r.icon !== 'reroll');
+    const all = shards.reduce((t, r) => ({ earned: t.earned + r.earned, saved: t.saved + r.saved, spent: t.spent + r.spent }),
+        { earned: 0, saved: 0, spent: 0 });
+    const n = (v: number) => Math.round(v).toLocaleString();
+    return (
+        <details className="modg-totals">
+            <summary>
+                Shards earned in total: <strong>{n(all.earned)}</strong>
+                <span> (spent and saved, all four types)</span>
+            </summary>
+            <table>
+                <thead><tr><th>Shards</th><th>Earned in total</th><th>Saved</th><th>Spent</th></tr></thead>
+                <tbody>
+                    {rows.map(r => (
+                        <tr key={r.key}>
+                            <td><span className="modg-totals-name"><ShardIcon kind={r.icon} /> {r.label}</span></td>
+                            <td>{n(r.earned)}</td><td>{n(r.saved)}</td><td>{n(r.spent)}</td>
+                        </tr>
+                    ))}
+                    {shards.length > 1 && (
+                        <tr className="modg-totals-sum">
+                            <td>All module shards</td><td>{n(all.earned)}</td><td>{n(all.saved)}</td><td>{n(all.spent)}</td>
+                        </tr>
+                    )}
+                </tbody>
+            </table>
+            <p>From the game&apos;s own lifetime counts (Import Game Data). Spent is everything they went on — slot levels and the rest.</p>
+        </details>
+    );
+}
+
 // An assist efficiency: its total, how much is stones and lab, and what
 // the next stone level and the rest cost.
 function AssistEffRow({ label, part, max, onChange }: {
@@ -475,6 +515,7 @@ export default function ModulesTab() {
                     </label>
                 ))}
             </div>
+            <ShardTotals currencies={currencies} />
             <div className="modg-tabs" role="tablist">
                 <button role="tab" aria-selected={panel === 'inventory'} className={`modg-tab ${panel === 'inventory' ? 'active' : ''}`}
                     onClick={() => setPanel('inventory')}>Inventory</button>

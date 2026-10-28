@@ -540,6 +540,19 @@ describe('29.1.3 exports (ExportVersion 1)', () => {
         expect(parseGameExport(makeExport()).currencies.rerollShards).toBeUndefined();
     });
 
+    // Each one earned in total (Module…Lifetime): spent and saved together.
+    it('reads the shards earned in total', () => {
+        const imp = parseGameExport(makeExport({
+            ModuleCannonShards: 9000, ModuleCannonShardsLifetime: 800000, ModuleArmorShardsLifetime: 760000,
+            ModuleGeneratorShardsLifetime: 790000, ModuleCoreShardsLifetime: 780000, ModuleRerollCurrencyLifetime: 1e8,
+        }));
+        expect(imp.currencies).toMatchObject({
+            cannonShardsLifetime: 800000, armorShardsLifetime: 760000, generatorShardsLifetime: 790000,
+            coreShardsLifetime: 780000, rerollShardsLifetime: 1e8,
+        });
+        expect(parseGameExport(makeExport()).currencies.cannonShardsLifetime).toBeUndefined();   // older files
+    });
+
     it('reads every tournament played', () => {
         const imp = parseGameExport(makeExport({
             TournamentRecords: [
