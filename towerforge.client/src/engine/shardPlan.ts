@@ -17,6 +17,14 @@
 //  coin a slot cost (wiki Modules). Costs are after the Module Shard and
 //  Module Coin Cost labs. Only the main effect is valued — sub-effect
 //  slots that a level reveals aren't.
+//
+//  "Best split": every shard of the type — the ones in its two slot levels
+//  and the ones saved — split between main and assist the best way there
+//  is, tried for every main level (Restore gives a slot's shards and coins
+//  all back, so levels can be moved; the sub-effects a module revealed stay
+//  — the game keeps the highest level reached). On the owner's export
+//  (2026-10-28) that total equals each type's shards earned in total
+//  (`Module…ShardsLifetime`) to within 27 shards: nothing else spends them.
 //  Pure functions — no store imports.
 // ============================================================
 
@@ -59,7 +67,21 @@ export interface TypeShardPlan {
     next: SlotStep | null;          // the best step past the plan — what to save for
     per10k: Record<SlotPos, number | null>;   // % gain per 10,000 shards past the plan
     pastCap: { pos: SlotPos; levels: number; shards: number; coins: number }[];
+    best: BestSplit | null;         // both slots usable: all the type's shards split the best way
 }
+
+export interface BestSplit {
+    total: number;       // shards in the two slots' levels + saved
+    main: number;        // levels
+    assist: number;
+    mult: number;        // the type's main effect at those levels
+    vsPlanPct: number;   // over the plan (levels now + saved shards spent)
+    restore: SlotPos[];  // slots that go lower: Restore them in game, then level back up
+    coins: number;       // coins it takes beyond what Restore gives back (≤ 0: none)
+}
+
+// Shards a slot's levels took from 0 — what Restore gives back.
+const inLevels = (cum: number[], s: ShardPlanSlot) => cum[s.from];
 
 // How far past the plan "next" and the rates look: far enough to see a
 // cheap level before a dearer one that adds a lot (the curves step up at
@@ -170,10 +192,37 @@ export function planTypeShards(
         pastCap.push({ pos: s === main ? 'main' : 'assist', levels: s.from - s.cap, shards: c.shards, coins: c.coins });
     }
 
+    // Every shard of the type split the best way: each main level the total
+    // reaches, the assist as high as the rest goes (two pointers — the more
+    // main takes, the lower the assist). Only when both slots have a module
+    // whose level counts; otherwise the plan above is already all there is.
+    let best: BestSplit | null = null;
+    if (assist && main.module && !main.fixed && assist.module && !assist.fixed) {
+        const total = inLevels(cum, main) + inLevels(cum, assist) + budget;
+        let a = 0;
+        while (a < assist.cap && cum[a + 1] <= total + EPS) a++;
+        let top = { m: 0, a, value: -Infinity, spent: Infinity };
+        for (let m = 0; m <= main.cap && cum[m] <= total + EPS; m++) {
+            while (a > 0 && cum[m] + cum[a] > total + EPS) a--;
+            const value = Math.log(curve('main', m)) + Math.log(curve('assist', a));
+            const spent = cum[m] + cum[a];
+            if (value > top.value + 1e-12 || (Math.abs(value - top.value) <= 1e-12 && spent < top.spent)) {
+                top = { m, a, value, spent };
+            }
+        }
+        const mult = Math.exp(top.value);
+        const coins = (lv: number) => moduleSlotCost(0, lv, labData).coins;
+        best = {
+            total, main: top.m, assist: top.a, mult, vsPlanPct: (mult / after - 1) * 100,
+            restore: [top.m < main.from && 'main', top.a < assist.from && 'assist'].filter(Boolean) as SlotPos[],
+            coins: coins(top.m) + coins(top.a) - coins(main.from) - coins(assist.from),
+        };
+    }
+
     return {
         type, saved: budget, now, after, gainPct: (after / now - 1) * 100,
         main, assist,
         shards: budget - left, coins: coinsFor(main) + (assist ? coinsFor(assist) : 0),
-        left, next, per10k, pastCap,
+        left, next, per10k, pastCap, best,
     };
 }

@@ -3,7 +3,8 @@
 //  For each type's saved shards: the main and assist levels that add the
 //  most to the type's main effect per shard (engine/shardPlan.ts), then
 //  the next level worth saving for and which slot gives more per shard
-//  from there. Which type to pick when the game lets you choose
+//  from there — and the best main and assist levels for every shard of
+//  the type (in its levels and saved), since Restore gives them back. Which type to pick when the game lets you choose
 //  (Event Shop trades, the Vault's daily missions) depends on the goal,
 //  so the Optimizer ranks that.
 // ============================================================
@@ -13,7 +14,7 @@ import { MAIN_EFFECT_LABELS } from '../../constants/moduleData';
 import { RARITIES } from '../../constants/moduleRarities';
 import { formatGameNumber } from '../../engine/gameNumbers';
 import { planTypeShards } from '../../engine/shardPlan';
-import type { ShardPlanSlot, SlotPos, TypeShardPlan } from '../../engine/shardPlan';
+import type { BestSplit, ShardPlanSlot, SlotPos, TypeShardPlan } from '../../engine/shardPlan';
 import ShardIcon from '../common/ShardIcon';
 import type { Currencies, LabData, ModuleState, ModuleType } from '../../types/gameTypes';
 
@@ -39,6 +40,42 @@ function SlotLine({ pos, slot }: { pos: SlotPos; slot: ShardPlanSlot | null }) {
         <div className="shardp-slot">
             <span className="shardp-pos">{POS[pos]}</span>
             <span>{what}</span>
+        </div>
+    );
+}
+
+// All the type's shards split the best way, and how to get there in game:
+// Restore puts a slot back to Lv 0 and gives every shard and coin back.
+function BestLevels({ best, effect }: { best: BestSplit; effect: string }) {
+    const done = best.vsPlanPct < 0.05;
+    const restore = best.restore.map(p => POS[p]).join(' and ');
+    return (
+        <div className="shardp-best">
+            <div className="shardp-best-head">Best levels for all {n(best.total)} shards</div>
+            {done ? (
+                <div className="shardp-dim">Your levels are already the best split of them.</div>
+            ) : (
+                <>
+                    <div className="shardp-slot">
+                        <span className="shardp-pos">Main</span><span>Lv <strong>{best.main}</strong></span>
+                    </div>
+                    <div className="shardp-slot">
+                        <span className="shardp-pos">Assist</span><span>Lv <strong>{best.assist}</strong></span>
+                    </div>
+                    <div className="shardp-effect">
+                        {effect} <strong>{x(best.mult)}</strong> <span className="shardp-gain">{pct(best.vsPlanPct)}</span>
+                        <span className="shardp-dim"> on the plan above</span>
+                    </div>
+                    <div className="shardp-cost">
+                        {restore
+                            ? <>In game: Restore the {restore} slot{best.restore.length > 1 ? 's' : ''} (every shard and coin comes
+                                back), then level Main to {best.main} and Assist to {best.assist}.</>
+                            : <>Level Main to {best.main} and Assist to {best.assist}.</>}
+                        {best.coins >= 1 && <> Takes {formatGameNumber(best.coins)} more coins.</>}
+                        {best.coins <= -1 && <> Gives {formatGameNumber(-best.coins)} coins back.</>}
+                    </div>
+                </>
+            )}
         </div>
     );
 }
@@ -103,6 +140,7 @@ function PlanCard({ plan }: { plan: TypeShardPlan }) {
                     </p>
                 );
             })}
+            {plan.best && <BestLevels best={plan.best} effect={effect} />}
         </div>
     );
 }
@@ -121,7 +159,9 @@ export default function ShardPlanPanel({ moduleState, labData, currencies }: {
             <p className="modg-hint shardp-intro">
                 Each type&apos;s shards level only its own slots. The plan buys the main or assist levels that add the
                 most per shard first; when the best next level is out of reach, it saves for it rather than spend on a
-                weaker one. After your Module Shard and Coin Cost labs.
+                weaker one. Restore gives a slot&apos;s shards back, so each card also works out the best main and assist
+                levels for every shard of that type — the ones in your levels and the ones saved. After your Module
+                Shard and Coin Cost labs.
             </p>
             <div className="modg-assist-grid">
                 {plans.map(p => <PlanCard key={p.type} plan={p} />)}

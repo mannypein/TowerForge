@@ -123,6 +123,46 @@ describe('module shard plan', () => {
         expect(plan.pastCap).toEqual([{ pos: 'main', levels: 10, shards, coins: moduleSlotCost(220, 230, {}).coins }]);
     });
 
+    // Every shard of the type — in the two slots' levels and saved — split
+    // the best way there is, checked against every pair of levels.
+    it('splits all of a type’s shards the best way', () => {
+        const labs = { 'Module Shard Cost': 30 };
+        const ms = modules('cannon', { rarity: 'A2', lv: 150 }, { rarity: 'A', lv: 120, multEff: 60 });
+        const plan = planTypeShards(ms, labs, 'cannon', 100_000);
+        const total = shardsFor(0, 150, labs) + shardsFor(0, 120, labs) + 100_000;
+        let top = { v: 0, m: 0, a: 0 };
+        for (let m = 0; m <= 240; m++) {
+            for (let a = 0; a <= 200; a++) {
+                if (shardsFor(0, m, labs) + shardsFor(0, a, labs) > total) continue;
+                const v = slotMainMult(ms, 'cannon', 'main', m, labs) * slotMainMult(ms, 'cannon', 'assist', a, labs);
+                if (v > top.v) top = { v, m, a };
+            }
+        }
+        expect(plan.best).toMatchObject({ main: top.m, assist: top.a });
+        expect(plan.best!.total).toBeCloseTo(total, 6);
+        expect(plan.best!.mult).toBeCloseTo(top.v, 9);
+        expect(plan.best!.mult).toBeGreaterThanOrEqual(plan.after - 1e-9);
+
+        // Levels already at the best split: nothing to move.
+        const there = modules('cannon', { rarity: 'A2', lv: top.m }, { rarity: 'A', lv: top.a, multEff: 60 });
+        const again = planTypeShards(there, labs, 'cannon', total - shardsFor(0, top.m, labs) - shardsFor(0, top.a, labs));
+        expect(again.best).toMatchObject({ main: top.m, assist: top.a, restore: [] });
+        expect(again.best!.vsPlanPct).toBeLessThan(0.05);
+    });
+
+    // The owner's armor (2026-10-28): an assist at 1% Mult Efficiency holds
+    // shards that do far more in the main slot.
+    it('moves levels off a weak assist', () => {
+        const labs = { 'Module Shard Cost': 30 };
+        const ms = modules('armor', { rarity: 'A5', lv: 215 }, { rarity: 'A5', lv: 201, multEff: 1 });
+        const best = planTypeShards(ms, labs, 'armor', 20_000).best!;
+        expect(best.main).toBeGreaterThan(215);
+        expect(best.assist).toBeLessThan(201);
+        expect(best.restore).toEqual(['assist']);
+        expect(best.vsPlanPct).toBeGreaterThan(5);
+        expect(best.coins).toBeGreaterThan(0);
+    });
+
     it('plans nothing for an empty slot or a ×value typed on the module', () => {
         expect(planTypeShards(modules('core', null), {}, 'core', 50_000)).toMatchObject({ shards: 0, gainPct: 0, next: null });
         const typed = planTypeShards(modules('core', { rarity: 'A', lv: 150, mainMult: 20 }), {}, 'core', 50_000);
@@ -131,5 +171,8 @@ describe('module shard plan', () => {
         // An assist slot with no module in it isn't levelled either.
         const emptyAssist = modules('core', { rarity: 'A', lv: 200 }, { rarity: 'A', lv: 50, multEff: 40 }, true);
         expect(planTypeShards(emptyAssist, {}, 'core', 50_000).assist?.to).toBe(50);
+        // With one slot to level, the plan is the split: no "best split".
+        expect(planTypeShards(emptyAssist, {}, 'core', 50_000).best).toBeNull();
+        expect(planTypeShards(modules('armor', { rarity: 'A', lv: 150 }), {}, 'armor', 50_000).best).toBeNull();
     });
 });

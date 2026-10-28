@@ -83,6 +83,23 @@ What each currency buys (wiki Currencies page) and how it's ranked:
   module's rarity cap are flagged (Restore refunds all a slot cost — wiki
   Modules). Not valued: the sub-effect slots a level reveals (101, 141, 161,
   241 — `MODULE_EFFECT_SLOT_UNLOCK`).
+- **Best levels for all a type's shards** (Shard plan, 2026-10-28): Restore
+  puts a slot back to Lv 0 and gives back every shard and coin it cost, and
+  the sub-effects a module revealed stay (the game keeps the highest level
+  reached — wiki Modules, `MODULE_EFFECT_SLOT_UNLOCK`). So each card also
+  splits every shard of the type — the ones in both slots' levels plus the
+  ones saved — the best way there is: every main level the total reaches,
+  the assist as high as the rest goes (exact; checked against every pair of
+  levels in a test). It says which slot to Restore and the levels to buy
+  back, and the coins it takes or gives back. **Checked on the owner's
+  export:** for every type, shards in the levels (at today's prices, after
+  the Module Shard Cost lab) + shards saved = shards earned in total
+  (`Module…ShardsLifetime`) to within 27 — nothing else spends module
+  shards, so the total is everything the player has. Owner's best splits:
+  Armor 238 / 148 instead of 215 / 201 (+12.5% Tower Health on the plan —
+  the assist runs at 1% Mult Efficiency), Cannon 213 / 210 (+2.95%), Core
+  211 / 210 (+1.81%), Generator 224 / 194 (+0.43%). Assumption: Restore
+  gives back what levels cost at today's prices (the totals above agree).
 - **Bots**: only stats a model reads score — Amplify Bot and Bot Bot bonus
   (damage), Golden Bot (coins). Flame and Thunder Bot aren't modeled, so
   their levels show no gain: battle reports record Flame Bot kills and hits
