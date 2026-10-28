@@ -77,6 +77,10 @@ export interface SharedGuardian {
     presetNames?: string[];
 }
 
+export interface SharedVault {
+    levels: Record<string, number>;   // by vault id, plus g<group> for unlocked sections
+}
+
 export interface SharePayload {
     profile?: SharedProfile;
     uw?: UWData;
@@ -87,11 +91,12 @@ export interface SharePayload {
     labs?: SharedLabs;
     relics?: SharedRelics;
     guardian?: SharedGuardian;
+    vault?: SharedVault;
 }
 
 // Payload keys in the order the viewer shows them (the server keeps the
 // same list, ShareStore.KnownSections).
-export const SHARE_SECTIONS = ['profile', 'uw', 'cards', 'bots', 'modules', 'workshop', 'labs', 'relics', 'guardian'] as const;
+export const SHARE_SECTIONS = ['profile', 'uw', 'cards', 'bots', 'modules', 'workshop', 'labs', 'relics', 'guardian', 'vault'] as const;
 export type ShareSectionKey = typeof SHARE_SECTIONS[number];
 
 // Anonymous shares come back with a claim token. We keep them on this

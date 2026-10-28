@@ -25,6 +25,7 @@ const SECTIONS: { key: SectionKey; label: string; hint: string }[] = [
     { key: 'labs', label: 'Labs', hint: 'Every lab you’ve researched' },
     { key: 'relics', label: 'Relics', hint: 'Your relics’ bonus totals' },
     { key: 'guardian', label: 'Guardian', hint: 'Chips equipped per preset, their levels, skins' },
+    { key: 'vault', label: 'Vault', hint: 'The Vault upgrades you’ve bought and their levels' },
 ];
 
 export default function ShareTab() {
@@ -42,12 +43,13 @@ export default function ShareTab() {
     const labData = useGameStore(s => s.labData);
     const relicData = useGameStore(s => s.relicData);
     const guardianData = useGameStore(s => s.guardianData);
+    const vaultLevels = useGameStore(s => s.vaultLevels);
     const accountStatus = useAccountStore(s => s.status);
     const sharesChanged = useAccountStore(s => s.sharesChanged);
     const setActiveTab = useGameStore(s => s.setActiveTab);
 
     const [selected, setSelected] = useState<Record<SectionKey, boolean>>({
-        profile: true, uw: true, cards: true, bots: true, modules: true, workshop: true, labs: true, relics: true, guardian: true,
+        profile: true, uw: true, cards: true, bots: true, modules: true, workshop: true, labs: true, relics: true, guardian: true, vault: true,
     });
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -56,6 +58,7 @@ export default function ShareTab() {
     const [openCode, setOpenCode] = useState('');
 
     const anySelected = SECTIONS.some(s => selected[s.key]);
+    const hasVault = Object.values(vaultLevels ?? {}).some(v => v > 0);
 
     async function handleCreate() {
         const payload: SharePayload = {};
@@ -81,6 +84,7 @@ export default function ShareTab() {
         if (selected.labs) payload.labs = { levels: labData };
         if (selected.relics) payload.relics = { totals: relicData };
         if (selected.guardian && guardianData?.unlocked) payload.guardian = { guardian: guardianData, presetCount, presetNames };
+        if (selected.vault && hasVault) payload.vault = { levels: vaultLevels };
 
         setBusy(true);
         setError(null);
@@ -134,7 +138,7 @@ export default function ShareTab() {
                         </p>
                     )}
 
-                    {SECTIONS.filter(s => s.key !== 'guardian' || guardianData?.unlocked).map(s => (
+                    {SECTIONS.filter(s => (s.key !== 'guardian' || guardianData?.unlocked) && (s.key !== 'vault' || hasVault)).map(s => (
                         <label key={s.key} className="field-row" style={{ cursor: 'pointer' }}>
                             <span className="field-label">
                                 {s.label}

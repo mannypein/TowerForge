@@ -1,96 +1,62 @@
 // ============================================================
 //  TowerForge Companion — UW Share Card
-//  The nine Ultimate Weapons: 3×3 on the poster, fewer columns on
-//  narrow screens.
+//  The nine Ultimate Weapons drawn like the game's UW screen (UWPanel):
+//  each stat's value with its next cost or Max, and the UW+ along the
+//  bottom. Two across on the poster (Reddit-shaped pages, PosterPages),
+//  fewer on narrow screens.
 // ============================================================
 
 import type { Ref } from 'react';
 import { useGameStore } from '../../store/useGameStore';
-import { UWS, UW_STAT_VALUES, UW_PLUS_DATA } from '../../constants/gameData';
-import type { UWAbbr, UWData } from '../../types/gameTypes';
-import { SHARE_COLORS, shareRootStyle } from './shareTheme';
+import { UWS } from '../../constants/gameData';
+import type { UWData } from '../../types/gameTypes';
+import UWPanel from '../common/UWPanel';
+import { shareRootStyle } from './shareTheme';
 import { ShareHeader, ShareFooter } from './shareCommon';
+import PosterPages from './PosterPages';
+import type { PosterBlock } from './PosterPages';
+
+const COLS = 2;
 
 // `snapshot` lets a shared link render someone else's data; without it the
 // card reads the logged-in player's store.
-export default function UWShareCard({ ref, snapshot, poster }: { ref?: Ref<HTMLDivElement>; snapshot?: UWData; poster?: boolean }) {
+export default function UWShareCard({ ref, snapshot, poster, onPages }: {
+    ref?: Ref<HTMLDivElement>;
+    snapshot?: UWData;
+    poster?: boolean;
+    onPages?: (count: number) => void;
+}) {
     const storeUwData = useGameStore(s => s.uwData);
     const uwData = snapshot ?? storeUwData;
 
     const ownedCount = UWS.filter(u => uwData.data[u.a]?.own).length;
     const plusCount = UWS.filter(u => uwData.data[u.a]?.upOwn).length;
+    const title = 'Ultimate Weapons';
+    const subtitle = `${ownedCount}/9 owned · ${plusCount}/9 UW+ unlocked`;
+    // UW+ rows only where unlocked (a share has no stones to show prices with).
+    const panel = (uw: typeof UWS[number]) => (
+        <UWPanel key={uw.a} uw={uw} data={uwData.data[uw.a]} showPlus={false} />
+    );
+
+    if (poster) {
+        const blocks: PosterBlock[] = [];
+        for (let i = 0; i < UWS.length; i += COLS) {
+            blocks.push({
+                key: `uw:${i}`,
+                node: (
+                    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${COLS}, minmax(0, 1fr))`, gap: 12 }}>
+                        {UWS.slice(i, i + COLS).map(panel)}
+                    </div>
+                ),
+            });
+        }
+        return <PosterPages ref={ref} title={title} subtitle={subtitle} onPages={onPages} blocks={blocks} />;
+    }
 
     return (
-        <div ref={ref} style={shareRootStyle(poster)}>
-            <ShareHeader
-                title="Ultimate Weapons"
-                subtitle={`${ownedCount}/9 owned · ${plusCount}/9 UW+ unlocked`}
-            />
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 290px), 1fr))', gap: 16 }}>
-                {UWS.map(uw => {
-                    const ud = uwData.data[uw.a];
-                    const owned = ud?.own ?? false;
-                    const plusDef = UW_PLUS_DATA[uw.a as UWAbbr];
-                    const upOwn = ud?.upOwn ?? false;
-                    const upLvl = ud?.upLvl ?? 0;
-
-                    return (
-                        <div
-                            key={uw.a}
-                            style={{
-                                background: SHARE_COLORS.panel,
-                                border: `1px solid ${owned ? SHARE_COLORS.border : 'transparent'}`,
-                                borderTop: `3px solid ${owned ? SHARE_COLORS.accent : SHARE_COLORS.locked}`,
-                                borderRadius: 10,
-                                padding: 16,
-                                opacity: owned ? 1 : 0.5,
-                            }}
-                        >
-                            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-                                <span style={{ fontSize: 19, fontWeight: 700 }}>{uw.n}</span>
-                                <span style={{ fontSize: 13, color: SHARE_COLORS.dim }}>{uw.a}</span>
-                            </div>
-
-                            {!owned ? (
-                                <div style={{ marginTop: 14, fontSize: 14, color: SHARE_COLORS.locked }}>Not owned</div>
-                            ) : (
-                                <>
-                                    <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                        {uw.s.map(([statName, maxLv], statIdx) => {
-                                            const lv = ud?.sv[statIdx] ?? 1;
-                                            const val = UW_STAT_VALUES[uw.a as UWAbbr]?.[statIdx]?.[lv - 1] ?? '—';
-                                            const isMax = lv >= maxLv;
-                                            return (
-                                                <div key={statName} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 15 }}>
-                                                    <span style={{ color: SHARE_COLORS.dim }}>{statName}</span>
-                                                    <span>
-                                                        <strong style={{ color: isMax ? SHARE_COLORS.gold : SHARE_COLORS.text }}>{val}</strong>
-                                                        <span style={{ color: SHARE_COLORS.dim, fontSize: 12 }}> · Lv {lv}/{maxLv}</span>
-                                                    </span>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-
-                                    <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${SHARE_COLORS.border}`, fontSize: 14 }}>
-                                        {upOwn && plusDef ? (
-                                            <span>
-                                                <span style={{ color: SHARE_COLORS.gold }}>{plusDef.name}</span>
-                                                <span style={{ color: SHARE_COLORS.dim }}> · Lv {upLvl + 1}/{uw.upMax + 1} · </span>
-                                                <strong>{plusDef.vals[upLvl] ?? '—'} {plusDef.unit}</strong>
-                                            </span>
-                                        ) : (
-                                            <span style={{ color: SHARE_COLORS.locked }}>{plusDef?.name ?? uw.up} locked</span>
-                                        )}
-                                    </div>
-                                </>
-                            )}
-                        </div>
-                    );
-                })}
-            </div>
-
+        <div ref={ref} style={shareRootStyle(false)}>
+            <ShareHeader title={title} subtitle={subtitle} />
+            <div className="uwg-list">{UWS.map(panel)}</div>
             <ShareFooter />
         </div>
     );

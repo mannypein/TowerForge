@@ -7,7 +7,8 @@
 //  it, so an export looks the same from any screen (shareTheme) — a
 //  long section as several Reddit-shaped images (PosterPages).
 //  Cards, Bots, Modules, Workshop and Guardian switch between the
-//  sender's presets, like their tabs. Sections show in the order of
+//  sender's presets, like their tabs. Cards, UWs, Guardian and Vault are
+//  drawn like the game's own screens. Sections show in the order of
 //  SHARE_SECTIONS; older shares just have fewer of them.
 // ============================================================
 
@@ -21,7 +22,9 @@ import BotsShareCard from './BotsShareCard';
 import ModulesShareCard from './ModulesShareCard';
 import StatsShareCard from './StatsShareCard';
 import type { StatGroup } from './StatsShareCard';
-import { guardianGroups, labsGroups, profileGroups, relicsGroups, workshopGroups } from './shareSections';
+import GuardianShareCard from './GuardianShareCard';
+import VaultShareCard from './VaultShareCard';
+import { labsGroups, profileGroups, relicsGroups, workshopGroups } from './shareSections';
 import { SHARE_OFFSCREEN_STYLE } from './shareTheme';
 import { openExportDialog } from './exportImages';
 import { BOTS_CONFIG, botsForPreset, getPresetBots, isBotEntryOwned } from '../../constants/botData';
@@ -104,6 +107,11 @@ export default function SharedView({ code }: Props) {
     const [guardianPresetIdx, setGuardianPreset] = useState(0);
     const [loadoutId, setLoadoutId] = useState<string | null>(null);
     const uwRef = useRef<HTMLDivElement>(null);
+    const guardianRef = useRef<HTMLDivElement>(null);
+    const vaultRef = useRef<HTMLDivElement>(null);
+    const [uwPages, setUwPages] = useState(1);
+    const [guardianPages, setGuardianPages] = useState(1);
+    const [vaultPages, setVaultPages] = useState(1);
     const cardsRef = useRef<HTMLDivElement>(null);
     const botsRef = useRef<HTMLDivElement>(null);
     const modulesRef = useRef<HTMLDivElement>(null);
@@ -195,8 +203,9 @@ export default function SharedView({ code }: Props) {
 
                 {payload?.uw && (
                     <ShareSection
+                        pages={uwPages}
                         onExport={() => exportCard(uwRef.current, 'uws', 'Ultimate Weapons')}
-                        poster={<UWShareCard ref={uwRef} snapshot={payload.uw} poster />}
+                        poster={<UWShareCard ref={uwRef} snapshot={payload.uw} onPages={setUwPages} poster />}
                     >
                         <UWShareCard snapshot={payload.uw} />
                     </ShareSection>
@@ -263,9 +272,25 @@ export default function SharedView({ code }: Props) {
                 )}
 
                 {guardian && (
-                    <StatsSection title="Guardian" file="guardian" subtitle={presetLabel(guardian.presetNames, guardianPresetIdx)}
+                    <ShareSection
                         controls={<PresetButtons count={guardian.presetCount} names={guardian.presetNames} value={guardianPresetIdx} onChange={setGuardianPreset} />}
-                        groups={guardianGroups(guardian, guardianPresetIdx)} empty="No Guardian chips equipped." columns={3} />
+                        pages={guardianPages}
+                        onExport={() => exportCard(guardianRef.current, 'guardian', 'Guardian')}
+                        poster={<GuardianShareCard ref={guardianRef} guardian={guardian.guardian} preset={guardianPresetIdx}
+                            presetName={presetLabel(guardian.presetNames, guardianPresetIdx)} onPages={setGuardianPages} poster />}
+                    >
+                        <GuardianShareCard guardian={guardian.guardian} preset={guardianPresetIdx} presetName={presetLabel(guardian.presetNames, guardianPresetIdx)} />
+                    </ShareSection>
+                )}
+
+                {payload?.vault && (
+                    <ShareSection
+                        pages={vaultPages}
+                        onExport={() => exportCard(vaultRef.current, 'vault', 'Vault')}
+                        poster={<VaultShareCard ref={vaultRef} snapshot={payload.vault.levels} onPages={setVaultPages} poster />}
+                    >
+                        <VaultShareCard snapshot={payload.vault.levels} />
+                    </ShareSection>
                 )}
             </main>
         </div>

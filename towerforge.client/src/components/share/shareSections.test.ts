@@ -1,10 +1,8 @@
 // The share sections drawn as tiles: what's above zero, in the game's
-// words, maxed in gold; the shown preset's workshop and Guardian. Made-up data.
+// words, maxed in gold; the shown preset's workshop. Made-up data.
 
 import { describe, expect, it } from 'vitest';
-import { guardianGroups, labsGroups, profileGroups, relicsGroups, workshopGroups } from './shareSections';
-import { defaultGuardianData } from '../../engine/guardian';
-import { CHIPS, chipById } from '../../constants/guardianData';
+import { labsGroups, profileGroups, relicsGroups, workshopGroups } from './shareSections';
 import type { SharedWorkshop } from '../../engine/shareApi';
 
 const tile = (groups: ReturnType<typeof profileGroups>, label: string, name: string) =>
@@ -40,18 +38,5 @@ describe('share sections', () => {
         expect(main.tiles[0].maxed).toBe(true);
         expect(main.note).toBe('2 researched · 1 maxed');
         expect(tile(relicsGroups({ totals: { rDmg: 50 } }), 'Attack', 'Damage')!.value).toBe('+50%');
-    });
-
-    it('Guardian: the equipped chips with their stats, then what’s owned', () => {
-        const g = defaultGuardianData();
-        const attack = chipById('attack');
-        const levels = Array(CHIPS.length * 3).fill(0);
-        levels[attack.index * 3] = 3;
-        const guardian = { ...g, unlocked: true, presets: [{ name: 'P', extraSlots: 0, chips: [attack.index, -1, -1], levels }] };
-        const groups = guardianGroups({ guardian, presetCount: 2 }, 0);
-        expect(groups[0].label).toBe('Attack');
-        expect(groups[0].tiles[0].note).toBe(`Lv 3 / ${attack.stats[0].max}`);
-        expect(tile(groups, 'Guardian', 'Chip slots')!.value).toBe('1');
-        expect(guardianGroups({ guardian: g, presetCount: 2 }, 0)).toEqual([]);   // not unlocked
     });
 });

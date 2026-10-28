@@ -1,16 +1,14 @@
 // ============================================================
 //  TowerForge Companion — Share sections as tiles
-//  Turns the shared Profile, Workshop, Labs, Relics and Guardian into
+//  Turns the shared Profile, Workshop, Labs and Relics into
 //  the groups StatsShareCard draws: what the sender has, in the game's
 //  words, maxed in gold. Only what's above zero is listed, so a share
 //  stays short.
 // ============================================================
 
 import { LABS, RELICS, WS_ENH, WS_STATS } from '../../constants/gameData';
-import { activeChips, guardianPreset } from '../../engine/guardian';
 import { enhForPreset } from '../../engine/statHelpers';
-import { RELEASED_CHIPS, SKIN_COIN_BONUS } from '../../constants/guardianData';
-import type { SharedGuardian, SharedLabs, SharedProfile, SharedRelics, SharedWorkshop } from '../../engine/shareApi';
+import type { SharedLabs, SharedProfile, SharedRelics, SharedWorkshop } from '../../engine/shareApi';
 import type { StatGroup, StatTile } from './StatsShareCard';
 
 const CATEGORY: Record<string, string> = { attack: 'Attack', defense: 'Defense', utility: 'Utility' };
@@ -76,31 +74,4 @@ export function relicsGroups(r: SharedRelics): StatGroup[] {
             .filter(x => x.v !== 0)
             .map((x): StatTile => ({ name: x.name, value: `${x.v > 0 && x.unit !== 's' ? '+' : ''}${x.v}${x.unit}` })),
     }));
-}
-
-// The Guardian preset a site preset uses: its equipped chips with their
-// stats, then what's owned.
-export function guardianGroups(s: SharedGuardian, preset: number): StatGroup[] {
-    const g = s.guardian;
-    if (!g?.unlocked) return [];
-    const p = guardianPreset(g, preset);
-    const chips = activeChips(g, preset).map((a): StatGroup => ({
-        label: a.chip.name,
-        note: 'equipped',
-        tiles: a.chip.stats.map((stat, k) => ({
-            name: stat.name, value: stat.fmt(a.values[k]), note: level(a.levels[k], stat.max), maxed: a.levels[k] >= stat.max,
-        })),
-    }));
-    const owned = RELEASED_CHIPS.filter(c => g.chipsOwned[c.index]).map(c => c.name);
-    return [
-        ...chips,
-        {
-            label: 'Guardian',
-            tiles: [
-                { name: 'Chip slots', value: String(1 + Math.min(2, Math.max(0, p?.extraSlots ?? 0))) },
-                { name: 'Chips owned', value: owned.length ? owned.join(', ') : '—' },
-                { name: 'Skins', value: String(g.skinsOwned ?? 0), note: `+${((g.skinsOwned ?? 0) * SKIN_COIN_BONUS * 100).toFixed(1)}% coins` },
-            ],
-        },
-    ];
 }
