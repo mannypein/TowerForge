@@ -7,7 +7,7 @@ import { useGameStore } from '../store/useGameStore';
 import { readActiveModuleBonuses } from './modBonuses';
 import { runRatesFrom } from './runRates';
 import { parseGameExport } from './gameExport';
-import { buildCandidates, goalScore, groupPath, mergeRepeats, pathGain, simulateMedalPath, simulateStonePath } from './optimizer';
+import { buildCandidates, goalScore, groupPath, mergeRepeats, pathGain, shardTypeValues, simulateMedalPath, simulateStonePath } from './optimizer';
 import { buildFarmCalibration } from './farming';
 import { buildEhpCalibration } from './ehp';
 import type { OptimizerSnapshot } from './optimizer';
@@ -449,10 +449,38 @@ describe('every currency', () => {
             category: 'uw' as const, label: 'x', subLabel: '', fromLv: 0, toLv: 1,
             cost: 15, costType: 'stones' as const, scorePct: 1, scorePerCost: 1 / 15,
         }));
-        const rows = simulateMedalPath(5, snapshot(), stonePath, 0, []);
+        const rows = simulateMedalPath(5, snapshot(), stonePath, 0, {});
         expect(rows).toHaveLength(1);
         expect(rows[0]).toMatchObject({ label: 'Event Shop — 15 Stones', subLabel: 'Trades 1–5 this event' });
         expect(rows[0].cost).toBe(40 + 65 + 90 + 130 + 175);
+    });
+
+    // Shards come in the type picked, and the shards of it already held
+    // go first: Armor's next 1,000 are worth less than Cannon's first.
+    const shardStep = (cost: number, scorePct: number) => ({
+        category: 'modules' as const, label: 'x', subLabel: '', fromLv: 0, toLv: 5,
+        cost, costType: 'shards' as const, scorePct, scorePerCost: scorePct / cost,
+    });
+    const shardPaths = { cannon: [shardStep(1000, 5)], armor: [shardStep(1000, 5), shardStep(1000, 3)] };
+
+    it('trades medals for the shard type worth most after the shards held', () => {
+        const rows = simulateMedalPath(6, snapshot(), [], 0, shardPaths, { armor: 1000 });
+        expect(rows.map(r => [r.label, r.subLabel])).toEqual([
+            ['Event Shop — 250 Cannon Shards', 'Trades 1–4 this event'],
+            ['Event Shop — 250 Armor Shards', 'Trades 5–6 this event'],
+        ]);
+        expect(rows[0].ref).toEqual(['trade', 'shards', 'cannon']);
+    });
+
+    it('values each type’s held shards and the next 1,000', () => {
+        const values = shardTypeValues({ ...shardPaths, generator: [], core: [] }, { armor: 1000 });
+        const armor = values.find(v => v.type === 'armor')!;
+        expect(armor.held).toBe(1000);
+        expect(armor.heldPct).toBeCloseTo(5, 9);
+        expect(armor.next1kPct).toBeCloseTo(3, 9);
+        expect(values.find(v => v.type === 'cannon')!.heldPct).toBe(0);
+        expect(values.find(v => v.type === 'cannon')!.next1kPct).toBeCloseTo(5, 9);
+        expect(values.find(v => v.type === 'core')!.next1kPct).toBe(0);
     });
 });
 

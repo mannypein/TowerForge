@@ -42,7 +42,7 @@ What each currency buys (wiki Currencies page) and how it's ranked:
 | Stones | UW stats, UW+, card mastery unlocks, assist modules — one path | wiki (see ultimate-weapons.md) |
 | Coins | workshop (per coin), enhancements (per coin) | game table via TheTowerSDK; discount labs |
 | Lab time | labs (per hour of research) | SDK lab catalog; Labs Speed, relic, Labs Coin Discount |
-| Module Shards | module slot levels, 5 at a time (per shard; coins shown) | SDK module tables + wiki level 1; Module Shard/Coin Cost labs (1% a level) |
+| Module Shards | module slot levels, 5 at a time (per shard; coins shown); each type's held shards and next 1,000 (below) | SDK module tables + wiki level 1; Module Shard/Coin Cost labs (1% a level) |
 | Medals | bot stat and Bot+ levels vs Event Shop trades (per medal) | bots: 100 + 40 × (L − 1) a level (wiki bot Cost pages, every bot); Bot+: 100 + 50 × (L − 1), Echoing Shot 100 + 200 × (L − 1); trades 40, 65, 90, 130, 175, 230, then 380 |
 | Gems | card slots: the best owned card not in the preset, into a free slot or the next one bought (per gem) | wiki Cards: 50 → 10,000 gems, 22 slots |
 | Elite Cells | not a path: a table of lab boosts (×1.5 at 15/h … ×8 at 1M/h) and the extra lab hours per cell, on the top lab | wiki Currencies |
@@ -50,9 +50,39 @@ What each currency buys (wiki Currencies page) and how it's ranked:
 | Keys, Guild Tokens | not ranked (Vault, Guild Store) | — |
 
 - **Medal trades** are worth what 15 stones / 250 shards buy next on their own
-  paths (`pathGain`): stones after the ones already held, shards from zero
-  (shards held aren't saved). Prices reset each event; the path assumes one
-  event. 150-gem trades aren't valued (gems have no single use to price them).
+  paths (`pathGain`), after the ones already held. Shards come in the type
+  the player picks (wiki Currency/Shards), so a shard trade takes the type
+  whose own path (`simulateShardPaths`) gains most after that type's held
+  shards, and says which ("Event Shop — 250 Core Shards"); the trade price
+  climbs with every shard trade, whatever the type (one Event Shop item).
+  Prices reset each event; the path assumes one event. 150-gem trades aren't
+  valued (gems have no single use to price them).
+- **Module shards by type** (2026-10-28): each type's shards level only that
+  type's slots (wiki Currency/Shards, Modules), so the Module Shards section
+  opens with "Your module shards": per type, what the shards held add along
+  that type's own path and what the next 1,000 would — the type to pick for
+  Event Shop trades and the Vault's Daily Mission Shard Type (Vault 1610).
+  The "Module slot levels" list below still ranks all four types together
+  by gain per shard. On the owner's export (2026-10-28) the pick follows the
+  goal: Cannon for damage (Core close behind), Generator for coins, Armor
+  for survival; the four per-type paths take 25–50 ms, less than the pooled
+  one.
+- **Shard plan** (Modules → Shard plan, `engine/shardPlan.ts`, 2026-10-28):
+  per type, the main and assist levels its saved shards should buy, judged
+  by the type's main effect alone (primary × assist at Mult Efficiency), so
+  it needs no goal. Levels go in order of gain per shard, looking up to 25
+  levels ahead so a cheap level just under a step-up (100, 200) counts with
+  the dear ones it opens; when the best next level is out of reach the plan
+  saves for it instead of spending on a weaker one. Checked on the owner's
+  export: Armor's assist at 1% Mult Efficiency gives a quarter of what the
+  main slot does a shard, so the plan buys main 216 and keeps 9,711 shards
+  for main 217 (89 short) rather than put 7,175 into the assist; Cannon and
+  Core assists at 201 give about 1.7× the main slot's gain a shard. Spending
+  everything at once would get within 1% of the best split there is (test
+  with 300K shards), but order matters as shards come in. Levels past a
+  module's rarity cap are flagged (Restore refunds all a slot cost — wiki
+  Modules). Not valued: the sub-effect slots a level reveals (101, 141, 161,
+  241 — `MODULE_EFFECT_SLOT_UNLOCK`).
 - **Bots**: only stats a model reads score — Amplify Bot and Bot Bot bonus
   (damage), Golden Bot (coins). Flame and Thunder Bot aren't modeled, so
   their levels show no gain: battle reports record Flame Bot kills and hits

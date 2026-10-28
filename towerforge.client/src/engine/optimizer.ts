@@ -388,6 +388,7 @@ const cap = (word: string) => word.charAt(0).toUpperCase() + word.slice(1);
 export function buildCandidates(
     snap: OptimizerSnapshot,
     cat: OptCategory,
+    onlyType?: ModuleType,   // module slots: just this type's
 ): OptCandidate[] {
     const candidates: OptCandidate[] = [];
     const basEDPS = getScore(snap);
@@ -972,7 +973,7 @@ export function buildCandidates(
     // Main and assist slot of each type, 5 levels a step; a module can't
     // pass its rarity's cap, so steps past it show no gain.
     if (cat === 'modules') {
-        for (const type of MODULE_TYPES) {
+        for (const type of onlyType ? [onlyType] : MODULE_TYPES) {
             for (const pos of ['main', 'assist'] as const) {
                 if (pos === 'assist' && (snap.moduleState.assistData[type]?.rarity ?? 'locked') === 'locked') continue;
                 const curLv = snap.moduleState.slotLevels?.[type]?.[pos] ?? 0;
@@ -1213,13 +1214,14 @@ export function simulateCategoryPath(
     cat: OptCategory,
     steps: number,
     snapshot: OptimizerSnapshot,
+    onlyType?: ModuleType,
 ): OptCandidate[] {
     const path: OptCandidate[] = [];
     const state = cloneSnapshot(snapshot);
 
     for (let i = 0; i < steps; i++) {
         // Upgrades worth almost nothing (< minGainPct) aren't recommended.
-        const candidates = buildCandidates(state, cat).filter(worthIt);
+        const candidates = buildCandidates(state, cat, onlyType).filter(worthIt);
         if (!candidates.length) break;
 
         const best = candidates[0];
@@ -1234,6 +1236,26 @@ export function simulateCategoryPath(
     }
 
     return cat === 'stones' ? path : groupPath(path);
+}
+
+// Each type's own module slot path: a type's shards level only its own
+// slots (wiki Currency/Shards). Shards held are what each path spends first.
+export type ShardPaths = Record<ModuleType, OptCandidate[]>;
+export function simulateShardPaths(steps: number, snapshot: OptimizerSnapshot): ShardPaths {
+    return Object.fromEntries(
+        MODULE_TYPES.map(type => [type, simulateCategoryPath('modules', steps, snapshot, type)]),
+    ) as ShardPaths;
+}
+
+// What each type's shards are worth: the ones held (spent along that
+// type's path) and the next 1,000 after them — for when the type is the
+// player's pick (Event Shop trades, the Vault's Daily Mission Shard Type).
+export interface ShardTypeValue { type: ModuleType; held: number; heldPct: number; next1kPct: number }
+export function shardTypeValues(paths: ShardPaths, held: Partial<Record<ModuleType, number>>): ShardTypeValue[] {
+    return MODULE_TYPES.map(type => {
+        const h = Math.max(0, held[type] ?? 0);
+        return { type, held: h, heldPct: pathGain(paths[type], 0, h), next1kPct: pathGain(paths[type], h, 1000) };
+    });
 }
 
 // What spending `amount` more of a currency along its ranked path is
@@ -1260,29 +1282,40 @@ export function pathGain(path: OptCandidate[], spent: number, amount: number): n
 //  Module Shards each, dearer with every trade of a kind in one event
 //  (40, 65, 90, 130, 175, 230, then 380). A trade is worth what those
 //  stones or shards buy next on their own ranked paths (`stonesHeld`
-//  are spent first). Each step takes the most gain per medal.
+//  are spent first). Shards come in the type the player picks, so a
+//  shard trade takes the type whose own path gains most after the
+//  shards of it held. Each step takes the most gain per medal.
 // ============================================================
 export function simulateMedalPath(
     steps: number,
     snapshot: OptimizerSnapshot,
     stonePath: OptCandidate[],
     stonesHeld: number,
-    shardPath: OptCandidate[],
+    shardPaths: Partial<ShardPaths>,
+    shardsHeld: Partial<Record<ModuleType, number>> = {},
 ): OptCandidate[] {
     const path: OptCandidate[] = [];
     const state = cloneSnapshot(snapshot);
     const trades = { stones: 0, shards: 0 };
+    const typeTrades: Partial<Record<ModuleType, number>> = {};
     const tradeRow = (kind: 'stones' | 'shards'): OptCandidate | null => {
         const k = trades[kind];
         const price = MEDAL_TRADE_PRICES[Math.min(k, MEDAL_TRADE_PRICES.length - 1)];
         const amount = MEDAL_TRADE_GIVES[kind];
-        const gain = kind === 'stones'
-            ? pathGain(stonePath, stonesHeld + k * amount, amount)
-            : pathGain(shardPath, k * amount, amount);
+        let gain = 0;
+        let type: ModuleType | undefined;
+        if (kind === 'stones') {
+            gain = pathGain(stonePath, stonesHeld + k * amount, amount);
+        } else {
+            for (const t of MODULE_TYPES) {
+                const g = pathGain(shardPaths[t] ?? [], (shardsHeld[t] ?? 0) + (typeTrades[t] ?? 0) * amount, amount);
+                if (g > gain) { gain = g; type = t; }
+            }
+        }
         if (!(gain >= GC_SCORING.minGainPct)) return null;
         return {
             category: 'bots',
-            label: kind === 'stones' ? `Event Shop — ${amount} Stones` : `Event Shop — ${amount} Module Shards`,
+            label: kind === 'stones' ? `Event Shop — ${amount} Stones` : `Event Shop — ${amount} ${cap(type!)} Shards`,
             subLabel: `Trade ${k + 1} this event`,
             fromLv: k,
             toLv: k + 1,
@@ -1291,7 +1324,7 @@ export function simulateMedalPath(
             costKnown: true,
             scorePct: gain,
             scorePerCost: gain / price,
-            ref: ['trade', kind],
+            ref: type ? ['trade', kind, type] : ['trade', kind],
         };
     };
     for (let i = 0; i < steps; i++) {
@@ -1305,6 +1338,8 @@ export function simulateMedalPath(
         path.push(best);
         if (best.ref?.[0] === 'trade') {
             trades[best.ref[1] as 'stones' | 'shards']++;
+            const type = best.ref[2] as ModuleType | undefined;
+            if (type) typeTrades[type] = (typeTrades[type] ?? 0) + 1;
         } else {
             applyUpgrade(state, best);
         }

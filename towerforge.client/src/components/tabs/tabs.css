@@ -1846,6 +1846,94 @@
     color: var(--text-bright);
 }
 
+/* Shard plan (Modules page): each type's shards, main vs assist */
+.shardp-intro {
+    margin: 0 0 10px;
+}
+
+.shardp-card {
+    background: var(--inset);
+    border: 1px solid var(--inset-line);
+    border-radius: 8px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 0;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.shardp-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+    .shardp-head strong {
+        font-size: 14px;
+        color: var(--text-bright);
+    }
+
+.shardp-saved {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-dim);
+}
+
+.shardp-effect {
+    color: var(--text-bright);
+    overflow-wrap: anywhere;
+}
+
+.shardp-gain {
+    color: var(--ra);
+    font-weight: 700;
+}
+
+.shardp-slot {
+    display: flex;
+    gap: 8px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+}
+
+    .shardp-slot > span:last-child {
+        min-width: 0;
+        overflow-wrap: anywhere;
+    }
+
+.shardp-pos {
+    width: 48px;
+    flex-shrink: 0;
+    color: var(--text-dim);
+}
+
+.shardp-cost,
+.shardp-next,
+.shardp-rates {
+    font-size: 12px;
+    color: var(--text);
+    overflow-wrap: anywhere;
+}
+
+.shardp-next {
+    border-top: 1px solid var(--line-soft);
+    padding-top: 5px;
+}
+
+.shardp-dim {
+    color: var(--text-dim);
+}
+
+.shardp-note {
+    margin: 0;
+    font-size: 11px;
+    color: var(--text-dim);
+    line-height: 1.4;
+}
+
 .modg-assist-split {
     display: flex;
     flex-wrap: wrap;

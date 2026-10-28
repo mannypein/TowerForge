@@ -17,7 +17,7 @@
 import type { AppState, BuildType, League, OptCandidate, OptCategory, OptCurrency } from '../types/gameTypes';
 import type { AccountState, GoalModels } from '../engine/accountModels';
 import { applyGoal, chosenReport, effectiveBuild, runModels, snapshotFromState } from '../engine/accountModels';
-import { groupPath, mergeRepeats, simulateCategoryPath, simulateMedalPath, simulateStonePath } from '../engine/optimizer';
+import { groupPath, mergeRepeats, simulateCategoryPath, simulateMedalPath, simulateShardPaths, simulateStonePath } from '../engine/optimizer';
 import { changeCost, upgradeTargets, whatIf } from '../engine/whatIf';
 import type { Change, Costs, UpgradeTarget } from '../engine/whatIf';
 import { buildTournamentModel, heatOf, newestTournament, withTournamentBuild } from '../engine/tournamentModel';
@@ -246,7 +246,10 @@ export function bestUpgrades(s: AiAccount, currency: AiCurrency, goalWanted?: st
         if (cur === 'stones') raw = stones = simulateStonePath(budget ? 150 : 60, snap);
         else if (cur === 'medals') {
             stones ??= simulateStonePath(40, snap);
-            raw = simulateMedalPath(PICKS, snap, stones, s.currencies?.stones ?? 0, simulateCategoryPath('modules', 20, snap));
+            const c = s.currencies;
+            raw = simulateMedalPath(PICKS, snap, stones, c?.stones ?? 0, simulateShardPaths(20, snap), {
+                cannon: c?.cannonShards ?? 0, armor: c?.armorShards ?? 0, generator: c?.generatorShards ?? 0, core: c?.coreShards ?? 0,
+            });
         } else {
             for (const cat of CURRENCY_CATS[cur]) raw.push(...simulateCategoryPath(cat, 30, snap));
             raw.sort((a, b) => b.scorePerCost - a.scorePerCost);

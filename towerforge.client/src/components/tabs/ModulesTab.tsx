@@ -28,6 +28,8 @@ import { activeLoadout, milestoneReached } from '../../engine/statHelpers';
 import { assistPart, nextAssistTier } from '../../engine/assistModules';
 import type { AssistPart } from '../../engine/assistModules';
 import { CurrencyField } from '../common/CurrencyBar';
+import ShardIcon from '../common/ShardIcon';
+import ShardPlanPanel from './ShardPlanPanel';
 import type { Currencies } from '../../types/gameTypes';
 
 // ── Types ─────────────────────────────────────────────────────
@@ -135,19 +137,6 @@ const MODULE_CURRENCIES: { key: keyof Currencies; label: string; icon: 'reroll' 
     { key: 'coreShards', label: 'Core Shards', icon: 'core' },
 ];
 
-// Each currency's icon, simplified from the game's: Reroll Shards, and
-// each type's shards in its module shape.
-function ShardIcon({ kind }: { kind: 'reroll' | ModuleType }) {
-    const shape = {
-        reroll: <><polygon points="12,2 21,7 21,17 12,22 3,17 3,7" /><circle cx="12" cy="12" r="3.5" /></>,
-        cannon: <circle cx="12" cy="12" r="8.5" />,
-        armor: <rect x="4" y="4" width="16" height="16" rx="2.5" />,
-        generator: <polygon points="12,3.5 21,19.5 3,19.5" />,
-        core: <polygon points="12,2.5 21.5,12 12,21.5 2.5,12" />,
-    }[kind];
-    return <svg className="modg-shard" viewBox="0 0 24 24" aria-hidden="true">{shape}</svg>;
-}
-
 // Shards earned in total — spent and saved — from the game's lifetime
 // counts (imported); spent is what was earned less what's saved now.
 function ShardTotals({ currencies }: { currencies: Currencies }) {
@@ -214,7 +203,7 @@ function AssistEffRow({ label, part, max, onChange }: {
 
 export default function ModulesTab() {
     const [search, setSearch] = useState('');
-    const [panel, setPanel] = useState<'inventory' | 'assist'>('inventory');
+    const [panel, setPanel] = useState<'inventory' | 'assist' | 'plan'>('inventory');
     const [typeFilter, setTypeFilter] = useState<ModuleType | ''>('');
     const [rarityFilter, setRarityFilter] = useState<'' | 'E' | 'L' | 'M' | 'A'>('');
     const [modal, setModal] = useState<ModalState>(defaultModal());
@@ -521,7 +510,12 @@ export default function ModulesTab() {
                     onClick={() => setPanel('inventory')}>Inventory</button>
                 <button role="tab" aria-selected={panel === 'assist'} className={`modg-tab ${panel === 'assist' ? 'active' : ''}`}
                     onClick={() => setPanel('assist')}>Assist</button>
+                <button role="tab" aria-selected={panel === 'plan'} className={`modg-tab ${panel === 'plan' ? 'active' : ''}`}
+                    onClick={() => setPanel('plan')}>Shard plan</button>
             </div>
+
+            {/* What each type's saved shards level best (main vs assist) */}
+            {panel === 'plan' && <ShardPlanPanel moduleState={moduleState} labData={labData} currencies={currencies} />}
 
             {/* ══════════════════════════════════════
           ASSIST — each type's assist slot and its stone upgrades

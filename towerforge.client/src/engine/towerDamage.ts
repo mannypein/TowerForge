@@ -211,6 +211,23 @@ export function calcModuleSlotMult(moduleState: ModuleState, type: ModuleType, l
         * assistMainContrib(assistMod, moduleState.assistData[type], lv.assist);
 }
 
+// One slot's part of its type's main effect if the slot were at `level`:
+// the primary module with its efficiency lab, or the assist at its Mult
+// Efficiency. 1 for an empty slot or a locked assist.
+export function slotMainMult(
+    moduleState: ModuleState,
+    type: ModuleType,
+    pos: 'main' | 'assist',
+    level: number,
+    labData?: LabData,
+): number {
+    const id = activeLoadout(moduleState)?.slots[type]?.[pos] ?? '';
+    const mod = moduleState.library.find(m => m.id === id);
+    return pos === 'main'
+        ? primaryMainMult(mod, level, type, labData)
+        : assistMainContrib(mod, moduleState.assistData[type], level);
+}
+
 // ── Combined Cannon Module Multiplier (2 equipped + 2 assist) ──
 // Two equipped modules multiply at full effect.
 // Two assist modules multiply at reduced efficiency:

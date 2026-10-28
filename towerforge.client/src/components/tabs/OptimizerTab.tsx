@@ -14,8 +14,9 @@ import {
 import type { OptGoal } from '../../constants/optimizerConfig';
 import { presetLabel, UWS, WS_STATS, WS_ENH, MEDAL_SYMBOL } from '../../constants/gameData';
 import stoneIcon from '../../assets/stone.png';
-import { simulateStonePath, simulateCategoryPath, simulateMedalPath, attachParts, workshopKey, bestGuardianChips } from '../../engine/optimizer';
-import type { ChipSet } from '../../engine/optimizer';
+import { simulateStonePath, simulateCategoryPath, simulateMedalPath, simulateShardPaths, shardTypeValues, attachParts, workshopKey, bestGuardianChips } from '../../engine/optimizer';
+import type { ChipSet, ShardTypeValue } from '../../engine/optimizer';
+import ShardIcon from '../common/ShardIcon';
 import { chipById } from '../../constants/guardianData';
 import { guardianPreset } from '../../engine/guardian';
 import { calcTTT, calcTTTDisplayStats } from '../../engine/ttt';
@@ -101,6 +102,7 @@ export default function OptimizerTab() {
     // What's left out for now (not unlocked in the game yet) — a note per panel.
     const [locked, setLocked] = useState<LockedNotes>({});
     const [chipSets, setChipSets] = useState<ChipSet[]>([]);
+    const [shardValues, setShardValues] = useState<ShardTypeValue[]>([]);
     useEffect(() => {
         try {
             if (savedGoal) localStorage.setItem(GOAL_KEY, savedGoal);
@@ -231,9 +233,17 @@ export default function OptimizerTab() {
                         if (cat !== 'bots') newResults[cat] = simulateCategoryPath(cat, steps(cat), snap);
                     }
                     // Medals weigh bot levels against Event Shop trades, valued by
-                    // what the stones (after the ones you hold) and shards buy next.
+                    // what the stones and shards (after the ones you hold) buy next;
+                    // shards in the type that gains most, each on its own slots.
+                    const shardPaths = simulateShardPaths(steps('modules'), snap);
+                    const cur = st.currencies;
+                    const shardsHeld = {
+                        cannon: cur.cannonShards ?? 0, armor: cur.armorShards ?? 0,
+                        generator: cur.generatorShards ?? 0, core: cur.coreShards ?? 0,
+                    };
+                    setShardValues(shardTypeValues(shardPaths, shardsHeld));
                     newResults.bots = simulateMedalPath(
-                        steps('bots'), snap, newResults.stones, st.currencies.stones ?? 0, newResults.modules,
+                        steps('bots'), snap, newResults.stones, cur.stones ?? 0, shardPaths, shardsHeld,
                     );
                     if (snap.blend) {
                         for (const cat of ['stones', ...CURRENCY_CATS] as OptCategory[]) {
@@ -243,6 +253,7 @@ export default function OptimizerTab() {
                     setResults(newResults);
                 } else {
                     setResults(EMPTY_RESULTS);
+                    setShardValues([]);
                 }
             } catch (e) {
                 console.error('Optimizer error:', e);
@@ -860,6 +871,9 @@ export default function OptimizerTab() {
                             {group.currency === 'bits' && chipSets.length > 1 && (
                                 <ChipAdvice sets={chipSets} metric={metricLabel} onEquip={equipChips} />
                             )}
+                            {group.currency === 'shards' && (
+                                <ShardAdvice values={shardValues} metric={metricLabel} />
+                            )}
                             {group.currency === 'coins' && runFits && skipPath.length > 0 && runModel && (
                                 <SkipPanel path={skipPath} runModel={runModel} coinsAt={coinsAt} skipScale={conditionedSkip(1, models.conditions)} />
                             )}
@@ -1007,6 +1021,42 @@ function ChipAdvice({ sets, metric, onEquip }: { sets: ChipSet[]; metric: string
                         <span className="opt-sub">{s.current ? 'Equipped now' : 'Double-click to equip'}</span>
                     </div>
                     <span className="opt-gain">{s.current ? '—' : `${s.scorePct >= 0 ? '+' : ''}${s.scorePct.toFixed(2)}%`}</span>
+                </div>
+            ))}
+        </div>
+    );
+}
+
+// Each type's shards level only its own slots: what the shards held add
+// along that type's path, and what the next 1,000 would — the type to pick
+// for Event Shop trades and the Vault's Daily Mission Shard Type.
+function ShardAdvice({ values, metric }: { values: ShardTypeValue[]; metric: string }) {
+    const best = [...values].sort((a, b) => b.next1kPct - a.next1kPct)[0];
+    if (!best || !(best.next1kPct > 0)) return null;
+    const pct = (v: number) => (v > 0 ? `+${v.toFixed(v < 0.1 ? 3 : 2)}%` : '—');
+    const name = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+    return (
+        <div className="opt-section">
+            <div className="opt-section-head">
+                <span className="opt-section-title">Your module shards</span>
+                <span className="s-badge">next 1,000</span>
+            </div>
+            <p className="opt-row-explainer" style={{ padding: '6px 12px 0' }}>
+                Each type&apos;s shards level only its own slots. Picking a type for Event Shop trades or the
+                Vault&apos;s Daily Mission Shard Type? <strong>{name(best.type)}</strong> adds the most {metric} now.
+                Modules → Shard plan shows which slot each type&apos;s shards should go to.
+            </p>
+            {values.map(v => (
+                <div key={v.type} className="opt-row">
+                    <ShardIcon kind={v.type} />
+                    <div className="opt-name-col">
+                        <span className="opt-name">{name(v.type)} Shards</span>
+                        <span className="opt-sub">
+                            {v.held <= 0 ? 'None saved'
+                                : `Your ${v.held.toLocaleString()}: ${v.heldPct > 0 ? `${pct(v.heldPct)} ${metric}` : `no gain for ${metric}`}`}
+                        </span>
+                    </div>
+                    <span className="opt-gain" style={{ color: v === best ? 'var(--ra)' : undefined }}>{pct(v.next1kPct)}</span>
                 </div>
             ))}
         </div>
