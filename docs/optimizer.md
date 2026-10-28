@@ -45,7 +45,7 @@ What each currency buys (wiki Currencies page) and how it's ranked:
 | Module Shards | module slot levels, 5 at a time (per shard; coins shown); each type's held shards and next 1,000 (below) | SDK module tables + wiki level 1; Module Shard/Coin Cost labs (1% a level) |
 | Medals | bot stat and Bot+ levels vs Event Shop trades (per medal) | bots: 100 + 40 × (L − 1) a level (wiki bot Cost pages, every bot); Bot+: 100 + 50 × (L − 1), Echoing Shot 100 + 200 × (L − 1); trades 40, 65, 90, 130, 175, 230, then 380 |
 | Gems | card slots: the best owned card not in the preset, into a free slot or the next one bought (per gem) | wiki Cards: 50 → 10,000 gems, 22 slots |
-| Elite Cells | not a path: a table of lab boosts (×1.5 at 15/h … ×8 at 1M/h) and the extra lab hours per cell, on the top lab | wiki Currencies |
+| Elite Cells | not a path: a table of lab boosts (×1.5 at 15/h … ×8 at 1M/h) and the extra lab hours per cell, on the top lab; the boosts the player's cells keep up are on the Labs page (below) | wiki Currencies, Lab Upgrades |
 | Bits | Guardian chip stats, each equipped chip's next level (per Bit); which chips to equip (free to swap: every owned set that fits the slots, scored for the goal, 2026-10-23 `bestGuardianChips`) | wiki Chips tables and TheTowerSDK guardian upgrades — matched at every level (`constants/guardianData.ts`) |
 | Keys, Guild Tokens | not ranked (Vault, Guild Store) | — |
 
@@ -110,6 +110,31 @@ What each currency buys (wiki Currencies page) and how it's ranked:
   lab slots, rushes and tickets aren't either.
 - Enhancement costs match every wiki level (the SDK prices up to 600 levels,
   the wiki and the site 400 — newer caps aren't confirmed).
+- **Lab boosts** (Labs page, `engine/labBoosts.ts`, 2026-10-28): a boost
+  is bought per lab slot for 1, 8 or 24 hours at a flat cells-an-hour rate
+  (×1.5 15 … ×8 1,000,000; wiki Lab Upgrades and Currencies) and only ticks
+  while the slot researches. Each step up costs more per unit of speed than
+  the one below (30 cells an hour a unit for ×1 → ×1.5, 750,000 for ×7 →
+  ×8), so the most research for the cells is every slot raised evenly, the
+  lowest one step at a time — the wiki's "Most Efficient Speed Across 5
+  Labs" table, which the ladder matches row for row (all 41, test). The plan
+  is the highest even step the cells an hour keep up; spare cells run the
+  next step's slot part of each day (24 × spare ÷ the step's extra cost),
+  and the next three steps show how long the cells held last at each
+  (held ÷ (cost − income)). Cells an hour come from the imported runs of
+  the last 7 days: CellsEarned over RealTime, times the share of the time
+  spent in a run — from the gaps between runs, as a run's BattleDate is
+  when it **ended** (owner's export: each date is the one before plus the
+  run's own RealTime, within a few minutes). Both can be typed over. Owner's
+  export (2026-10-28): 30 runs, 203,653 cells an hour in a run, 91.6% of the
+  time → 186,624 an hour → ×6 ×6 ×5 ×5 ×5 kept up (155,700) with the spare
+  running a third ×6 about 15 hours a day; the owner runs ×6 ×6 ×6 ×5 ×5
+  (203,800), which their 34.95M cells held keep going about 84 days. Lab
+  times: a running lab's normal-speed time left (`labTimerLeft`) ÷ its boost
+  — the fastest boosts on the labs with the most time left — and any lab's
+  next level and the rest of it from the lab catalog after Labs Speed and
+  the Lab Speed relic (`labLevelCost`). Lab slots: `LabsUnlocked` + 1 (see
+  game-export-format.md).
 - Module slot shards: SDK's table starts at level 2; the wiki's Modules/Cost
   gives level 1 as 7 shards + 10K coins, and its totals then match
   (3,136,095 shards to 300).

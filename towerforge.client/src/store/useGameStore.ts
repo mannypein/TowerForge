@@ -433,6 +433,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             ...(imp.currentLeague ? { currentLeague: imp.currentLeague } : {}),
             ...(imp.wallUnlocked ? { wall: true } : {}),
             ...(imp.wsUnlocked ? { wsUnlocked: imp.wsUnlocked } : {}),
+            ...(imp.labSlots ? { labSlots: imp.labSlots } : {}),
             ...(imp.presetNames.some(n => n) ? { presetNames: imp.presetNames } : {}),
         };
         // Runs add to the history already kept (the file only has the last 5).

@@ -4415,6 +4415,146 @@
     text-align: right;
 }
 
+    .lab-run-boost {
+        display: block;
+        color: var(--accent);
+    }
+
+/* Lab boosts (Elite Cells): the even plan for the cells a player earns */
+.labb {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.labb-inputs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 18px;
+}
+
+.labb-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--text-dim);
+}
+
+    .labb-field .cur-input {
+        width: 110px;
+        font-size: 13px;
+        padding: 4px 8px;
+    }
+
+.labb-note {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text-dim);
+}
+
+.labb-reset {
+    margin-left: 8px;
+    padding: 1px 8px;
+    font: inherit;
+    font-size: 11px;
+    color: var(--accent);
+    background: transparent;
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+}
+
+.labb-best {
+    background: var(--inset);
+    border: 1px solid var(--inset-line);
+    border-radius: 8px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.labb-best-head {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: var(--text-bright);
+}
+
+.labb-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.labb-chip {
+    min-width: 44px;
+    padding: 4px 8px;
+    text-align: center;
+    font-family: var(--font-mono);
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-dim);
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+
+    .labb-chip.on {
+        color: var(--text-bright);
+        border-color: var(--accent);
+        background: var(--accent-glow);
+    }
+
+.labb-sub {
+    font-size: 12px;
+    color: var(--text);
+}
+
+.labb-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+    .labb-table th {
+        text-align: left;
+        font-weight: 600;
+        color: var(--text-dim);
+        padding: 4px 6px;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .labb-table td {
+        padding: 5px 6px;
+        border-bottom: 1px solid var(--line-soft);
+        font-family: var(--font-mono);
+        color: var(--text);
+    }
+
+    .labb-table td:first-child {
+        font-family: inherit;
+    }
+
+    .labb-table .labb-speeds {
+        font-family: var(--font-mono);
+        white-space: nowrap;
+    }
+
+.labb-time {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+    .labb-time select {
+        max-width: 100%;
+        align-self: flex-start;
+    }
+
 /* ── Shared stats page (?share=) ─────────────────────────────── */
 /* Someone's stats, read-only. Each section fits the screen; the Bots and
    Modules cards reuse the tabs' game-style pieces (botg-, modg-). Sizes

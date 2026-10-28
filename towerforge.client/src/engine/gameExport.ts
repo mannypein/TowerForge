@@ -66,6 +66,7 @@ export interface GameImport {
     currentLeague: League;             // LeagueID: the league you're in now
     bots: BotImport | null;            // bot levels and which are active, per preset
     labsRunning: LabRunning[] | null;
+    labSlots: number | null;           // lab slots owned: LabsUnlocked (bought) + the free one
     tourneyRecords: TourneyRecord[] | null;   // TournamentRecords (29.1.3+); null when the file has none
     relics: RelicImport | null;
     vault: Record<string, number> | null;     // Vault.UpgradesLevel: vault id → level
@@ -616,6 +617,9 @@ export function parseGameExport(raw: Raw): GameImport {
         currentLeague: typeof raw.LeagueID === 'number' ? GAME_LEAGUES[raw.LeagueID] ?? '' : '',
         bots: parseBots(raw),
         labsRunning: parseLabsRunning(raw),
+        // LabsUnlocked counts the slots bought with gems, not the free first one:
+        // the owner's 4 with 5 labs running, a newer account's 2 with 3 (2026-10-28).
+        labSlots: typeof raw.LabsUnlocked === 'number' ? clamp(raw.LabsUnlocked + 1, 1, 5) : null,
         tourneyRecords: parseTourneyRecords(raw),
         relics: parseRelics(raw),
         vault,

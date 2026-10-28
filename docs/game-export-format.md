@@ -153,7 +153,8 @@ never read them.
 | `ResearchPercentComplete[260]` | 📊 | Progress of labs currently researching. |
 | Primary module efficiency labs | 🔜 | One per module type (Cannon, Armor, Generator, Core), unlocked at T23 W500, +1% primary-module efficiency per level (100% → 130%). Added to the site as `Primary-<Type> Mult`; their lab numbers aren't known yet, so the import keeps what the player enters. Probably at the end of `ResearchLevel` once an account has them. |
 | `ResearchesComplete`, `TotalCoinsSpentOnResearch` | 📊 | Lifetime lab stats. |
-| `LabsUnlocked`, `LabLevel[5]`, `CompletedLabs[]` | ❓ | Possibly lab slots bought (the owner's 4 with 5 labs running; a new account 0 — its Labs not open yet, T1 W26 < W30). Not used: whether the Labs are open comes from the best wave on Tier 1 (the W30 milestone). |
+| `LabsUnlocked` | ✅ | Lab slots bought with gems, not counting the free first one: **lab slots = `LabsUnlocked` + 1**. Checked 2026-10-28 on two accounts: the owner's 4 with all 5 `LabActiveBool` running, a newer account's 2 with 3 running (slots 4–5 off); a brand-new account has 0 before its Labs open (T1 W30). Imported as `profile.labSlots` (Labs page → Lab boosts). |
+| `LabLevel[5]`, `CompletedLabs[]` | ❓ | `LabLevel` is all 0 on both accounts. Not used: whether the Labs are open comes from the best wave on Tier 1 (the W30 milestone). |
 
 ## Cards
 

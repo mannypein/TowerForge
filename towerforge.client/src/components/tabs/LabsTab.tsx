@@ -1,7 +1,8 @@
 // ============================================================
 //  TowerForge Companion — Labs Tab
-//  179 labs across 11 categories with search and lock state, and the
-//  labs being researched at the last import (29.1.3+ exports).
+//  179 labs across 11 categories with search and lock state, the labs
+//  being researched at the last import (29.1.3+ exports), and the Elite
+//  Cell boosts the player's runs keep up (LabBoostPanel).
 // ============================================================
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
@@ -11,6 +12,8 @@ import NumericInput from '../common/NumericInput';
 import { labOpen, labsOpen } from '../../engine/unlocks';
 import type { LabRunning } from '../../types/gameTypes';
 import { labFinishAt, labTimerLeft } from '../../engine/labTimer';
+import { boostSettings, boostsForLabs, cellIncome, planLabBoosts } from '../../engine/labBoosts';
+import LabBoostPanel from './LabBoostPanel';
 
 const span = (sec: number) => {
     const m = Math.max(0, Math.round(sec / 60));
@@ -22,13 +25,16 @@ const span = (sec: number) => {
 // being researched. The finish is the game's ResearchCompleteDate (normal
 // speed) brought forward by the speed-up (engine/labTimer.ts); the game's
 // own timer counts normal-speed time, so it reads longer while a speed-up
-// runs — shown too, to match the Labs screen.
-function LabsRunning({ labs }: { labs: LabRunning[] }) {
+// runs — shown too, to match the Labs screen. With the Lab boosts plan,
+// each lab's finish at its boost kept up (the fastest on the longest).
+function LabsRunning({ labs, speeds }: { labs: LabRunning[]; speeds: number[] }) {
     const [now, setNow] = useState(() => Date.now());
     useEffect(() => {
         const t = setInterval(() => setNow(Date.now()), 60_000);
         return () => clearInterval(t);
     }, []);
+    const left = labs.map(r => labTimerLeft(r, now) ?? 0);
+    const boosts = boostsForLabs(left, speeds);
     return (
         <div className="section" style={{ marginBottom: '10px' }}>
             <div className="section-head">
@@ -55,6 +61,9 @@ function LabsRunning({ labs }: { labs: LabRunning[] }) {
                                 const when = new Date(done).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
                                 return `Done in ${span((done - now) / 1000)} · ${when}`;
                             })()}
+                            {boosts[i] > 1 && left[i] > 0 && (
+                                <span className="lab-run-boost">At ×{boosts[i]} kept up: {span(left[i] / boosts[i])}</span>
+                            )}
                         </span>
                     </div>
                 ))}
@@ -71,6 +80,15 @@ export default function LabsTab() {
     const setLabLevel = useGameStore(s => s.setLabLevel);
     const setAllLabs = useGameStore(s => s.setAllLabs);
     const labsRunning = useGameStore(s => s.labsRunning);
+    const importedBattles = useGameStore(s => s.importedBattles);
+    const cellsHeld = useGameStore(s => s.currencies.cells ?? 0);
+    const relicData = useGameStore(s => s.relicData);
+    const updateProfile = useGameStore(s => s.updateProfile);
+
+    // Elite Cell boosts: what the runs earn, spread evenly over the lab slots.
+    const income = useMemo(() => cellIncome(importedBattles), [importedBattles]);
+    const settings = boostSettings(profile, income, labsRunning.length);
+    const plan = useMemo(() => planLabBoosts(settings.budget, settings.slots), [settings.budget, settings.slots]);
 
     const completedTier = profile.completedTier || 0;
 
@@ -99,6 +117,12 @@ export default function LabsTab() {
     function clearAll() {
         setAllLabs({});
     }
+
+    // Labs that can still be researched, for "How long a lab takes".
+    const openLabs = useMemo(
+        () => LABS.flatMap(g => g.l.filter(([n, max]) => isUnlocked(n) && (labData[n] ?? 0) < max).map(([n]) => n)),
+        [labData, isUnlocked],
+    );
 
     // Summary counts
     const { totalLabs, doneLabs } = useMemo(() => {
@@ -155,7 +179,15 @@ export default function LabsTab() {
                 </span>
             </div>
 
-            {labsRunning.length > 0 && <LabsRunning labs={labsRunning} />}
+            {labsRunning.length > 0 && <LabsRunning labs={labsRunning} speeds={plan.best.speeds} />}
+
+            {labsOpen(progress) && (
+                <LabBoostPanel
+                    settings={settings} income={income} plan={plan} profile={profile} cellsHeld={cellsHeld}
+                    openLabs={openLabs} defaultLab={labsRunning.find(r => r.lab && openLabs.includes(r.lab))?.lab ?? undefined}
+                    labData={labData} relicData={relicData} onProfile={updateProfile}
+                />
+            )}
 
             {/* ── Lab Groups ── */}
             {filteredGroups.filter(group =>

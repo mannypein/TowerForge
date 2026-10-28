@@ -507,6 +507,14 @@ describe('29.1.3 exports (ExportVersion 1)', () => {
         expect(imp.labsRunning![0]).toMatchObject({ lab: 'Enemy Balance Mastery', labIndex: 169, toLevel: 6 });
     });
 
+    // LabsUnlocked is the slots bought, beside the free first one: the
+    // owner's 4 with 5 labs running, a newer account's 2 with 3 (2026-10-28).
+    it('reads the lab slots owned', () => {
+        expect(parseGameExport(makeExport({ LabsUnlocked: 2 })).labSlots).toBe(3);
+        expect(parseGameExport(makeExport({ LabsUnlocked: 4 })).labSlots).toBe(5);
+        expect(parseGameExport(makeExport({})).labSlots).toBeNull();
+    });
+
     // Slots from TheTowerSDK's catalog: 0 No Spoon (Defense Absolute 2%),
     // 1 Red Pill (Health 5%), 2 Copper Badge (Damage 3%), 318 Massive
     // Abduction (Cash 5%), 320 Alien Encounter (Bot Range 2 m).
