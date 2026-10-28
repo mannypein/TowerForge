@@ -7,10 +7,12 @@
 #    powershell -File import-icons.ps1                       # all icons
 #    powershell -File import-icons.ps1 -Source D:\icons      # other folder
 #
-#  Source layout: <Source>\Modules\*.png and <Source>\Bots\*.png.
-#  File names become slugs: "Shrink Ray.png" / "Shrink_Ray_4.png" →
-#  shrink-ray.png (trailing _N numbers are dropped). $Aliases maps
-#  file names that differ from the in-app name.
+#  Source layout: <Source>\Modules, Bots, Cards, Chips, Ultimate Weapons
+#  and Vault, each holding *.png. File names become slugs: "Shrink
+#  Ray.png" / "Shrink_Ray_4.png" → shrink-ray.png (trailing _N numbers
+#  are dropped; camelCase splits: "CellsCard" → cells-card). $Aliases
+#  maps file names that differ from the in-app name; cards, chips, UWs
+#  and Vault upgrades are matched to their files in constants/gameIcons.ts.
 # ============================================================
 
 param(
@@ -27,8 +29,12 @@ $Aliases = @{
 }
 
 $Targets = @{
-    'Modules' = "$PSScriptRoot\towerforge.client\src\assets\modules"
-    'Bots'    = "$PSScriptRoot\towerforge.client\src\assets\bots"
+    'Modules'          = "$PSScriptRoot\towerforge.client\src\assets\modules"
+    'Bots'             = "$PSScriptRoot\towerforge.client\src\assets\bots"
+    'Cards'            = "$PSScriptRoot\towerforge.client\src\assets\cards"
+    'Chips'            = "$PSScriptRoot\towerforge.client\src\assets\chips"
+    'Ultimate Weapons' = "$PSScriptRoot\towerforge.client\src\assets\uws"
+    'Vault'            = "$PSScriptRoot\towerforge.client\src\assets\vault"
 }
 
 function Get-Slug([string]$name) {

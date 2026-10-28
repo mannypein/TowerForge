@@ -295,6 +295,13 @@ export const UW_STAT_VALUES: Record<UWAbbr, string[][]> = {
     ],
 };
 
+// A stat's values by level; the SL Angle stops at 60° — the table goes
+// to 90°, but past 60° it adds nothing, so stones aren't spent on it.
+export function uwStatValues(abbr: UWAbbr, statIdx: number): string[] {
+    const vals = UW_STAT_VALUES[abbr]?.[statIdx] ?? [];
+    return abbr === 'SL' && statIdx === 1 ? vals.filter(v => parseInt(v) <= 60) : vals;
+}
+
 // ── UW Stone Costs ─────────────────────────────────────────────
 // FLAT cost per upgrade (not cumulative). Index = current level.
 export const UW_STONE_COSTS: Record<UWAbbr, number[][]> = {

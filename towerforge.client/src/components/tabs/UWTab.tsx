@@ -1,15 +1,18 @@
 // ============================================================
 //  TowerForge Companion — UW Tab
-//  9 Ultimate Weapons: stats, UW+, stone balance.
+//  The nine Ultimate Weapons drawn like the game's UW screen (UWPanel):
+//  each stat's value and next cost — tap a stat to set its level — the
+//  effective value with module and lab bonuses, and the UW+ along the
+//  bottom once all nine are owned. Stones for the next UW and UW+.
 // ============================================================
 
 import { useRef } from 'react';
 import { useGameStore } from '../../store/useGameStore';
-import { UWS, UW_STAT_VALUES, UW_PLUS_DATA, UW_PLUS_UNLOCK_COSTS, UW_STONE_COSTS, UW_UNLOCK_COSTS } from '../../constants/gameData';
+import { UWS, UW_PLUS_UNLOCK_COSTS, UW_UNLOCK_COSTS, uwStatValues } from '../../constants/gameData';
 import { readActiveModuleBonuses } from '../../engine/modBonuses';
 import type { UWAbbr } from '../../types/gameTypes';
 import stoneIcon from '../../assets/stone.png';
-import IconDropdown from '../common/IconDropdown';
+import UWPanel from '../common/UWPanel';
 import UWShareCard from '../share/UWShareCard';
 import { SHARE_OFFSCREEN_STYLE } from '../share/shareTheme';
 import { openExportDialog } from '../share/exportImages';
@@ -86,18 +89,31 @@ export default function UWTab() {
     const ownedCount = UWS.filter(u => uwData.data[u.a]?.own).length;
     const allUWsOwned = ownedCount >= UWS.length;
 
-    // Cost (in stones) to unlock the NEXT UW. UW_UNLOCK_COSTS is a single
-    // global sequence indexed by how many you already own: index 0 = the
-    // 1st UW, index 1 = the 2nd, etc. null when the data isn't available.
+    // UW_UNLOCK_COSTS is one sequence by how many UWs are owned (the 1st
+    // costs [0], the 2nd [1]…), and UW+ unlocks likewise by how many UW+
+    // are unlocked — the next one's price, whichever it is.
     const nextUWUnlockCost = UW_UNLOCK_COSTS[ownedCount] ?? null;
-
-    // UW_PLUS_UNLOCK_COSTS is a single global sequence — the cost of your
-    // *next* UW+ unlock depends on how many you've already unlocked in
-    // total, not which UW it is.
     const unlockedPlusCount = UWS.filter(u => uwData.data[u.a]?.upOwn).length;
+    const plusUnlockCost = UW_PLUS_UNLOCK_COSTS[unlockedPlusCount];
 
     const shareRef = useRef<HTMLDivElement>(null);
     const handleExport = () => openExportDialog(shareRef.current, 'towerforge-uws', 'Ultimate Weapons');
+
+    // A stat's value with its module sub-effect and lab bonuses, when any.
+    function effectiveValues(a: UWAbbr): (string | null)[] {
+        const ud = uwData.data[a];
+        const uwBonusMap = (modBonuses.uwBonus as Record<string, Record<string, number>>)[a] ?? {};
+        return [0, 1, 2].map(i => {
+            const vals = uwStatValues(a, i);
+            const cur = vals[(ud?.sv[i] ?? 1) - 1];
+            const bonusKey = STAT_BONUS_KEYS[a]?.[i] ?? null;
+            const labBonus = (UW_LAB_BONUSES[a] ?? [])
+                .filter(lb => lb.statIdx === i)
+                .reduce((sum, lb) => sum + (labData[lb.labName] ?? 0) * lb.perLevel, 0);
+            if (!cur || (!bonusKey && !labBonus)) return null;
+            return computeEffective(cur, bonusKey, bonusKey ? (uwBonusMap[bonusKey] ?? 0) : 0, labBonus);
+        });
+    }
 
     return (
         <div>
@@ -106,270 +122,45 @@ export default function UWTab() {
                 <UWShareCard ref={shareRef} poster />
             </div>
 
-            {/* ── Export action ── */}
-            <div className="flex-row" style={{ padding: '14px 14px 0' }}>
-                <span style={{ flex: 1 }} />
-                <button className="btn btn-accent" onClick={handleExport}>
-                    📸 Export Image
-                </button>
-            </div>
-
-            {/* ── Next UW Unlock Banner ── */}
-            {!allUWsOwned && (
-                <div className="uw-next-unlock-bar">
-                    <span className="uw-next-unlock-label">
-                        {ownedCount}/9 UWs owned
+            <div className="uwg-bar">
+                <span className="uwg-count">{ownedCount}/9 owned</span>
+                {!allUWsOwned && (
+                    <span className="uwg-count">
+                        Next UW:{' '}
+                        {nextUWUnlockCost !== null ? <strong>{nextUWUnlockCost.toLocaleString()}<img src={stoneIcon} alt="stones" className="cost-icon" /></strong> : 'unknown'}
+                        {' · '}UW+ opens once all 9 are owned
                     </span>
-                    {nextUWUnlockCost != null ? (
-                        <span className="uw-next-unlock-cost">
-                            Next UW unlock:&nbsp;<strong>{nextUWUnlockCost.toLocaleString()}</strong>
-                            <img src={stoneIcon} alt="stones" className="cost-icon" />
-                        </span>
-                    ) : (
-                        <span className="uw-next-unlock-cost uw-next-unlock-cost-unknown">
-                            Next UW unlock cost: unknown
-                        </span>
-                    )}
-                </div>
-            )}
-
-            {/* ── UW Sections ── */}
-            <div style={{ padding: '14px' }}>
-                {UWS.map(uw => {
-                    const ud = uwData.data[uw.a] ?? { own: false, sv: [0, 0, 0], upOwn: false, upLvl: 0 };
-                    const owned = ud.own ?? false;
-                    const plusDef = UW_PLUS_DATA[uw.a];
-                    const upOwn = ud.upOwn ?? false;
-                    const upLvl = ud.upLvl ?? 0;
-
-                    // UW+ unlock cost display — next cost in the global sequence
-                    const unlockCost = UW_PLUS_UNLOCK_COSTS[unlockedPlusCount];
-                    const upgradeCost = upOwn && plusDef?.costs[upLvl] != null
-                        ? plusDef.costs[upLvl]
-                        : null;
-
-                    return (
-                        <div key={uw.a} className={`uw-section ${!owned ? 'uw-not-owned' : ''}`}>
-
-                            {/* ── UW Header ── */}
-                            <div className="uw-head">
-                                <span className="uw-name">{uw.n}</span>
-                                <span className="uw-abbr">{uw.a}</span>
-                                <span
-                                    className={`uw-owned-badge ${owned ? 'owned' : 'not-owned'}`}
-                                    onClick={() => {
-                                        if (!owned) {
-                                            // Initialize all stats to level 1 on first unlock
-                                            setUWOwned(uw.a, true);
-                                            uw.s.forEach((_, statIdx) => {
-                                                setUWStat(uw.a, statIdx, 1);
-                                            });
-                                        } else {
-                                            setUWOwned(uw.a, false);
-                                        }
-                                    }}
-                                    title="Click to toggle owned"
-                                >
-                                    {owned ? '✓ Owned' : '✗ Not Owned'}
-                                </span>
-                            </div>
-
-                            {/* ── UW Body ── */}
-                            {owned && (
-                                <div className="uw-body">
-
-                                    {/* Stats grid */}
-                                    <div className="uw-stats-grid">
-                                        {uw.s.map(([statName, maxLv], statIdx) => {
-                                            const curLv = ud.sv[statIdx] ?? 1;
-                                            const vals = UW_STAT_VALUES[uw.a as UWAbbr]?.[statIdx] ?? [];
-
-                                            // SL Angle is capped at 60° — the underlying data goes to 90°,
-                                            // but upgrading past 60° provides no additional benefit and
-                                            // we don't want players over-investing stones into it.
-                                            const isSLAngle = uw.a === 'SL' && statIdx === 1;
-                                            const SL_ANGLE_CAP = 60; // degrees
-                                            const cappedVals = isSLAngle
-                                                ? vals.filter(v => parseInt(v) <= SL_ANGLE_CAP)
-                                                : vals;
-
-                                            const trueMax = cappedVals.length;  // capped max level for SL angle, true max otherwise
-                                            const curVal = cappedVals[curLv - 1] ?? vals[curLv - 1] ?? '—';
-                                            const pct = Math.min(100, Math.round((curLv / trueMax) * 100));
-
-                                            // Module sub-stat bonus
-                                            const bonusKey = STAT_BONUS_KEYS[uw.a as UWAbbr]?.[statIdx] ?? null;
-                                            const uwBonusMap = (modBonuses.uwBonus as Record<string, Record<string, number>>)[uw.a] ?? {};
-                                            const modBonusVal = bonusKey ? (uwBonusMap[bonusKey] ?? 0) : 0;
-
-                                            // Lab bonus for this stat (in display units)
-                                            const labBonus = (UW_LAB_BONUSES[uw.a as UWAbbr] ?? [])
-                                                .filter(lb => lb.statIdx === statIdx)
-                                                .reduce((sum, lb) => sum + (labData[lb.labName] ?? 0) * lb.perLevel, 0);
-
-                                            const effVal = (bonusKey || labBonus) && curVal !== '—'
-                                                ? computeEffective(curVal, bonusKey, modBonusVal, labBonus)
-                                                : null;
-
-                                            return (
-                                                <div key={statName} className="uw-stat-box">
-                                                    <div className="uw-stat-label">{statName}</div>
-
-                                                    {/* Dropdown — value is the 1-based level */}
-                                                    <IconDropdown
-                                                        value={curLv}
-                                                        icon={stoneIcon}
-                                                        iconAlt="stones"
-                                                        style={{ marginBottom: '6px' }}
-                                                        onChange={lv => setUWStat(uw.a, statIdx, lv)}
-                                                        options={cappedVals.map((displayVal, lvIdx) => ({
-                                                            value: lvIdx + 1,
-                                                            label: `Lv ${lvIdx + 1} — ${displayVal}`,
-                                                            // Lv1 is free (comes with the UW); costs[0] is the
-                                                            // Lv1→Lv2 upgrade, so level (lvIdx+1) costs costs[lvIdx-1].
-                                                            cost: lvIdx > 0
-                                                                ? UW_STONE_COSTS[uw.a as UWAbbr]?.[statIdx]?.[lvIdx - 1]
-                                                                : undefined,
-                                                        }))}
-                                                    />
-
-                                                    {/* Current value + Max button */}
-                                                    <div className="uw-stat-input" style={{ marginBottom: effVal ? '2px' : '6px' }}>
-                                                        <span className="uw-stat-val" style={{
-                                                            flex: 1,
-                                                            color: curLv >= maxLv ? 'var(--gold)' : 'var(--accent)',
-                                                        }}>
-                                                            {curVal}
-                                                        </span>
-                                                        <button
-                                                            className="btn btn-dim"
-                                                            style={{ fontSize: '11px', padding: '2px 7px' }}
-                                                            disabled={curLv >= trueMax}
-                                                            title={`Max ${statName}`}
-                                                            onClick={() => setUWStat(uw.a, statIdx, trueMax)}
-                                                        >
-                                                            {curLv >= trueMax ? '✓ Max' : 'Max'}
-                                                        </button>
-                                                    </div>
-
-                                                    {/* Effective value with module bonuses */}
-                                                    {effVal && (
-                                                        <div className="uw-stat-effective" style={{ marginBottom: '6px' }}>
-                                                            <span className="uw-stat-eff-label">Eff</span>
-                                                            <span className="uw-stat-eff-val">{effVal}</span>
-                                                        </div>
-                                                    )}
-
-                                                    {/* Progress bar */}
-                                                    <div className="pbar">
-                                                        <div
-                                                            className={`pbar-fill ${pct >= 100 ? 'gold' : ''}`}
-                                                            style={{ width: `${pct}%` }}
-                                                        />
-                                                    </div>
-                                                    <div className="pbar-pct">{curLv} / {trueMax}</div>
-                                                    {plusDef && !allUWsOwned && (
-                                                        <div className="uw-plus-locked-hint">
-                                                            Unlock all 9 UWs to access {plusDef.name}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-
-                                    {/* UW+ Section — only shown once all 9 UWs are owned */}
-                                    {plusDef && allUWsOwned && (
-                                        <div className="uw-plus-section">
-                                            <span className="uw-plus-label">
-                                                {plusDef.name}
-                                            </span>
-
-                                            <input
-                                                type="checkbox"
-                                                checked={upOwn}
-                                                onChange={e => {
-                                                    setUWPlusOwned(uw.a, e.target.checked);
-                                                    if (!e.target.checked) setUWPlusLevel(uw.a, 0);
-                                                }}
-                                                title="Mark UW+ as unlocked"
-                                            />
-                                            <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
-                                                Unlocked
-                                            </span>
-
-                                            {upOwn && (
-                                                <>
-                                                    {/* UW+ level dropdown */}
-                                                    <IconDropdown
-                                                        value={upLvl}
-                                                        icon={stoneIcon}
-                                                        iconAlt="stones"
-                                                        style={{ minWidth: '220px' }}
-                                                        onChange={lv => setUWPlusLevel(uw.a, lv)}
-                                                        // upLvl is 0-based: upLvl 0 = the base level you get free
-                                                        // on unlock (vals[0]), shown as "Lv 1". Reaching upLvl k
-                                                        // costs costs[k-1] (k=0 is free).
-                                                        options={plusDef.vals.map((displayVal, k) => ({
-                                                            value: k,
-                                                            label: `Lv ${k + 1} — ${displayVal}`,
-                                                            cost: k > 0 ? plusDef.costs[k - 1] : undefined,
-                                                        }))}
-                                                    />
-
-                                                    {/* Max button */}
-                                                    <button
-                                                        className="btn btn-dim"
-                                                        style={{ fontSize: '11px', padding: '2px 7px' }}
-                                                        disabled={upLvl >= uw.upMax}
-                                                        onClick={() => setUWPlusLevel(uw.a, uw.upMax)}
-                                                    >
-                                                        {upLvl >= uw.upMax ? '✓ Max' : 'Max'}
-                                                    </button>
-
-                                                    {/* Current value display (upLvl is 0-based) */}
-                                                    {plusDef.vals[upLvl] && (
-                                                        <span className="uw-plus-val">
-                                                            {plusDef.vals[upLvl]} {plusDef.unit}
-                                                        </span>
-                                                    )}
-
-                                                    {/* Next upgrade cost */}
-                                                    {upgradeCost != null && upLvl < uw.upMax && (
-                                                        <span className="uw-plus-cost">
-                                                            Next: {upgradeCost.toLocaleString()}
-                                                            <img src={stoneIcon} alt="stones" className="cost-icon" />
-                                                        </span>
-                                                    )}
-
-                                                    {upLvl >= uw.upMax && (
-                                                        <span style={{ color: 'var(--gold)', fontSize: '12px' }}>
-                                                            ✓ Maxed
-                                                        </span>
-                                                    )}
-                                                </>
-                                            )}
-
-                                            {!upOwn && (
-                                                <span className="uw-plus-cost">
-                                                    Unlock: {unlockCost.toLocaleString()}
-                                                    <img src={stoneIcon} alt="stones" className="cost-icon" />
-                                                </span>
-                                            )}
-
-                                            {/* UW+ description */}
-                                            <span className="uw-plus-desc">
-                                                {plusDef.desc.replace('{CL Chance}', `${ud.sv[2] ?? 0}`)}
-                                            </span>
-                                        </div>
-                                    )}
-
-                                </div>
-                            )}
-                        </div>
-                    );
-                })}
+                )}
+                <span style={{ flex: 1 }} />
+                <button className="btn btn-accent" onClick={handleExport}>📸 Export Image</button>
             </div>
+
+            <div className="uwg-list">
+                {UWS.map(uw => (
+                    <UWPanel
+                        key={uw.a}
+                        uw={uw}
+                        data={uwData.data[uw.a]}
+                        showPlus={allUWsOwned}
+                        plusUnlockCost={plusUnlockCost}
+                        unlockCost={nextUWUnlockCost}
+                        effective={effectiveValues(uw.a)}
+                        edit={{
+                            onStat: (i, lv) => setUWStat(uw.a, i, lv),
+                            onOwned: on => {
+                                setUWOwned(uw.a, on);
+                                // A new UW starts every stat at level 1.
+                                if (on) uw.s.forEach((_, i) => setUWStat(uw.a, i, 1));
+                            },
+                            onPlus: lv => {
+                                setUWPlusOwned(uw.a, lv >= 0);
+                                setUWPlusLevel(uw.a, Math.max(0, lv));
+                            },
+                        }}
+                    />
+                ))}
+            </div>
+            <p className="uwg-note">Tap a stat to set its level; the bar under it is the next level&apos;s cost.</p>
         </div>
     );
 }
