@@ -30,6 +30,9 @@ describe('numbers in an answer', () => {
         expect(unverifiedNumbers('About +42 waves for 1,042 stones.', data, 'q')).toEqual(['42', '1,042']);
         // A number from the question is fine ("I have 500 stones").
         expect(unverifiedNumbers('With your 500 stones…', data, 'I have 500 stones')).toEqual([]);
+        // "40s" in the notes is 40 seconds as well as 40 sextillion.
+        expect(unverifiedNumbers('It lasts 40 seconds, with a 180-second cooldown.', 'Duration 5s → 40s, Cooldown 180s → 60s', 'q')).toEqual([]);
+        expect(unverifiedNumbers('About 40s coins.', 'Coins per run: 40s', 'q')).toEqual([]);
     });
 });
 

@@ -71,6 +71,19 @@ public sealed class AppDb
                 created_at INTEGER NOT NULL,
                 issued_by  TEXT    NOT NULL
             );
+
+            -- Ask AI answers a player chose to send (👎 → Send): the question,
+            -- the answer and what it looked at, as JSON. status 'open' or
+            -- 'fixed'; read on the owner's AI reports page.
+            CREATE TABLE IF NOT EXISTS ai_reports (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id    INTEGER NULL REFERENCES users(id) ON DELETE SET NULL,
+                created_at INTEGER NOT NULL,
+                status     TEXT    NOT NULL DEFAULT 'open',
+                data       TEXT    NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS ix_ai_reports_created ON ai_reports(created_at);
             """;
         cmd.ExecuteNonQuery();
     }

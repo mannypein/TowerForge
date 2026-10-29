@@ -101,6 +101,41 @@ players get it (it runs on their hardware, which is the risk):
 4. Add each reported question to `bench/benchQuestions.ts` (in the
    player's words) and rerun the bench before and after the fix.
 
+## Debugging: the log, reports and counts (2026-10-29)
+
+Three ways to see what goes wrong, from most private to least:
+
+- **Debug log** (everyone with Ask AI, this device only): every question
+  with its trace — the route and whether the wording or the model picked
+  it, the data it looked at, the answer, numbers that aren't TowerForge's,
+  route / first words / total time, model, 👍/👎 — the last 200 in
+  `localStorage` (`tc_ai_log`, `ai/aiLog.ts`), shown under the chat
+  (`components/tabs/AiDebug.tsx`). Filters for what's flagged (numbers
+  not TowerForge's, route from keywords, no answer, error, slow > 45 s,
+  👎); each entry can be asked again or copied as a test bench question
+  (`benchSnippet` — correct its `expect` before adding it).
+- **Reports** (opt-in, per answer): 👎 offers "Send this answer to
+  TowerForge?", saying what it sends (question, answer, the data it looked
+  at, model, GPU, version, a note) before anything goes; Send posts it to
+  `/api/ai-reports` (signed in, the "ai" preview, 10 a minute, 128 KB;
+  kept a year in `ai_reports`). The owner reads them on the **AI reports**
+  panel (the `"ai-admin"` preview in `features.json`): Open / Fixed / All,
+  the whole trace, Mark fixed, Delete, Copy as bench question. Checked
+  2026-10-29 on the local server: signed out 401; an account without the
+  previews 403 on all four; a report sent from the page arrives with
+  exactly its 11 fields, marks fixed, filters.
+- **Anonymous counts**: an `ai-answer` analytics event per answer (no
+  words, docs/analytics.md) — which tool, wording or model, flagged or
+  not, a time band, the model.
+
+The Ask AI page's privacy text says all three. The local test also caught
+the number check flagging "40" and "180" (the notes' "40s" and "180s" are
+seconds; the game's "s" is sextillion): `numbersIn` now reads a number
+with a lowercase s both ways.
+
+To turn on the reports panel on the server: add the owner's username
+under `"ai-admin"` in `/var/lib/towerforge/features.json` (next to "ai").
+
 ## Added 2026-10-29
 
 - **Number check on every answer** (`aiCheck.ts`, shared with the bench):

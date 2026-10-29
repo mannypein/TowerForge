@@ -32,6 +32,8 @@ import { TAB_PATHS } from '../routes';
 import { UWS } from '../constants/gameData';
 import { notesText, searchNotes } from './aiKnowledge';
 import { unverifiedNumbers } from './aiCheck';
+import { addToLog } from './aiLog';
+import { trackEvent } from '../analytics';
 
 export interface AiMessage {
     role: 'user' | 'assistant';
@@ -41,6 +43,7 @@ export interface AiMessage {
     routed?: RouteChoice;      // the same, as read (the test bench checks it)
     status?: string;           // while it works ("Reading your account…")
     unchecked?: string[];      // numbers in the answer that aren't TowerForge's (aiCheck)
+    id?: string;               // the answer's debug log entry (aiLog)
     done?: boolean;
 }
 
@@ -391,6 +394,22 @@ Rules:
 - Big numbers use the game's letters, smallest to largest: K (thousand), M (million), B (billion), T (trillion), q (quadrillion), Q (quintillion), s, S, O, N, D, then aa, ab… So 61.00K is far less than 4.67Q, and q is less than Q. When the data lists picks "in order of cost, lowest first", use that to compare costs.
 - To point to a page, use these addresses exactly (no others): ${PAGE_LINKS}.`;
 
+// Anonymous counts for the owner's analytics (Umami, towerforge.net only):
+// which data an answer used, whether its wording or the model picked it,
+// flagged numbers, time and model — never the question, the answer or
+// the account. docs/analytics.md.
+function countAnswer(route: RouteChoice | null, unchecked: number, ms: number, model: string | null, error: boolean): void {
+    const secs = ms / 1000;
+    trackEvent('ai-answer', {
+        tool: route?.tool ?? 'error',
+        picked: route?.quick ? 'wording' : route?.guessed ? 'keywords' : 'model',
+        flagged: unchecked > 0 ? 'yes' : 'no',
+        time: secs < 10 ? 'under 10 s' : secs < 20 ? '10–20 s' : secs < 40 ? '20–40 s' : 'over 40 s',
+        model: (model ?? '?').replace(/-q4f\d+_1-MLC$/, ''),
+        ...(error ? { error: 'yes' } : {}),
+    });
+}
+
 // Rough token count (about 3.5 characters a token for this text).
 const tokens = (s: string) => Math.ceil(s.length / 3.5);
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}…` : s);
@@ -494,11 +513,26 @@ export const useAiStore = create<AiStore>((set, get) => {
             // Earlier questions only: a small model copies its own earlier
             // answers' numbers into new ones, so it never sees them.
             const earlier = get().messages.filter(m => m.role === 'user').slice(-2).map(m => clip(m.text, 300));
+            const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
             set(s => ({
                 busy: true,
                 messages: [...s.messages, { role: 'user', text: q, done: true },
-                    { role: 'assistant', text: '', status: 'Working out what to look at…' }],
+                    { role: 'assistant', id, text: '', status: 'Working out what to look at…' }],
             }));
+            // The trace for the debug log (this device only) and the
+            // anonymous counts (no text): what was picked, how long each step took.
+            const t0 = performance.now();
+            let routeMs = 0;
+            let firstMs: number | null = null;
+            let traced: { route: RouteChoice | null; looked: ToolResult[] } = { route: null, looked: [] };
+            const finish = (text: string, unchecked: string[], error?: string) => {
+                const timings = { routeMs, firstMs, totalMs: Math.round(performance.now() - t0) };
+                addToLog({
+                    id, time: Date.now(), question: q, routed: traced.route, route: traced.route ? routeText(traced.route) : '',
+                    looked: traced.looked, answer: text, unchecked, timings, model: get().loadedId, think: get().think, ...(error ? { error } : {}),
+                });
+                countAnswer(traced.route, unchecked.length, timings.totalMs, get().loadedId, !!error);
+            };
             try {
                 // Follow-ups ("and CF+ instead?") read with the question before.
                 const asked = earlier.length ? `Earlier question, for context: ${earlier[earlier.length - 1]}\nQuestion: ${q}` : q;
@@ -511,10 +545,13 @@ export const useAiStore = create<AiStore>((set, get) => {
                     response_format: { type: 'json_object', schema: ROUTE_SCHEMA },
                     extra_body: { enable_thinking: false },
                 })).choices[0]?.message?.content ?? '', q);
+                routeMs = quick ? 0 : Math.round(performance.now() - t0);
+                traced = { route, looked: [] };
 
                 patchLast({ status: 'Reading your account…' });
                 await new Promise(r => setTimeout(r, 30));   // let the page show it
                 const looked = lookUp(route, q, ctx);
+                traced = { route, looked };
                 const summary = accountSummary(ctx.account);
                 let data = looked.map(r => `[${r.title}]\n${r.text}`).join('\n\n');
                 // Keep everything inside the context with room for the answer.
@@ -534,13 +571,18 @@ export const useAiStore = create<AiStore>((set, get) => {
                 for await (const chunk of stream) {
                     raw += chunk.choices[0]?.delta?.content ?? '';
                     const shown = visible(raw);
+                    if (shown && firstMs === null) firstMs = Math.round(performance.now() - t0);
                     patchLast({ text: shown, status: shown ? undefined : 'Thinking…' });
                 }
                 const text = visible(raw) || '(No answer — try asking another way.)';
                 const unchecked = unverifiedNumbers(text, [summary, ...looked.map(r => r.text)].join('\n'), q);
                 patchLast({ text, status: undefined, done: true, ...(unchecked.length ? { unchecked } : {}) });
+                finish(text, unchecked);
             } catch (e) {
-                patchLast({ text: `Something went wrong: ${e instanceof Error ? e.message : String(e)}`, status: undefined, done: true });
+                const error = e instanceof Error ? e.message : String(e);
+                const text = `Something went wrong: ${error}`;
+                patchLast({ text, status: undefined, done: true });
+                finish(text, [], error);
             } finally {
                 set({ busy: false });
             }

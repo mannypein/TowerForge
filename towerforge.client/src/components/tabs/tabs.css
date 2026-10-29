@@ -5943,6 +5943,193 @@ button.grdg-chip {
         color: var(--text);
     }
 
+/* 👍/👎 under an answer, and the offer to send a report on 👎. */
+.ai-rate {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+    .ai-rate > button {
+        padding: 2px 8px;
+        font-size: 14px;
+        line-height: 1.4;
+        background: var(--bg3);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        cursor: pointer;
+        filter: grayscale(1);
+        opacity: 0.7;
+    }
+
+        .ai-rate > button.on,
+        .ai-rate > button:hover {
+            filter: none;
+            opacity: 1;
+            border-color: var(--accent);
+        }
+
+.ai-send {
+    flex-basis: 100%;
+    padding: 8px 10px;
+    font-size: 12px;
+    color: var(--text-dim);
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+
+    .ai-send p {
+        margin: 0 0 6px;
+    }
+
+    .ai-send textarea {
+        width: 100%;
+        box-sizing: border-box;
+        font: inherit;
+        color: var(--text);
+        background: var(--bg2);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 6px;
+    }
+
+/* The Debug log and AI reports panels under the chat. */
+.ai-dbg > summary {
+    cursor: pointer;
+    list-style: none;
+}
+
+    .ai-dbg > summary::-webkit-details-marker {
+        display: none;
+    }
+
+.ai-dbg-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+    .ai-dbg-filters .ai-chip.active {
+        border-color: var(--accent);
+        color: var(--text-bright);
+    }
+
+.ai-dbg-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.ai-dbg-row {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg2);
+    min-width: 0;
+}
+
+.ai-dbg-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 10px;
+    width: 100%;
+    padding: 6px 8px;
+    text-align: left;
+    font: inherit;
+    font-size: 12px;
+    color: var(--text);
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+
+.ai-dbg-when,
+.ai-dbg-tool,
+.ai-dbg-ms {
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+    white-space: nowrap;
+}
+
+.ai-dbg-q {
+    flex: 1 1 200px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.ai-dbg-flag {
+    padding: 0 6px;
+    font-size: 11px;
+    border-radius: 999px;
+    color: var(--text);
+    background: var(--gold-glow);
+    border: 1px solid var(--gold);
+    white-space: nowrap;
+}
+
+    .ai-dbg-flag.error,
+    .ai-dbg-flag.empty,
+    .ai-dbg-flag.down {
+        border-color: var(--danger);
+        background: color-mix(in srgb, var(--danger) 15%, transparent);
+    }
+
+    .ai-dbg-flag.fixed {
+        border-color: var(--good);
+        background: color-mix(in srgb, var(--good) 15%, transparent);
+    }
+
+.ai-dbg-trace {
+    padding: 0 8px 8px;
+    font-size: 12px;
+    color: var(--text-dim);
+    overflow-wrap: anywhere;
+}
+
+    .ai-dbg-trace > div > span {
+        display: inline-block;
+        min-width: 80px;
+        color: var(--text);
+    }
+
+    .ai-dbg-trace pre {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        max-height: 220px;
+        overflow-y: auto;
+        margin: 4px 0;
+    }
+
+.ai-dbg-answer {
+    margin: 6px 0;
+    padding: 6px 8px;
+    white-space: pre-wrap;
+    color: var(--text);
+    background: var(--bg3);
+    border-radius: 4px;
+}
+
+.ai-dbg-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 0 8px 8px;
+}
+
+.ai-send .ai-dbg-actions {
+    padding: 6px 0 0;
+}
+
+.ai-dbg-clear {
+    margin-top: 10px;
+}
+
     .ai-looked summary {
         cursor: pointer;
     }

@@ -19,6 +19,12 @@ server. Set up 2026-10-16 with Umami v3.4.0.
   `Auto import on` / `off`; `Theme` with the theme picked (header picker,
   since 2026-10-22); `Open Discord` (the header's Discord link, since
   v1.26.1); `Copy creator code` and `Open creator link` on Creator Codes.
+- `ai-answer` (Ask AI, 2026-10-29): one per answer, with no question, answer
+  or account in it — `tool` (the data it used), `picked` (wording, model or
+  keywords), `flagged` (a number that isn't TowerForge's: yes/no), `time`
+  (under 10 s, 10–20 s, 20–40 s, over 40 s), `model` (Qwen3-4B…) and
+  `error: yes` when it failed (`countAnswer`, `src/ai/aiAssistant.ts`). The Ask
+  AI page says so.
 - Only from `towerforge.net` / `www.towerforge.net` (`data-domains` on the tag in
   `towerforge.client/index.html`), so dev and previews send nothing.
 - Website ID: `06a68bc5-23dd-40b8-9f3f-7fa542b9ceca` (public — it's in the page).

@@ -18,6 +18,10 @@ import type { AiContext, AiMessage } from '../../ai/aiAssistant';
 import { loadTourneySim } from '../common/tourneySim';
 import { TAB_PATHS, tabFromPath } from '../../routes';
 import { handOffToWhatIf } from '../common/whatIfHandoff';
+import { useAccountStore } from '../../store/useAccountStore';
+import { loadLog, reportOf, updateLog } from '../../ai/aiLog';
+import { sendAiReport } from '../../ai/aiReports';
+import { AiReportsPanel, DebugLog } from './AiDebug';
 
 const SUGGESTIONS = [
     'What should I spend my stones on next?',
@@ -90,18 +94,79 @@ const whatIfOf = (m: AiMessage) => [...(m.looked ?? [])].reverse().find(l => l.w
 
 // Everything about one answer, for a tester's report (pasted into Discord):
 // the question, the answer, what it looked at, the model and the GPU.
-async function reportText(m: AiMessage, question: string, model: string | null): Promise<string> {
-    let gpu = 'unknown';
+async function gpuName(): Promise<string> {
     try {
         const a = await (navigator as Navigator & { gpu?: { requestAdapter(): Promise<{ info?: { vendor?: string; architecture?: string } } | null> } }).gpu?.requestAdapter();
-        gpu = [a?.info?.vendor, a?.info?.architecture].filter(Boolean).join(' ') || gpu;
-    } catch { /* not known */ }
+        return [a?.info?.vendor, a?.info?.architecture].filter(Boolean).join(' ') || 'unknown';
+    } catch {
+        return 'unknown';
+    }
+}
+
+async function reportText(m: AiMessage, question: string, model: string | null): Promise<string> {
+    const gpu = await gpuName();
     return [
         `TowerForge Ask AI v${__APP_VERSION__} · model ${model ?? '?'} · GPU ${gpu}`,
         `Question: ${question}`, `Asked for: ${m.route ?? '?'}`, '', m.text,
         ...(m.unchecked ? ['', `Not TowerForge's numbers: ${m.unchecked.join(', ')}`] : []),
         '', 'Looked at:', ...(m.looked ?? []).map(l => `[${l.title}]\n${l.text}`),
     ].join('\n');
+}
+
+// 👍/👎 under an answer (kept in the debug log), and on 👎 the offer to send
+// it to TowerForge — what it sends, said before it's sent; nothing goes
+// unless the player presses Send.
+function Rate({ id }: { id: string }) {
+    const [rating, setRating] = useState<'up' | 'down' | null>(() => loadLog().find(e => e.id === id)?.rating ?? null);
+    const [asking, setAsking] = useState(false);
+    const [note, setNote] = useState('');
+    const [state, setState] = useState<'idle' | 'sending' | 'sent'>('idle');
+    const [error, setError] = useState<string | null>(null);
+    const signedIn = useAccountStore(a => a.status === 'signedIn');
+    const rate = (r: 'up' | 'down') => {
+        setRating(r);
+        updateLog(id, { rating: r });
+        setAsking(r === 'down');
+    };
+    const send = async () => {
+        const entry = loadLog().find(e => e.id === id);
+        if (!entry) { setError('This answer isn\'t in the debug log any more.'); return; }
+        setState('sending');
+        try {
+            await sendAiReport(reportOf(entry, await gpuName(), __APP_VERSION__, note));
+            updateLog(id, { reported: true });
+            setState('sent');
+            setAsking(false);
+        } catch (e) {
+            setState('idle');
+            setError(e instanceof Error ? e.message : String(e));
+        }
+    };
+    return (
+        <div className="ai-rate">
+            <button type="button" className={rating === 'up' ? 'on' : ''} onClick={() => rate('up')} aria-pressed={rating === 'up'} title="A good answer">👍</button>
+            <button type="button" className={rating === 'down' ? 'on' : ''} onClick={() => rate('down')} aria-pressed={rating === 'down'} title="Something's wrong">👎</button>
+            {state === 'sent' && <span className="ai-fine">Sent to TowerForge — thanks.</span>}
+            {asking && state !== 'sent' && (
+                <div className="ai-send">
+                    <p>
+                        Send this answer to TowerForge so it can be fixed? It sends the question, the answer, the data it
+                        looked at (your account&apos;s numbers it used), the model and your graphics card. Nothing else, and
+                        only if you press Send.
+                    </p>
+                    <textarea rows={2} maxLength={2000} placeholder="What's wrong with it? (optional)" value={note} onChange={e => setNote(e.target.value)} />
+                    {!signedIn && <div className="ai-fine">Sign in (Player → Account) to send it.</div>}
+                    {error && <div className="grd-warn">{error}</div>}
+                    <div className="ai-dbg-actions">
+                        <button type="button" className="btn btn-accent" disabled={!signedIn || state === 'sending'} onClick={() => void send()}>
+                            {state === 'sending' ? 'Sending…' : 'Send'}
+                        </button>
+                        <button type="button" className="btn btn-dim" onClick={() => setAsking(false)}>No thanks</button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
 }
 
 function Message({ m, question, model }: { m: AiMessage; question: string; model: string | null }) {
@@ -123,6 +188,7 @@ function Message({ m, question, model }: { m: AiMessage; question: string; model
                     useGameStore.getState().setActiveTab('whatif');
                 }}>Open in What If →</button>
             )}
+            {m.done && m.id && <Rate id={m.id} />}
             {m.done && (
                 <button type="button" className="ai-report" title="Copies the question, the answer and what it looked at, to paste into a bug report"
                     onClick={() => { void reportText(m, question, model).then(t => navigator.clipboard.writeText(t)).then(() => setCopied(true), () => setCopied(false)); }}>
@@ -142,6 +208,7 @@ function Message({ m, question, model }: { m: AiMessage; question: string; model
 
 export default function AiTab() {
     const s = useAiStore();
+    const isAdmin = useAccountStore(a => a.features.includes('ai-admin'));
     const [draft, setDraft] = useState('');
     const endRef = useRef<HTMLDivElement>(null);
     const gpu = hasWebGpu();
@@ -166,10 +233,11 @@ export default function AiTab() {
         <div className="ai-tab">
             <div className="relics-note">
                 <strong>Ask AI (preview)</strong> — ask about your account in your own words. It runs on this
-                computer: the model downloads once into your browser, then works offline, and your questions and
-                account never leave this device. It reads the same numbers as the Optimizer, What If and
-                Tournament pages, but it&apos;s a small model and can still get things wrong — check anything
-                important on those pages.
+                computer: the model downloads once into your browser, then works offline. Your questions and
+                account stay on this device unless you choose to send an answer to TowerForge (👎 → Send);
+                TowerForge only counts, without your words, what kind of question was asked and how long the
+                answer took. It reads the same numbers as the Optimizer, What If and Tournament pages, but
+                it&apos;s a small model and can still get things wrong — check anything important on those pages.
             </div>
 
             {!gpu && (
@@ -272,6 +340,9 @@ export default function AiTab() {
                     </label>
                 </div>
             </div>
+
+            <DebugLog version={s.messages.length + (s.busy ? 0 : 1)} onAsk={send} canAsk={ready && !s.busy} />
+            {isAdmin && <AiReportsPanel />}
         </div>
     );
 }

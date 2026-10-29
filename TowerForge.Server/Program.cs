@@ -46,6 +46,7 @@ if (args.Length >= 1 && args[0] == "--recovery-code")
 builder.Services.AddSingleton(new AppDb(dataDir));
 builder.Services.AddSingleton<ShareStore>();
 builder.Services.AddSingleton<UserStore>();
+builder.Services.AddSingleton<AiReportStore>();
 // Parts of the site only some accounts see while they're tried out.
 builder.Services.AddSingleton(sp => new PreviewFeatures(
     Path.Combine(dataDir, "features.json"), sp.GetRequiredService<ILogger<PreviewFeatures>>()));
@@ -92,6 +93,7 @@ builder.Services.AddRateLimiter(options =>
     options.AddPolicy("auth", ctx => PerIp(ctx, permitsPerMinute: 10));
     options.AddPolicy("share-create", ctx => PerIp(ctx, permitsPerMinute: 20));
     options.AddPolicy("save", ctx => PerIp(ctx, permitsPerMinute: 60));
+    options.AddPolicy("ai-report", ctx => PerIp(ctx, permitsPerMinute: 10));
 });
 
 builder.Services.AddControllers();

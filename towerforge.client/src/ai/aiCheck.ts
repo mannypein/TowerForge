@@ -15,15 +15,19 @@ const LETTERS: Record<string, number> = {
 
 // Every number in a text with its value: "1,500", "+5.7", "W8,600", "4.67Q",
 // "23%", "12h 30m" (each part). Dates and list markers ("1.") are skipped.
-export function numbersIn(text: string): { raw: string; value: number }[] {
-    const out: { raw: string; value: number }[] = [];
+// `values`: every way it reads — "40s" is 40 seconds as often as 40
+// sextillion (the game's s), so both count (the notes' "Cooldown 180s"
+// flagged an answer's "180 seconds", 2026-10-29).
+export function numbersIn(text: string): { raw: string; value: number; values: number[] }[] {
+    const out: { raw: string; value: number; values: number[] }[] = [];
     const clean = text.replace(/\b\d{4}-\d{2}-\d{2}(T[\d:.]+Z?)?\b/g, ' ').replace(/^\s*\d+\.\s/gm, ' ');
     const re = /(\d[\d,]*(?:\.\d+)?)(\s?(?:K|M|B|T|q|Q|s|S|O|N|D)(?![a-zA-Z]))?/g;
     for (let m = re.exec(clean); m; m = re.exec(clean)) {
         const n = Number(m[1].replace(/,/g, ''));
         if (!Number.isFinite(n)) continue;
         const letter = m[2]?.trim();
-        out.push({ raw: m[0].trim(), value: letter ? n * LETTERS[letter] : n });
+        const value = letter ? n * LETTERS[letter] : n;
+        out.push({ raw: m[0].trim(), value, values: letter === 's' ? [value, n] : [value] });
     }
     return out;
 }
@@ -38,9 +42,9 @@ export function close(a: number, b: number): boolean {
 // Numbers in the answer that aren't in the data or the question. Small
 // counts (1–12) pass: "3 picks", "top 2", tier numbers in passing.
 export function unverifiedNumbers(answer: string, data: string, question: string): string[] {
-    const known = [...numbersIn(data), ...numbersIn(question)].map(n => n.value);
+    const known = [...numbersIn(data), ...numbersIn(question)].flatMap(n => n.values);
     return [...new Set(numbersIn(answer)
-        .filter(n => !(Number.isInteger(n.value) && n.value <= 12))
-        .filter(n => !known.some(k => close(k, n.value)))
+        .filter(n => !n.values.some(v => Number.isInteger(v) && v <= 12))
+        .filter(n => !n.values.some(v => known.some(k => close(k, v))))
         .map(n => n.raw))];
 }
