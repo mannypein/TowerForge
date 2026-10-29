@@ -34,6 +34,7 @@ export interface AiMessage {
     text: string;
     looked?: ToolResult[];     // the data the answer was written from
     route?: string;            // what step 1 asked for (shown with the data)
+    routed?: RouteChoice;      // the same, as read (the test bench checks it)
     status?: string;           // while it works ("Reading your account…")
     done?: boolean;
 }
@@ -101,7 +102,7 @@ async function modelIdFor(m: AiModel): Promise<string> {
 }
 
 // ── Step 1: route ─────────────────────────────────────────────
-interface Route {
+export interface Route {
     tool: 'upgrades' | 'what_if' | 'levels' | 'runs' | 'tier' | 'tournament' | 'guide' | 'none';
     currency: AiCurrency;
     goal: 'default' | 'waves' | 'damage' | 'coins' | 'survival';
@@ -179,8 +180,10 @@ function guessRoute(q: string): Route {
 const currencyIn = (l: string): AiCurrency => (['stones', 'coins', 'research', 'shards', 'medals', 'gems', 'bits'] as const)
     .find(c => l.includes(c.replace(/s$/, ''))) ?? 'any';
 
+export type RouteChoice = Route & { guessed?: boolean };
+
 // Qwen3 starts every reply with its (here empty) <think></think>.
-function readRoute(raw: string, q: string): Route & { guessed?: boolean } {
+function readRoute(raw: string, q: string): RouteChoice {
     try {
         const body = raw.replace(/<think>[\s\S]*?<\/think>/g, '');
         const r = JSON.parse(body.slice(body.indexOf('{'), body.lastIndexOf('}') + 1)) as Partial<Route>;
@@ -197,7 +200,7 @@ function readRoute(raw: string, q: string): Route & { guessed?: boolean } {
     }
 }
 
-const routeText = (r: Route & { guessed?: boolean }) => [
+const routeText = (r: RouteChoice) => [
     r.tool,
     r.tool === 'upgrades' && `${r.currency}${r.goal !== 'default' ? `, goal ${r.goal}` : ''}${r.runs !== 'any' ? `, ${r.runs} runs` : ''}${r.budget ? `, budget ${r.budget.toLocaleString()}` : ''}`,
     r.tool === 'what_if' && r.changes.map(c => `${c.upgrade} → ${c.level}`).join('; '),
@@ -377,7 +380,7 @@ export const useAiStore = create<AiStore>((set, get) => {
                 if (tokens(data) > room) data = clip(data, Math.floor(room * 3.5));
 
                 const system = `${ANSWER_PROMPT}\n\n[The player's account]\n${summary}${data ? `\n\n${data}` : ''}${context}`;
-                patchLast({ looked, route: routeText(route), status: get().think ? 'Thinking…' : 'Writing…' });
+                patchLast({ looked, route: routeText(route), routed: route, status: get().think ? 'Thinking…' : 'Writing…' });
                 const stream = await engine.chat.completions.create({
                     messages: [{ role: 'system', content: system }, { role: 'user', content: q }],
                     stream: true, temperature: 0.2, top_p: 0.8, max_tokens: answerTokens,

@@ -1,0 +1,91 @@
+// ============================================================
+//  TowerForge Companion — Ask AI test bench: the questions
+//  What players ask, in their words (typos, short names and slang too),
+//  with the data each should be answered from: the tool step 1 should
+//  pick and the fields that matter (currency, goal, runs, budget, tier,
+//  the upgrades named). `accounts` limits a question to the accounts it
+//  fits (Smite needs UW+); `followUp` asks it in the same chat right
+//  after the one before. `mustNot` catches known misreadings ("PS" as
+//  Power Stones). "The next tier" may be read from the tier farmed or
+//  the highest reached (or left 0, which the site takes as the next). Grading: benchGrade.ts; runner: runBench.ts.
+// ============================================================
+
+import type { Route } from '../aiAssistant';
+
+export type BenchAccountKey = 'early' | 'mid' | 'late';
+type Tool = Route['tool'];
+
+export interface BenchQuestion {
+    id: string;
+    q: string;
+    accounts?: BenchAccountKey[];
+    followUp?: boolean;
+    expect: {
+        tool: Tool | Tool[];               // any of these is right
+        currency?: Route['currency'] | Route['currency'][];
+        goal?: Route['goal'] | Route['goal'][];
+        runs?: Route['runs'] | Route['runs'][];
+        budget?: number;
+        tier?: number | Partial<Record<BenchAccountKey, number[]>>;   // 0 = "the next tier" to the site
+        upgrades?: string[];               // each named upgrade (any wording containing it)
+        notUpgrades?: string[];            // upgrades it must have dropped ("… instead?")
+    };
+    mustNot?: RegExp[];
+}
+
+export const BENCH_QUESTIONS: BenchQuestion[] = [
+    // ── What to buy ──────────────────────────────────────────────
+    { id: 'stones', q: 'What should I spend my stones on?', expect: { tool: 'upgrades', currency: 'stones' } },
+    { id: 'stones-slang', q: 'wat shud i upgrade nxt w/ my stonez', expect: { tool: 'upgrades', currency: 'stones' } },
+    { id: 'coins-budget', q: 'I have 2.4B coins, what workshop upgrades should I buy?', accounts: ['early'], expect: { tool: 'upgrades', currency: 'coins', goal: ['default', 'waves'], budget: 2.4e9 } },
+    { id: 'coins-budget-late', q: 'I have 4Q coins to spend, what should I buy in the workshop?', accounts: ['late'], expect: { tool: 'upgrades', currency: 'coins', goal: ['default', 'waves'], budget: 4e18 } },
+    { id: 'stones-tourney', q: "I'm about to get 500 stones, what's the best way to do better in tournaments?", accounts: ['mid', 'late'], expect: { tool: 'upgrades', currency: 'stones', runs: 'tournament', budget: 500 } },
+    { id: 'more-coins', q: 'How do I get more coins?', expect: { tool: 'upgrades', currency: ['any', 'coins'], goal: 'coins' } },
+    { id: 'labs', q: 'What should I research next in the labs?', expect: { tool: 'upgrades', currency: 'research' } },
+    { id: 'medals', q: 'where should my medals go', expect: { tool: 'upgrades', currency: 'medals' } },
+    { id: 'shards', q: "what's the best use of my module shards", accounts: ['mid', 'late'], expect: { tool: 'upgrades', currency: 'shards' } },
+    { id: 'gems', q: 'Should I buy card slots with my gems?', expect: { tool: 'upgrades', currency: 'gems' } },
+    { id: 'survive', q: 'How do I survive longer?', expect: { tool: 'upgrades', goal: 'survival' } },
+    { id: 'push-cheap', q: "what's the cheapest way to push more waves", expect: { tool: 'upgrades', goal: 'waves' } },
+
+    // ── What would an upgrade do ─────────────────────────────────
+    { id: 'whatif-dw', q: 'How many waves would maxing Death Wave get me?', accounts: ['mid', 'late'], expect: { tool: 'what_if', upgrades: ['death wave|dw'] } },
+    { id: 'whatif-cf-follow', q: 'and what about chrono field instead?', accounts: ['mid', 'late'], followUp: true, expect: { tool: 'what_if', upgrades: ['chrono|cf'], notUpgrades: ['death wave|dw'] } },
+    { id: 'whatif-not-owned', q: 'How many waves would maxing Death Wave get me?', accounts: ['early'], expect: { tool: 'what_if', upgrades: ['death wave|dw'] } },
+    { id: 'whatif-lab', q: 'Is 10 more levels of the damage lab worth it?', expect: { tool: 'what_if', upgrades: ['damage'] } },
+    { id: 'whatif-level', q: 'what would CL damage 25 do for me', accounts: ['mid', 'late'], expect: { tool: 'what_if', upgrades: ['cl|chain'] } },
+    { id: 'whatif-compare', q: 'Which is better: maxing black hole duration or golden tower multiplier?', accounts: ['mid', 'late'], expect: { tool: 'what_if', upgrades: ['black hole|bh', 'golden tower|gt'] } },
+    { id: 'whatif-plus', q: 'what if I max Smite', accounts: ['late'], expect: { tool: 'what_if', upgrades: ['smite|cl\\+|chain'] } },
+
+    // ── Levels and the account ───────────────────────────────────
+    { id: 'level-gt', q: 'what level is my Golden Tower?', expect: { tool: ['levels', 'none'] } },
+    { id: 'level-ws', q: "What's my workshop damage level?", expect: { tool: ['levels', 'none'] } },
+    { id: 'my-tier', q: 'What tier am I on?', expect: { tool: ['none', 'levels'] } },
+
+    // ── Runs ─────────────────────────────────────────────────────
+    { id: 'runs-damage', q: 'Which UW does the most damage in my runs?', expect: { tool: 'runs', runs: ['any', 'campaign'] } },
+    { id: 'runs-killed', q: 'What keeps killing me?', expect: { tool: 'runs', runs: ['any', 'campaign'] } },
+    { id: 'runs-cl-tourney', q: 'Why is my chain lightning weak in tournaments?', accounts: ['mid', 'late'], expect: { tool: 'runs', runs: 'tournament' } },
+
+    // ── Another tier ─────────────────────────────────────────────
+    { id: 'tier-next', q: 'How far would I get on the next tier up?', expect: { tool: 'tier', tier: { early: [0, 6, 7], mid: [0, 11, 12, 13], late: [0, 19, 20] } } },
+    { id: 'tier-named', q: 'how far could i farm T17', accounts: ['late'], expect: { tool: 'tier', tier: { late: [17] } } },
+    { id: 'tier-named-mid', q: 'how far could i farm T11', accounts: ['mid'], expect: { tool: 'tier', tier: { mid: [11] } } },
+
+    // ── Tournaments ──────────────────────────────────────────────
+    { id: 'tourney-week', q: "How will I do in this week's tournament?", accounts: ['mid', 'late'], expect: { tool: 'tournament' } },
+    { id: 'tourney-league', q: 'Am I going to move up a league?', accounts: ['mid', 'late'], expect: { tool: 'tournament' } },
+    { id: 'tourney-rank', q: "What's my best tournament rank?", accounts: ['late'], expect: { tool: 'tournament' } },
+    { id: 'tourney-none', q: 'How do I do better in tournaments?', accounts: ['early'], expect: { tool: ['upgrades', 'tournament'] } },
+
+    // ── How the game works ───────────────────────────────────────
+    { id: 'guide-cf', q: 'How does Chrono Field work?', accounts: ['late'], expect: { tool: 'guide' } },
+    { id: 'guide-skip', q: 'What is enemy level skip?', accounts: ['late'], expect: { tool: 'guide' } },
+    { id: 'guide-module', q: 'What does the Death Penalty module do?', accounts: ['late'], expect: { tool: 'guide' } },
+    { id: 'guide-site', q: 'How does TowerForge work out the best upgrade?', accounts: ['late'], expect: { tool: 'guide' } },
+    { id: 'guide-ps', q: 'is ps worth it', accounts: ['late'], expect: { tool: ['what_if', 'guide', 'levels'] }, mustNot: [/power stone/i] },
+
+    // ── Not about the account ────────────────────────────────────
+    { id: 'hello', q: 'hi', accounts: ['mid'], expect: { tool: 'none' } },
+    { id: 'off-topic', q: 'Write me a poem about towers', accounts: ['mid'], expect: { tool: 'none' } },
+];
