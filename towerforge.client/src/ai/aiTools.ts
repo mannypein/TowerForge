@@ -20,7 +20,7 @@
 import type { AppState, BuildType, League, OptCandidate, OptCategory, OptCurrency } from '../types/gameTypes';
 import type { AccountState, GoalModels } from '../engine/accountModels';
 import { applyGoal, chosenReport, effectiveBuild, runModels, snapshotFromState } from '../engine/accountModels';
-import { groupPath, mergeRepeats, simulateCategoryPath, simulateMedalPath, simulateShardPaths, simulateStonePath } from '../engine/optimizer';
+import { bestGuardianChips, groupPath, mergeRepeats, simulateCategoryPath, simulateMedalPath, simulateShardPaths, simulateStonePath } from '../engine/optimizer';
 import { changeCost, upgradeTargets, whatIf } from '../engine/whatIf';
 import type { Change, Costs, UpgradeTarget } from '../engine/whatIf';
 import { buildTournamentModel, heatOf, newestTournament, tournamentWhatIf, withTournamentBuild } from '../engine/tournamentModel';
@@ -37,11 +37,13 @@ import { lockedNotes } from '../engine/unlocks';
 import { boostSettings, boostsForLabs, cellIncome, hoursOnHand, labHours, planLabBoosts } from '../engine/labBoosts';
 import { labTimerLeft } from '../engine/labTimer';
 import { planTypeShards } from '../engine/shardPlan';
+import { buildRunModel, projectRun, runSettingsFromCards } from '../engine/runCoins';
 import { labFinishAt } from '../engine/labTimer';
-import { LABS, RELICS, UWS, UW_UNLOCK_COSTS, presetLabel } from '../constants/gameData';
+import { LABS, MAX_TIER, RELICS, UWS, UW_UNLOCK_COSTS, presetLabel } from '../constants/gameData';
 import { VAULT_SECTIONS } from '../constants/vaultData';
 import { vaultKeys, vaultLevel } from '../engine/vault';
 import { activeChips } from '../engine/guardian';
+import { CHIPS } from '../constants/guardianData';
 import { GAME_LEAGUES } from '../constants/gameExportMaps';
 import { BOTS_CONFIG, botsForPreset } from '../constants/botData';
 import { RARITIES, rarityStars } from '../constants/moduleRarities';
@@ -846,4 +848,80 @@ export function shardPlanReport(s: AiAccount, query = ''): ToolResult {
     }
     out.push('Each type\'s shards only level its own slots; levels past a module\'s rarity cap add nothing.');
     return { title: `Shard plan${asked.length === 1 ? ` — ${asked[0]}` : ''}`, text: out.join('\n') };
+}
+
+// ── Which tier to farm ────────────────────────────────────────
+// Coins an hour on the tier farmed now and the ones around it (up to the
+// highest unlocked): where runs would end on each (Run Length: the enemy
+// health of the last deaths, as for another tier), and coins a run, run
+// time and coins an hour at that wave (Coins per Run's model of the runs,
+// engine/runCoins.ts). Health only, as for another tier.
+export function farmTiersReport(s: AiAccount): ToolResult {
+    const runLength = buildRunLengthModel(s.importedBattles);
+    const tuning = defaultBattleIndex(s.importedBattles);
+    const settings = runSettingsFromCards(s.cardData, s.activePreset);
+    const coins = tuning >= 0 ? buildRunModel(s.importedBattles, tuning, settings) : null;
+    if (!runLength || !coins) {
+        return { title: 'Which tier to farm', text: 'Headline: TowerForge needs campaign runs with level skips and coins in your battle history to compare tiers: import your game data after a few runs.' };
+    }
+    const unlocked = Math.max(runLength.tier, s.profile.highestTier ?? runLength.tier);
+    const tiers = [runLength.tier - 1, runLength.tier, runLength.tier + 1, runLength.tier + 2]
+        .filter(t => t >= 1 && t <= Math.min(MAX_TIER, unlocked));
+    const rows = tiers.map(tier => {
+        const waves = runLength.used.map(d => (tier === runLength.tier ? d.run.wave
+            : deathWave(d.enemyHealth!, tier, Math.max(0, 1 - d.healthLevel! / d.run.wave))));
+        const wave = Math.round(waves.reduce((a, w) => a + w, 0) / waves.length);
+        return projectRun(coins.calibration, settings, wave, tier);
+    });
+    const best = rows.reduce((a, r) => (r.coinsPerHour > a.coinsPerHour ? r : a));
+    const now = rows.find(r => r.tier === runLength.tier)!;
+    const row = (r: typeof rows[number]) => `T${r.tier}: runs end around W${r.wave.toLocaleString()}, ${num(r.coins)} coins a run in ${formatLabTime(r.hours)}, ${num(r.coinsPerHour)} coins an hour`;
+    const vs = best.tier === now.tier ? 'the tier you farm now' : `${((best.coinsPerHour / now.coinsPerHour - 1) * 100).toFixed(0)}% more an hour than T${now.tier}, where you farm now`;
+    return {
+        title: `Which tier to farm (T${tiers[0]}–T${tiers[tiers.length - 1]})`,
+        text: [
+            `Headline: for coins an hour, T${best.tier} is your best tier to farm — about ${num(best.coinsPerHour)} coins an hour, ${vs}.`,
+            ...rows.map(row),
+            `How: each tier's waves from the enemy health where your last ${runLength.used.length} runs on T${runLength.tier} ended, and coins from Coins per Run's model of your runs at that wave and tier.`
+                + ' Only enemy health is compared: enemies on higher tiers also hit harder, so runs there may end sooner.'
+                + (unlocked < runLength.tier + 2 ? ` Tiers past T${unlocked} aren't unlocked yet.` : ''),
+        ].join('\n'),
+    };
+}
+
+// ── Guardian chips ────────────────────────────────────────────
+// The Optimizer's chip picker (optimizer.bestGuardianChips): every set of
+// owned chips that fits the preset's slots, scored for a goal at the chips'
+// levels now, against the set equipped. Swapping chips is free in game.
+export function guardianReport(s: AiAccount, goalWanted?: string): ToolResult {
+    const equipped = activeChips(s.guardianData, s.activePreset);
+    if (!s.guardianData?.unlocked) {
+        return { title: 'Guardian chips', text: 'Headline: the Guardian isn\'t unlocked on this account yet (the game\'s Guild → Guardian).' };
+    }
+    const build = buildOf(s);
+    const goal = goalFor(build, goalWanted);
+    const goals = [...new Set<OptGoal>([goal, ...(BUILD_GOALS[build] ?? []).filter(g => g === 'coins')])];
+    const name = (id: string) => CHIPS.find(c => c.id === id)?.name ?? id;
+    const setText = (ids: string[]) => ids.map(name).join(', ');
+    const out: string[] = [];
+    goals.forEach((g, i) => {
+        const snap = snapshotFromState(s);
+        applyGoal(snap, g, build, chosenReport(s), runModels(s));
+        const sets = bestGuardianChips(snap);
+        if (!sets.length) return;
+        const best = sets[0];
+        const label = GOAL_LABELS[g].toLowerCase();
+        const verdict = best.current || best.scorePct <= 0.005
+            ? `the chips you have on (${setText(equipped.map(a => a.chip.id))}) are already the best for ${label}`
+            : `equip ${setText(best.chips)} for ${label}: ${pct(best.scorePct)} over the chips you have on now (${setText(equipped.map(a => a.chip.id)) || 'none'})`;
+        out.push(i === 0 ? `Headline: ${verdict}.` : `For ${label}: ${verdict}.`);
+        // Sets that score the same (a chip that adds nothing either way) aren't a ranking.
+        const tied = sets.slice(1).filter(x => Math.abs(x.scorePct - best.scorePct) < 0.005);
+        const after = sets.slice(1 + tied.length, 4 + tied.length).slice(0, 3);
+        if (tied.length) out.push(`  Just as good for ${label}: ${tied.slice(0, 3).map(x => setText(x.chips)).join('; ')}.`);
+        if (after.length) out.push(`  Next best for ${label}: ${after.map(x => `${setText(x.chips)} ${pct(x.scorePct)}`).join('; ')}.`);
+    });
+    if (!out.length) return { title: 'Guardian chips', text: 'Headline: no chips owned that fit the Guardian\'s slots yet.' };
+    out.push('Swapping chips is free in the game. Scored at the chips\' levels now: Attack and Scout count for damage and waves, Bounty, Summon and Fetch for coins; Ally isn\'t counted yet.');
+    return { title: 'Guardian chips', text: out.join('\n') };
 }

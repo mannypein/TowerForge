@@ -23,13 +23,15 @@ import type { WebWorkerMLCEngine } from '@mlc-ai/web-llm';
 import { AI_MODELS, CONTEXT_TOKENS, modelByKey } from './aiModels';
 import type { AiModel } from './aiModels';
 import {
-    accountSummary, bestUpgrades, labBoostsReport, levelsOf, runsReport, shardPlanReport, tierOutlook, tournamentOutlook, whatIfChanges,
+    accountSummary, bestUpgrades, farmTiersReport, guardianReport, labBoostsReport, levelsOf, runsReport, shardPlanReport, tierOutlook,
+    tournamentOutlook, whatIfChanges,
 } from './aiTools';
 import type { AiAccount, AiChangeAsk, AiCurrency, AiRunKind, AiTourneySettings, ToolResult } from './aiTools';
 import { budgetIn, wordsOf } from './aiTools';
 import { TAB_PATHS } from '../routes';
 import { UWS } from '../constants/gameData';
 import { notesText, searchNotes } from './aiKnowledge';
+import { unverifiedNumbers } from './aiCheck';
 
 export interface AiMessage {
     role: 'user' | 'assistant';
@@ -38,6 +40,7 @@ export interface AiMessage {
     route?: string;            // what step 1 asked for (shown with the data)
     routed?: RouteChoice;      // the same, as read (the test bench checks it)
     status?: string;           // while it works ("Reading your account…")
+    unchecked?: string[];      // numbers in the answer that aren't TowerForge's (aiCheck)
     done?: boolean;
 }
 
@@ -105,7 +108,7 @@ async function modelIdFor(m: AiModel): Promise<string> {
 
 // ── Step 1: route ─────────────────────────────────────────────
 export interface Route {
-    tool: 'upgrades' | 'what_if' | 'levels' | 'runs' | 'tier' | 'tournament' | 'lab_boosts' | 'shard_plan' | 'guide' | 'none';
+    tool: 'upgrades' | 'what_if' | 'levels' | 'runs' | 'tier' | 'farm_tier' | 'tournament' | 'lab_boosts' | 'shard_plan' | 'guardian' | 'guide' | 'none';
     currency: AiCurrency;
     goal: 'default' | 'waves' | 'damage' | 'coins' | 'survival';
     changes: AiChangeAsk[];
@@ -122,7 +125,7 @@ const UW_NAMES = `UW short names: ${UWS.map(u => `${u.a} ${u.n}`).join(', ')}. U
 const ROUTE_SCHEMA = JSON.stringify({
     type: 'object',
     properties: {
-        tool: { type: 'string', enum: ['upgrades', 'what_if', 'levels', 'runs', 'tier', 'tournament', 'lab_boosts', 'shard_plan', 'guide', 'none'] },
+        tool: { type: 'string', enum: ['upgrades', 'what_if', 'levels', 'runs', 'tier', 'farm_tier', 'tournament', 'lab_boosts', 'shard_plan', 'guardian', 'guide', 'none'] },
         currency: { type: 'string', enum: ['any', 'stones', 'coins', 'research', 'shards', 'medals', 'gems', 'bits'] },
         goal: { type: 'string', enum: ['default', 'waves', 'damage', 'coins', 'survival'] },
         changes: {
@@ -151,6 +154,8 @@ tool:
 - "tournament": tournaments: this week's battle conditions, how far tournament runs should get, past tournaments' waves and ranks, leagues.
 - "lab_boosts": speeding labs up with cells: which boost (×1.5 to ×8) their labs can keep, what boosts cost in cells, how long the labs being researched or a named lab take. search: the lab named, else "".
 - "shard_plan": spending Module Shards on module slot levels (main and assist slots): what to level, the best levels for all their shards, Restore. search: the type (cannon, armor, generator or core), else "".
+- "farm_tier": which tier to farm for the most coins an hour (comparing tiers).
+- "guardian": which Guardian chips to equip.
 - "guide": how a game mechanic works or how TowerForge calculates something. search: a few keywords.
 - "none": greetings, questions the account overview answers (their tier, best waves, what they own), and requests that have nothing to do with The Tower (a poem, a joke).
 currency is what they want to spend; "any" when they name more than one (coins and stones) or none.
@@ -175,6 +180,8 @@ Examples:
 Earlier question "how many waves would maxing DW get me", then "and CF instead?" → {"tool":"what_if","currency":"any","goal":"default","changes":[{"upgrade":"CF","level":"max"}],"search":"","runs":"any","tier":0,"budget":0}
 "what speed should I boost my labs to" → {"tool":"lab_boosts","currency":"any","goal":"default","changes":[],"search":"","runs":"any","tier":0,"budget":0}
 "how long until my damage lab is maxed" → {"tool":"lab_boosts","currency":"any","goal":"default","changes":[],"search":"damage lab","runs":"any","tier":0,"budget":0}
+"which tier should I farm for coins" → {"tool":"farm_tier","currency":"any","goal":"default","changes":[],"search":"","runs":"any","tier":0,"budget":0}
+"which guardian chips should I use" → {"tool":"guardian","currency":"any","goal":"default","changes":[],"search":"","runs":"any","tier":0,"budget":0}
 "how should I spend my armor shards" → {"tool":"shard_plan","currency":"any","goal":"default","changes":[],"search":"armor","runs":"any","tier":0,"budget":0}
 "how many tournament waves would maxing CL get me" → {"tool":"what_if","currency":"any","goal":"default","changes":[{"upgrade":"CL","level":"max"}],"search":"","runs":"tournament","tier":0,"budget":0}
 "what keeps killing me" → {"tool":"runs","currency":"any","goal":"default","changes":[],"search":"","runs":"any","tier":0,"budget":0}
@@ -247,6 +254,11 @@ function checked(r: Route, q: string): Route {
         const kept = out.changes.filter(c => wordsOf(c.upgrade).some(w => w !== '+' && asked.has(w)));
         out.changes = kept.length ? kept : out.changes.slice(-1);
     }
+    // Which tier to farm, and Guardian chips: their own tools.
+    if (/\b(which|best|what) tier\b.*\bfarm|\bfarm\b.*\b(which|best|what) tier\b|\btier\b.*\b(most|more) coins\b/i.test(q) && !/\bt(?:ier)?\s?\d/i.test(q)) {
+        out.tool = 'farm_tier';
+    }
+    if (/\bchips?\b/i.test(q) && /\bguardian\b|\b(equip|use|best|should)\b/i.test(q) && !['what_if', 'levels'].includes(out.tool)) out.tool = 'guardian';
     // Module shards alone, or boosting labs: their own pages' plans.
     if (out.tool === 'upgrades' && out.currency === 'shards') out.tool = 'shard_plan';
     if (out.tool !== 'lab_boosts' && /\bboost/i.test(q) && /\blabs?\b/i.test(q)) out.tool = 'lab_boosts';
@@ -316,6 +328,10 @@ function lookUp(route: Route, question: string, ctx: AiContext): ToolResult[] {
             return [tournamentOutlook(account, ctx.tourney), runsReport(account, 'tournament')];
         case 'lab_boosts':
             return [labBoostsReport(account, `${route.search} ${question}`)];
+        case 'farm_tier':
+            return [farmTiersReport(account)];
+        case 'guardian':
+            return [guardianReport(account, route.goal === 'default' ? ctx.goal : route.goal)];
         case 'shard_plan':
             return [shardPlanReport(account, `${route.search} ${question}`)];
         case 'guide': {
@@ -491,7 +507,9 @@ export const useAiStore = create<AiStore>((set, get) => {
                     const shown = visible(raw);
                     patchLast({ text: shown, status: shown ? undefined : 'Thinking…' });
                 }
-                patchLast({ text: visible(raw) || '(No answer — try asking another way.)', status: undefined, done: true });
+                const text = visible(raw) || '(No answer — try asking another way.)';
+                const unchecked = unverifiedNumbers(text, [summary, ...looked.map(r => r.text)].join('\n'), q);
+                patchLast({ text, status: undefined, done: true, ...(unchecked.length ? { unchecked } : {}) });
             } catch (e) {
                 patchLast({ text: `Something went wrong: ${e instanceof Error ? e.message : String(e)}`, status: undefined, done: true });
             } finally {

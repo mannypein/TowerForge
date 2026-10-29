@@ -5,7 +5,8 @@ import { describe, expect, it } from 'vitest';
 import { parseGameExport } from '../../engine/gameExport';
 import { BENCH_ACCOUNTS } from './benchAccounts';
 import { BENCH_QUESTIONS } from './benchQuestions';
-import { badLinks, gradeHeadline, gradeRoute, numbersIn, unverifiedNumbers, wordIssues } from './benchGrade';
+import { badLinks, gradeHeadline, gradeRoute, wordIssues } from './benchGrade';
+import { numbersIn, unverifiedNumbers } from '../aiCheck';
 import type { RouteChoice } from '../aiAssistant';
 
 const route = (r: Partial<RouteChoice>): RouteChoice => ({

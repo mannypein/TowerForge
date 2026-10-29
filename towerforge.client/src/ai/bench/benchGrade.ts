@@ -16,6 +16,7 @@
 // ============================================================
 
 import type { RouteChoice } from '../aiAssistant';
+import { close, numbersIn, unverifiedNumbers } from '../aiCheck';
 import type { BenchAccountKey, BenchQuestion } from './benchQuestions';
 
 export interface BenchRecord {
@@ -38,44 +39,6 @@ export interface BenchGrade {
     badLinks: string[];
     wordIssues: string[];
     pass: boolean;          // route, headline, links and words (numbers are read by hand)
-}
-
-// ── Numbers ───────────────────────────────────────────────────
-// The game's letters (q quadrillion, Q quintillion — case matters).
-const LETTERS: Record<string, number> = {
-    K: 1e3, k: 1e3, M: 1e6, B: 1e9, T: 1e12, q: 1e15, Q: 1e18, s: 1e21, S: 1e24, O: 1e27, N: 1e30, D: 1e33,
-};
-
-// Every number in a text with its value: "1,500", "+5.7", "W8,600", "4.67Q",
-// "23%", "12h 30m" (each part). Dates and list markers ("1.") are skipped.
-export function numbersIn(text: string): { raw: string; value: number }[] {
-    const out: { raw: string; value: number }[] = [];
-    const clean = text.replace(/\b\d{4}-\d{2}-\d{2}(T[\d:.]+Z?)?\b/g, ' ').replace(/^\s*\d+\.\s/gm, ' ');
-    const re = /(\d[\d,]*(?:\.\d+)?)(\s?(?:K|M|B|T|q|Q|s|S|O|N|D)(?![a-zA-Z]))?/g;
-    for (let m = re.exec(clean); m; m = re.exec(clean)) {
-        const n = Number(m[1].replace(/,/g, ''));
-        if (!Number.isFinite(n)) continue;
-        const letter = m[2]?.trim();
-        out.push({ raw: m[0].trim(), value: letter ? n * LETTERS[letter] : n });
-    }
-    return out;
-}
-
-// Same within rounding: "5.7" for 5.66, "99q" for 98.9q, "3,190" for 3,190.
-function close(a: number, b: number): boolean {
-    if (a === b) return true;
-    const big = Math.max(Math.abs(a), Math.abs(b));
-    return big > 0 && Math.abs(a - b) / big <= 0.011;
-}
-
-// Numbers in the answer that aren't in the data or the question. Small
-// counts (1–12) pass: "3 picks", "top 2", tier numbers in passing.
-export function unverifiedNumbers(answer: string, data: string, question: string): string[] {
-    const known = [...numbersIn(data), ...numbersIn(question)].map(n => n.value);
-    return numbersIn(answer)
-        .filter(n => !(Number.isInteger(n.value) && n.value <= 12))
-        .filter(n => !known.some(k => close(k, n.value)))
-        .map(n => n.raw);
 }
 
 // ── Route ─────────────────────────────────────────────────────

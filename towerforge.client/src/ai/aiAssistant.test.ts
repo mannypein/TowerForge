@@ -47,6 +47,12 @@ describe('the route, checked against the question', () => {
         expect(readRoute(json({ tool: 'what_if', changes: [{ upgrade: 'CL', level: 'max' }] }), 'is maxing CL worth my stones').tool).toBe('what_if');
     });
 
+    it('sends which-tier-to-farm and Guardian chip questions to their tools', () => {
+        expect(readRoute(json({ tool: 'tier', tier: 0 }), 'Which tier should I farm for coins?').tool).toBe('farm_tier');
+        expect(readRoute(json({ tool: 'tier', tier: 19 }), 'is T19 better to farm than T18?').tool).toBe('tier');
+        expect(readRoute(json({ tool: 'none' }), 'Which guardian chips should I use?').tool).toBe('guardian');
+    });
+
     it('falls back to keywords when the JSON can\'t be read', () => {
         expect(readRoute('not json', 'How do I get more coins?')).toMatchObject({ tool: 'upgrades', goal: 'coins', guessed: true });
     });

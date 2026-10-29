@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { useGameStore } from '../store/useGameStore';
 import { parseGameExport } from '../engine/gameExport';
 import { BENCH_ACCOUNTS } from './bench/benchAccounts';
-import { accountSummary, labBoostsReport, shardPlanReport, whatIfChanges } from './aiTools';
+import { accountSummary, farmTiersReport, guardianReport, labBoostsReport, shardPlanReport, whatIfChanges } from './aiTools';
 import type { AiAccount } from './aiTools';
 
 function load(key: 'early' | 'mid' | 'late'): AiAccount {
@@ -61,6 +61,26 @@ describe('What If for tournaments', () => {
         const r = whatIfChanges(load('early'), [{ upgrade: 'damage lab', level: '+10' }], { league: '', week: {}, recent: {} });
         expect(r.title).toBe('What If');
         expect(r.text).toMatch(/There are no tournament runs saved yet, so this is for campaign runs\./);
+    });
+});
+
+describe('which tier to farm', () => {
+    it('compares coins an hour on the tiers around the one farmed, up to the highest unlocked', () => {
+        const r = farmTiersReport(load('late'));
+        expect(r.text).toMatch(/^Headline: for coins an hour, T19 is your best tier to farm — about [\d.]+q coins an hour, \d+% more an hour than T18/);
+        expect(r.text).toMatch(/^T18: runs end around W8,946, [\d.]+q coins a run in /m);
+        expect(r.text).toMatch(/Tiers past T19 aren't unlocked yet\./);
+        expect(farmTiersReport(load('mid')).text).toMatch(/^Headline: for coins an hour, T10 is your best tier to farm — .*the tier you farm now\./);
+    });
+});
+
+describe('Guardian chips', () => {
+    it('gives the best set for the goal and for coins, ties as just as good', () => {
+        const r = guardianReport(load('late'));
+        expect(r.text).toMatch(/^Headline: equip .*Scout.* for push further.*: \+[\d.]+% over the chips you have on now \(Attack, Bounty, Fetch\)\./);
+        expect(r.text).toMatch(/For more coins \(econ\): equip .*Summon/);
+        expect(r.text).toMatch(/Just as good for /);
+        expect(guardianReport(load('mid')).text).toMatch(/^Headline: the Guardian isn't unlocked/);
     });
 });
 

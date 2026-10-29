@@ -67,7 +67,8 @@ export const BENCH_QUESTIONS: BenchQuestion[] = [
     // ── Levels and the account ───────────────────────────────────
     { id: 'lab-level', q: 'What level is my super crit mult lab?', accounts: ['late'], expect: { tool: ['levels', 'none'] } },
     { id: 'vault', q: 'What have I bought in the vault?', accounts: ['late'], expect: { tool: ['none', 'levels'] } },
-    { id: 'guardian-chips', q: 'Which guardian chips am I using?', accounts: ['late'], expect: { tool: ['none', 'levels'] } },
+    { id: 'guardian-chips', q: 'Which guardian chips am I using?', accounts: ['late'], expect: { tool: ['none', 'levels', 'guardian'] } },
+    { id: 'guardian-best', q: 'Which guardian chips should I use?', accounts: ['late'], expect: { tool: 'guardian' } },
     { id: 'level-gt', q: 'what level is my Golden Tower?', expect: { tool: ['levels', 'none'] } },
     { id: 'level-ws', q: "What's my workshop damage level?", expect: { tool: ['levels', 'none'] } },
     { id: 'my-tier', q: 'What tier am I on?', expect: { tool: ['none', 'levels'] } },
@@ -81,6 +82,8 @@ export const BENCH_QUESTIONS: BenchQuestion[] = [
     { id: 'tier-next', q: 'How far would I get on the next tier up?', expect: { tool: 'tier', tier: { early: [0, 6, 7], mid: [0, 11, 12, 13], late: [0, 19, 20] } } },
     { id: 'tier-named', q: 'how far could i farm T17', accounts: ['late'], expect: { tool: 'tier', tier: { late: [17] } } },
     { id: 'tier-named-mid', q: 'how far could i farm T11', accounts: ['mid'], expect: { tool: 'tier', tier: { mid: [11] } } },
+
+    { id: 'farm-tier', q: 'Which tier should I farm for coins?', expect: { tool: 'farm_tier' } },
 
     // ── Tournaments ──────────────────────────────────────────────
     { id: 'tourney-week', q: "How will I do in this week's tournament?", accounts: ['mid', 'late'], expect: { tool: 'tournament' } },

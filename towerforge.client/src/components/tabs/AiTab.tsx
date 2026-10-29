@@ -89,6 +89,12 @@ function Message({ m }: { m: AiMessage }) {
         <div className="ai-msg ai-bot">
             {m.text ? <Answer text={m.text} /> : null}
             {m.status && <div className="ai-status">{m.status}</div>}
+            {m.unchecked && (
+                <div className="ai-check" role="note">
+                    ⚠ Not one of TowerForge&apos;s numbers: {m.unchecked.map((n, i) => <Fragment key={n}>{i > 0 && ', '}<strong>{n}</strong></Fragment>)}.
+                    The AI may have worked {m.unchecked.length > 1 ? 'these' : 'it'} out itself — check under &quot;Looked at&quot; or on the page.
+                </div>
+            )}
             {m.route && (
                 <details className="ai-looked">
                     <summary>Looked at: {m.looked?.length ? m.looked.map(l => l.title).join(' · ') : 'just your account'}</summary>
