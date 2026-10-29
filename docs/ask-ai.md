@@ -83,6 +83,45 @@ no previews. Checked 2026-10-21 against a local server with two made-up
 test accounts. The gate hides the page; the code itself ships in the public
 bundle (the repo is public anyway) and runs only on the visitor's machine.
 
+### Opening the preview to testers
+
+Only accounts in the server's `features.json` see Ask AI. Before more
+players get it (it runs on their hardware, which is the risk):
+
+1. Pick testers with different hardware: an NVIDIA and an AMD desktop, a
+   laptop with a weaker GPU (it should use Qwen3 1.7B or 4B), and someone
+   on Chrome or Edge on Android (WebGPU there varies by phone).
+2. Add their site usernames to `/var/lib/towerforge/features.json` on the
+   server (`{ "ai": ["owner", "tester1", …] }`) — read again on change, no
+   restart. Usernames never go in the repo.
+3. Ask them to use **Copy for a report** under any answer that's wrong: it
+   copies the question, the answer, what it looked at, the model and the
+   GPU — paste that into Discord. A "Not one of TowerForge's numbers" note
+   under an answer is worth reporting too.
+4. Add each reported question to `bench/benchQuestions.ts` (in the
+   player's words) and rerun the bench before and after the fix.
+
+## Added 2026-10-29
+
+- **Number check on every answer** (`aiCheck.ts`, shared with the bench):
+  numbers in the answer that aren't in the data or the question show under
+  it — "⚠ Not one of TowerForge's numbers: 9.8M".
+- **Which tier to farm** (`farmTiersReport`): coins an hour on the tier
+  farmed and the ones around it, up to the highest unlocked — waves from
+  the enemy health where the runs ended, coins from Coins per Run's model.
+- **Guardian chips** (`guardianReport`): the Optimizer's chip picker for the
+  goal and for coins; equal sets read "just as good".
+- **Open in What If**: an answer whose What If tried changes has a button
+  that opens the What If page with them (and the mode) filled in
+  (`components/common/whatIfHandoff.ts`).
+- **Measured campaign / tournament differences** in the runs data (CL
+  reach, shots per enemy, what ended the runs, the conditions ticked), the
+  only reasons the answer may give.
+- **Quick routing** (`quickRoute`): questions whose wording settles the
+  data skip the model's step 1 — 41 of the bench's 94 asks; never
+  follow-ups or anything that could be a What If.
+- **Copy for a report** under each answer, and new suggested questions.
+
 ## What was checked (2026-10-21, RX 7800 XT, Qwen3 4B)
 
 - Download 2.3 GB at ~60 MB/s; loading from the browser's storage ~15 s.

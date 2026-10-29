@@ -22,9 +22,10 @@ import { handOffToWhatIf } from '../common/whatIfHandoff';
 const SUGGESTIONS = [
     'What should I spend my stones on next?',
     'How many waves would maxing Chain Lightning get me?',
-    'What are my best lab upgrades right now?',
-    'How far would I get on the next tier?',
-    'Where does my damage come from in tournaments?',
+    'Which tier should I farm for coins?',
+    'What speed should I boost my labs to?',
+    'How should I spend my module shards?',
+    'Which guardian chips should I use?',
 ];
 
 // The account as the tools read it, fresh for each question.
@@ -87,7 +88,24 @@ function Answer({ text }: { text: string }) {
 // The changes the answer's What If tried (all of them together, the last result).
 const whatIfOf = (m: AiMessage) => [...(m.looked ?? [])].reverse().find(l => l.whatIf?.changes.length)?.whatIf;
 
-function Message({ m }: { m: AiMessage }) {
+// Everything about one answer, for a tester's report (pasted into Discord):
+// the question, the answer, what it looked at, the model and the GPU.
+async function reportText(m: AiMessage, question: string, model: string | null): Promise<string> {
+    let gpu = 'unknown';
+    try {
+        const a = await (navigator as Navigator & { gpu?: { requestAdapter(): Promise<{ info?: { vendor?: string; architecture?: string } } | null> } }).gpu?.requestAdapter();
+        gpu = [a?.info?.vendor, a?.info?.architecture].filter(Boolean).join(' ') || gpu;
+    } catch { /* not known */ }
+    return [
+        `TowerForge Ask AI v${__APP_VERSION__} · model ${model ?? '?'} · GPU ${gpu}`,
+        `Question: ${question}`, `Asked for: ${m.route ?? '?'}`, '', m.text,
+        ...(m.unchecked ? ['', `Not TowerForge's numbers: ${m.unchecked.join(', ')}`] : []),
+        '', 'Looked at:', ...(m.looked ?? []).map(l => `[${l.title}]\n${l.text}`),
+    ].join('\n');
+}
+
+function Message({ m, question, model }: { m: AiMessage; question: string; model: string | null }) {
+    const [copied, setCopied] = useState(false);
     if (m.role === 'user') return <div className="ai-msg ai-user">{m.text}</div>;
     return (
         <div className="ai-msg ai-bot">
@@ -104,6 +122,12 @@ function Message({ m }: { m: AiMessage }) {
                     handOffToWhatIf(whatIfOf(m)!);
                     useGameStore.getState().setActiveTab('whatif');
                 }}>Open in What If →</button>
+            )}
+            {m.done && (
+                <button type="button" className="ai-report" title="Copies the question, the answer and what it looked at, to paste into a bug report"
+                    onClick={() => { void reportText(m, question, model).then(t => navigator.clipboard.writeText(t)).then(() => setCopied(true), () => setCopied(false)); }}>
+                    {copied ? 'Copied' : 'Copy for a report'}
+                </button>
             )}
             {m.route && (
                 <details className="ai-looked">
@@ -222,7 +246,7 @@ export default function AiTab() {
                         </div>
                     ) : (
                         <div className="ai-log" aria-live="polite">
-                            {s.messages.map((m, i) => <Message key={i} m={m} />)}
+                            {s.messages.map((m, i) => <Message key={i} m={m} question={s.messages[i - 1]?.text ?? ''} model={s.loadedId} />)}
                             <div ref={endRef} />
                         </div>
                     )}
