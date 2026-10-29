@@ -462,8 +462,8 @@ and never Chain Lightning. Instead the Stones and Bots panels say so with
 the price against what's held (`lockedNotes`, held stones and medals): "The
 next costs 50 stones (you hold 160, enough for it)". UW unlock prices are
 `UW_UNLOCK_COSTS` (checked in game); bot prices `BOT_UNLOCK_MEDALS` — 150,
-300, 600, 900, 1,200 medals by bots owned, **from the wiki's Currency page,
-not yet checked in game**. Ask AI reads the same notes. Ranking them would
+300, 600, 900, 1,200 medals by bots owned, from the wiki's Currency page
+(the owner confirmed they match the game, 2026-10-29). Ask AI reads the same notes. Ranking them would
 need a separate estimate per UW and bot that doesn't come from the run.
 
 Not a gap, though it looked like one on the bench's eHP account: Chrono
