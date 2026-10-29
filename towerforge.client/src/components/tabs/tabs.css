@@ -5902,6 +5902,13 @@ button.grdg-chip {
     color: var(--text-dim);
 }
 
+/* "Open in What If" under an answer that tried changes. */
+.ai-open {
+    margin-top: 6px;
+    font-size: 12px;
+    padding: 4px 10px;
+}
+
 /* Numbers in an answer the site didn't work out (aiCheck). */
 .ai-check {
     margin-top: 6px;

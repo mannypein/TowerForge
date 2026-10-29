@@ -67,6 +67,8 @@ export interface AiTourneySettings {
 export interface ToolResult {
     title: string;     // shown under the answer ("Looked at: …")
     text: string;      // what the model reads
+    // What If's changes, for the answer's "Open in What If" button.
+    whatIf?: { changes: Change[]; tournament: boolean };
 }
 
 const num = (v: number) => formatGameNumber(v < 1000 ? Math.round(v) : v);
@@ -600,7 +602,7 @@ export function whatIfChanges(s: AiAccount, asks: AiChangeAsk[], tourney?: AiTou
         .sort((a, b) => Math.abs(b.waves!) - Math.abs(a.waves!)).slice(0, 4);
     if (links.length) out.push(`Where the waves come from: ${links.map(l => `${l.label} ${l.waves! >= 0 ? '+' : ''}${l.waves!.toFixed(1)}`).join('; ')}.`);
     out.push(`Total cost: ${costsText(r.costs)}.`);
-    return { title: inTourney ? 'What If — tournament' : 'What If', text: out.join('\n') };
+    return { title: inTourney ? 'What If — tournament' : 'What If', text: out.join('\n'), whatIf: { changes, tournament: !!inTourney } };
 }
 
 // ── Tournament ────────────────────────────────────────────────
@@ -689,6 +691,39 @@ function averageShares(runs: BattleReport[]): [string, number][] {
 
 export type AiRunKind = 'any' | 'campaign' | 'tournament';
 
+// What the runs show differs between campaign and tournament runs — the
+// only reasons the answer may give for a share that changes (a small
+// model otherwise invents some: "tournament enemies are more resilient").
+// Measured, not a full why: what Chain Lightning reached, shots per enemy,
+// what ended the runs, and the battle conditions ticked for the tournament
+// runs with how TowerForge counts each.
+function tourneyDifferences(s: AiAccount, camp: BattleReport[], tour: BattleReport[]): string[] {
+    const avg = (rs: BattleReport[], f: (r: BattleReport) => number | null) => {
+        const v = rs.map(f).filter((x): x is number => x !== null && Number.isFinite(x));
+        return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
+    };
+    const share = (v: number | null) => (v === null ? 'not recorded' : `${Math.round(v * 100)}%`);
+    const per = (v: number | null) => (v === null ? 'not recorded' : v.toFixed(1));
+    const reach = (r: BattleReport) => (r.totalEnemies > 0 && (r.clHits ?? 0) > 0 ? Math.min(1, r.clHits! / r.totalEnemies) : null);
+    const shots = (r: BattleReport) => (r.totalEnemies > 0 && (r.projectileCount ?? 0) > 0 ? r.projectileCount! / r.totalEnemies : null);
+    const killers = (rs: BattleReport[]) => {
+        const n = new Map<string, number>();
+        for (const r of rs) { const k = killedBy(r); if (k) n.set(k, (n.get(k) ?? 0) + 1); }
+        const total = [...n.values()].reduce((a, b) => a + b, 0);
+        return total ? [...n].sort((a, b) => b[1] - a[1]).map(([k, c]) => `${k} ${Math.round(c / total * 100)}%`).join(', ') : 'not recorded';
+    };
+    const out = ['What TowerForge can see that differs between your campaign and tournament runs (measured; the runs don\'t record more of the why):'];
+    out.push(`- Enemies Chain Lightning reached: ${share(avg(camp, reach))} campaign, ${share(avg(tour, reach))} tournaments.`);
+    out.push(`- Tower shots per enemy: ${per(avg(camp, shots))} campaign, ${per(avg(tour, shots))} tournaments.`);
+    out.push(`- What ended the runs: campaign ${killers(camp)}; tournaments ${killers(tour)}.`);
+    const ticked = [...new Set(tour.flatMap(r => s.tourneyLog?.[runKey(r)]?.conditions ?? []))];
+    const conds = ticked.flatMap(k => HEAT_CONDITIONS.filter(c => c.key === k));
+    out.push(conds.length
+        ? `- Battle conditions ticked for your tournament runs: ${conds.map(c => `${c.name} (${c.how ?? c.text})`).join('; ')}`
+        : '- Battle conditions: none ticked for your tournament runs on the Tournament page, so TowerForge doesn\'t know which they had.');
+    return out;
+}
+
 // UWs with no damage of their own (docs/ultimate-weapons.md).
 const NO_DAMAGE: Partial<Record<string, string>> = {
     GT: 'it multiplies the coins from kills while it\'s active',
@@ -714,7 +749,7 @@ export function runsReport(s: AiAccount, kind: AiRunKind = 'any'): ToolResult {
         };
         const names = [...new Set([...cSh, ...tSh].map(([n]) => n))];
         out.push(`Damage by source, last campaign runs on T${farmTier} against last tournament runs: ${names.map(n => `${n} ${share(cSh, n)} campaign, ${share(tSh, n)} tournaments`).join('; ')}.`);
-        out.push('The runs only record each source\'s share of the damage, not why a share changes between campaign and tournaments.');
+        out.push(...tourneyDifferences(s, campaign.filter(r => r.tier === farmTier && r.wave > 100).slice(0, 5), tourney.filter(r => r.wave > 10).slice(0, 5)));
     } else if (cSh.length) {
         out.push(`Damage by source, last campaign runs on T${farmTier}: ${sharesText(cSh)}.`);
     } else if (tSh.length) {

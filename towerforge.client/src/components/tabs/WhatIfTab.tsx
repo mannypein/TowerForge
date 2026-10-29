@@ -26,6 +26,7 @@ import { runKey } from '../../engine/battleReport';
 import { defaultBattleIndex } from '../../engine/gameExport';
 import { activeLoadout } from '../../engine/statHelpers';
 import { keysOf, loadTourneySim, saveTourneySim, ticksOf } from '../common/tourneySim';
+import { takeWhatIfHandoff } from '../common/whatIfHandoff';
 import type { TourneySim } from '../common/tourneySim';
 
 type Mode = 'campaign' | 'tournament';
@@ -103,7 +104,9 @@ export default function WhatIfTab() {
 
     // Campaign runs, or a tournament with the tournament build and this
     // week's conditions (settings shared with the Tournament page).
-    const [mode, setModeState] = useState<Mode>(loadMode);
+    // Changes handed over by another page (Ask AI's "Open in What If"), once.
+    const [handoff] = useState(takeWhatIfHandoff);
+    const [mode, setModeState] = useState<Mode>(() => (handoff ? (handoff.tournament ? 'tournament' : 'campaign') : loadMode()));
     const [sim, setSimState] = useState<TourneySim>(loadTourneySim);
     const setMode = (m: Mode) => {
         setModeState(m);
@@ -145,7 +148,7 @@ export default function WhatIfTab() {
     const [group, setGroup] = useState<string>('');
     const [pick, setPick] = useState<string>('');
     const [level, setLevel] = useState<string>('');
-    const [changes, setChanges] = useState<Change[]>([]);
+    const [changes, setChanges] = useState<Change[]>(() => handoff?.changes ?? []);
 
     const activeGroup = groups.includes(group) ? group : groups[0] ?? '';
     const inGroup = targets.filter(t => t.group === activeGroup);

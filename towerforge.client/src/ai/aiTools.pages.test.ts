@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { useGameStore } from '../store/useGameStore';
 import { parseGameExport } from '../engine/gameExport';
 import { BENCH_ACCOUNTS } from './bench/benchAccounts';
-import { accountSummary, farmTiersReport, guardianReport, labBoostsReport, shardPlanReport, whatIfChanges } from './aiTools';
+import { accountSummary, farmTiersReport, guardianReport, labBoostsReport, runsReport, shardPlanReport, whatIfChanges } from './aiTools';
 import type { AiAccount } from './aiTools';
 
 function load(key: 'early' | 'mid' | 'late'): AiAccount {
@@ -81,6 +81,16 @@ describe('Guardian chips', () => {
         expect(r.text).toMatch(/For more coins \(econ\): equip .*Summon/);
         expect(r.text).toMatch(/Just as good for /);
         expect(guardianReport(load('mid')).text).toMatch(/^Headline: the Guardian isn't unlocked/);
+    });
+});
+
+describe('campaign against tournaments', () => {
+    it('lists what the runs show differs, the only reasons an answer may give', () => {
+        const r = runsReport(load('late'), 'tournament');
+        expect(r.text).toMatch(/What TowerForge can see that differs between your campaign and tournament runs/);
+        expect(r.text).toMatch(/- Enemies Chain Lightning reached: \d+% campaign, \d+% tournaments\./);
+        expect(r.text).toMatch(/- What ended the runs: campaign Ray \d+%.*; tournaments /);
+        expect(r.text).toMatch(/none ticked for your tournament runs/);
     });
 });
 

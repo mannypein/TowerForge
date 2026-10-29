@@ -17,6 +17,7 @@ import { hasWebGpu, useAiStore } from '../../ai/aiAssistant';
 import type { AiContext, AiMessage } from '../../ai/aiAssistant';
 import { loadTourneySim } from '../common/tourneySim';
 import { TAB_PATHS, tabFromPath } from '../../routes';
+import { handOffToWhatIf } from '../common/whatIfHandoff';
 
 const SUGGESTIONS = [
     'What should I spend my stones on next?',
@@ -83,6 +84,9 @@ function Answer({ text }: { text: string }) {
     return <>{blocks}</>;
 }
 
+// The changes the answer's What If tried (all of them together, the last result).
+const whatIfOf = (m: AiMessage) => [...(m.looked ?? [])].reverse().find(l => l.whatIf?.changes.length)?.whatIf;
+
 function Message({ m }: { m: AiMessage }) {
     if (m.role === 'user') return <div className="ai-msg ai-user">{m.text}</div>;
     return (
@@ -94,6 +98,12 @@ function Message({ m }: { m: AiMessage }) {
                     ⚠ Not one of TowerForge&apos;s numbers: {m.unchecked.map((n, i) => <Fragment key={n}>{i > 0 && ', '}<strong>{n}</strong></Fragment>)}.
                     The AI may have worked {m.unchecked.length > 1 ? 'these' : 'it'} out itself — check under &quot;Looked at&quot; or on the page.
                 </div>
+            )}
+            {m.done && whatIfOf(m) && (
+                <button type="button" className="btn btn-dim ai-open" onClick={() => {
+                    handOffToWhatIf(whatIfOf(m)!);
+                    useGameStore.getState().setActiveTab('whatif');
+                }}>Open in What If →</button>
             )}
             {m.route && (
                 <details className="ai-looked">
