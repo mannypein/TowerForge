@@ -7,7 +7,10 @@
 //  one height (the fullest page's). Export Image saves each
 //  [data-poster-page] as its own image (posterImages.ts).
 //  Heights are measured again when they change (fonts loading,
-//  new data), so the pages always match what's drawn.
+//  new data), so the pages always match what's drawn. A layout only
+//  draws the blocks it was measured for: new blocks (a preset switched,
+//  a Vault upgrade taken off) go on one page until they're measured,
+//  which happens before the screen paints.
 // ============================================================
 
 import { useLayoutEffect, useRef, useState } from 'react';
@@ -29,6 +32,7 @@ const GAP = 10;
 const BOX: CSSProperties = { display: 'flow-root', minWidth: 0 };
 
 interface Layout {
+    signature: string;            // the blocks it was measured for
     pages: PagePlan[];
     height: number | undefined;   // shared page height when there's more than one
 }
@@ -60,7 +64,7 @@ export default function PosterPages({ ref, title, subtitle, blocks, onPages }: {
                 gap: GAP,
             });
             const height = pages.length > 1 ? Math.ceil(frame + Math.max(...pages.map(p => p.used))) : undefined;
-            const next: Layout = { pages, height };
+            const next: Layout = { signature, pages, height };
             setLayout(prev => (prev && JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
         };
         measure();
@@ -71,11 +75,13 @@ export default function PosterPages({ ref, title, subtitle, blocks, onPages }: {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [signature]);
 
-    const count = layout?.pages.length ?? 1;
-    useLayoutEffect(() => { onPages?.(count); }, [count, onPages]);
+    // A layout of other blocks would point past these (fewer blocks) or at
+    // the wrong ones; until these are measured, everything on one page.
+    const fitted = layout?.signature === signature ? layout : null;
+    const pages: PagePlan[] = fitted?.pages ?? [{ cont: null, blocks: blocks.map((_, i) => i), used: 0 }];
 
-    // Before the first measurement: everything on one page.
-    const pages: PagePlan[] = layout?.pages ?? [{ cont: null, blocks: blocks.map((_, i) => i), used: 0 }];
+    const count = pages.length;
+    useLayoutEffect(() => { onPages?.(count); }, [count, onPages]);
 
     return (
         <>
@@ -91,7 +97,7 @@ export default function PosterPages({ ref, title, subtitle, blocks, onPages }: {
                     <div
                         key={n}
                         data-poster-page=""
-                        style={{ ...shareRootStyle(true), display: 'flex', flexDirection: 'column', height: layout?.height, marginBottom: 24 }}
+                        style={{ ...shareRootStyle(true), display: 'flex', flexDirection: 'column', height: fitted?.height, marginBottom: 24 }}
                     >
                         <div style={BOX}>
                             <ShareHeader title={title} subtitle={pages.length > 1 ? `${subtitle} · ${n + 1}/${pages.length}` : subtitle} />

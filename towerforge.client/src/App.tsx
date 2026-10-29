@@ -41,6 +41,7 @@ import ShareTab from './components/tabs/ShareTab';
 import AccountTab from './components/tabs/AccountTab';
 import { useAccountStore } from './store/useAccountStore';
 import SharedView from './components/share/SharedView';
+import ErrorBoundary from './components/common/ErrorBoundary';
 
 import './styles/app.css';
 
@@ -358,7 +359,7 @@ export default function App() {
         if (!importData(text)) alert('Import failed — this isn’t a game data export or a TowerForge backup.');
     }
 
-    if (shareCode) return <SharedView code={shareCode} />;
+    if (shareCode) return <ErrorBoundary><SharedView code={shareCode} /></ErrorBoundary>;
 
     const activeGroup = groupOf(activeTab);
     function openTab(tab: TabName) {
@@ -521,7 +522,9 @@ export default function App() {
 
             {/* ── Content ── */}
             <main className="tab-content">
-                <Suspense fallback={null}>{renderTab()}</Suspense>
+                <ErrorBoundary key={activeTab}>
+                    <Suspense fallback={null}>{renderTab()}</Suspense>
+                </ErrorBoundary>
             </main>
 
             {linkChoices && (
