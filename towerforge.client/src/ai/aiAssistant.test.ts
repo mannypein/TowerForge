@@ -84,6 +84,7 @@ describe('the answer', () => {
         expect(tidy('Chain Lightning does 14%.')).toBe('Chain Lightning does 14%.');
         expect(tidy('Based on your current progress and the data provided, you would reach W363 on T6.')).toBe('You would reach W363 on T6.');
         expect(tidy('However, the data shows that maxing both does nothing.')).toBe('However, maxing both does nothing.');
+        expect(tidy('CL is not weaker, but the data shows it contributes less.')).toBe('CL is not weaker, but TowerForge\'s numbers show it contributes less.');
     });
 
     it('reads "my runs" as the runs', () => {

@@ -238,6 +238,17 @@ Qwen3 4B on the RX 7800 XT: 78 asks in about 20 minutes, 9–29 s an answer.
 | 4b — "my runs", tidy-up, tier headline alone (the 18 asks those touch) | 100% | 100% | 100% | 0 |
 | 5 — lab boosts, shard plan, tournament What If (90 asks; 85 asked) | 86% | 89% | 94% | 2 |
 | 5b — the new tools kept to their questions in code (22 asks) | 95% | 100% | 100% | 0 |
+| 6 — number check, farm tier, Guardian, What If links, measured reasons, quick routing (94 asks) | 94% | 100% | 95% | 4 |
+| 6b — the cost line reworded, "the data shows" tidied (17 asks) | 100% | 100% | 100% | 1 |
+
+Run 6 (2026-10-29): quick-routed answers took 15.4 s on average (41 asks)
+against 23.9 s for the ones the model routed (53). Reading the answers:
+the Guardian answer first said "keep your current setup (Attack, Bounty,
+Fetch)" — the data listed whole tied sets and a "keep what you have there"
+line; it now says the swap ("swap Fetch for Scout (+0.97%)") and the bench
+checks the chip put in (`noHeadline` for "which chips am I using", which
+asks what's on now). The tournament-reason answer now quotes the measured
+shares (Death Wave 20%, Orbs 44%) instead of inventing a cause.
 
 Run 5 (2026-10-29): the two new tools pulled old questions to them on every
 account — "what should I research next in the labs" → lab_boosts, "card

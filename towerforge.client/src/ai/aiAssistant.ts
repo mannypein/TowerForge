@@ -281,7 +281,8 @@ function checked(r: Route, q: string): Route {
     if (/\b(which|best|what) tier\b.*\bfarm|\bfarm\b.*\b(which|best|what) tier\b|\btier\b.*\b(most|more) coins\b/i.test(q) && !/\bt(?:ier)?\s?\d/i.test(q)) {
         out.tool = 'farm_tier';
     }
-    if (/\bchips?\b/i.test(q) && /\bguardian\b|\b(equip|use|best|should)\b/i.test(q) && !['what_if', 'levels'].includes(out.tool)) out.tool = 'guardian';
+    // Advice only: "which chips am I using" is the account summary's.
+    if (/\bchips?\b/i.test(q) && /\b(equip|use|best|should|recommend)\b/i.test(q) && !['what_if', 'levels'].includes(out.tool)) out.tool = 'guardian';
     // Module shards alone, or boosting labs: their own pages' plans.
     if (out.tool === 'upgrades' && out.currency === 'shards') out.tool = 'shard_plan';
     if (out.tool !== 'lab_boosts' && /\bboost/i.test(q) && /\blabs?\b/i.test(q)) out.tool = 'lab_boosts';
@@ -380,14 +381,14 @@ Rules:
 - When the data says what the player can buy with what they hold now, follow it: never tell them to buy more than that.
 - When the data says there's nothing worth buying, say so with the reason it gives; don't suggest other buys instead.
 - Give only reasons, mechanics and enemy behavior that the data or the game notes state. When they don't say why, say TowerForge can't tell why rather than guessing, and don't add advice the data doesn't give. Asked why something differs between campaign and tournaments, give the measured differences the data lists and nothing else.
-- Write it in your own words: never name the data's own sections or labels ("Headline", "Plan for", "Cheapest first", titles in [brackets]) and don't mention "the data".
+- Write it in your own words: never name the data's own sections or labels ("Headline", "Plan for", titles in [brackets]) and don't mention "the data".
 - Only help with The Tower and TowerForge: for anything else, say in one sentence that you can only help with their Tower account.
 - Use the game's own words: stones, Ultimate Weapons (UWs), UW+, labs, workshop, enhancements, cards, modules, bots, Bot+, Guardian, tiers, waves. ${UW_NAMES}
 - Be brief and direct: answer first in a sentence or two, then a few short bullet points if they help.
 - If the data says an upgrade couldn't be found, or doesn't have the answer, say so plainly and don't guess.
 - Game notes are TowerForge's own notes: explain them in plain words and leave out code names and file names.
 - In the account, "Damage 13/32" is an upgrade's level (13 of 32), not damage dealt.
-- Big numbers use the game's letters, smallest to largest: K (thousand), M (million), B (billion), T (trillion), q (quadrillion), Q (quintillion), s, S, O, N, D, then aa, ab… So 61.00K is far less than 4.67Q, and q is less than Q. When the data has a "Cheapest first" line, use it to compare costs.
+- Big numbers use the game's letters, smallest to largest: K (thousand), M (million), B (billion), T (trillion), q (quadrillion), Q (quintillion), s, S, O, N, D, then aa, ab… So 61.00K is far less than 4.67Q, and q is less than Q. When the data lists picks "in order of cost, lowest first", use that to compare costs.
 - To point to a page, use these addresses exactly (no others): ${PAGE_LINKS}.`;
 
 // Rough token count (about 3.5 characters a token for this text).
@@ -401,7 +402,9 @@ export const tidy = (s: string) => s
         (_, start: string, c: string) => `${start}${c.toUpperCase()}`)
     .replace(/,?\s+(?:based on|according to) (?:the|your) data(?: provided| above| given| shown)?(?=[.,;])/gi, '')
     // "However, the data shows that maxing…" → "However, maxing…"
-    .replace(/\bthe data (?:shows|says|indicates) that\s+/gi, '');
+    .replace(/\bthe data (?:shows|says|indicates) that\s+/gi, '')
+    // …and without "that": "the data shows it" → "TowerForge's numbers show it".
+    .replace(/\bthe data (shows|says|indicates)\b/gi, (_, verb: string) => `TowerForge's numbers ${verb.replace(/s$/, '')}`);
 const visible = (s: string) => tidy(s.replace(/<think>[\s\S]*?<\/think>\s*/g, '').replace(/<think>[\s\S]*$/, '').trimStart());
 
 export const useAiStore = create<AiStore>((set, get) => {

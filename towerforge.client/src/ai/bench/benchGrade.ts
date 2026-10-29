@@ -88,6 +88,12 @@ export function gradeHeadline(data: string, answer: string): { ok: boolean | nul
         const first = plan[2].split('; ')[0].replace(/\s+\d.*$/, '');
         return has(first) ? { ok: true, why: '' } : { ok: false, why: `doesn't name the plan's first buy "${first}"` };
     }
+    // Guardian chips: "swap Fetch for Scout" — the chip to put in.
+    const swap = /Headline: .*?\b(?:swap .+? for|add) ([A-Z][\w ,]+?) \(/.exec(data);
+    if (swap) {
+        const chips = swap[1].split(/, | and /);
+        return chips.every(has) ? { ok: true, why: '' } : { ok: false, why: `doesn't say to put in ${chips.join(', ')}` };
+    }
     // What If: "gives about +4.2 waves" / "gives +12.30% damage".
     const gain = /Headline: .+? gives (?:about )?([+−-]?[\d.,]+)/.exec(data);
     if (gain) {
@@ -133,7 +139,7 @@ export function wordIssues(answer: string, qn: BenchQuestion): string[] {
 
 export function grade(qn: BenchQuestion, rec: BenchRecord, pagePaths: string[]): BenchGrade {
     const routeWhy = gradeRoute(qn, rec.account, rec.routed);
-    const head = gradeHeadline(rec.data, rec.answer);
+    const head = qn.noHeadline ? { ok: null, why: '' } : gradeHeadline(rec.data, rec.answer);
     const links = badLinks(rec.answer, pagePaths);
     const words = wordIssues(rec.answer, qn);
     return {

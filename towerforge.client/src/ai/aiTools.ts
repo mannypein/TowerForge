@@ -403,7 +403,8 @@ export function bestUpgrades(s: AiAccount, currency: AiCurrency, goalWanted?: st
         const priced = picks.filter(c => c.cost > 0 && c.costKnown !== false);
         if (priced.length > 1) {
             const cheap = [...priced].sort((a, b) => a.cost - b.cost);
-            parts.push(`Cheapest first: ${cheap.map(c => `${c.label} ${c.subLabel} (${costText(c)})`).join('; ')}.`);
+            // Worded so that echoing it reads naturally ("Cheapest first:" was quoted as a list).
+            parts.push(`In order of cost, lowest first: ${cheap.map(c => `${c.label} ${c.subLabel} (${costText(c)})`).join('; ')}.`);
         }
     }
     const scope = [ask.runs === 'tournament' && 'tournaments', budget && `${amountText(wanted[0], budget)} to spend`].filter(Boolean).join(', ');
@@ -946,14 +947,19 @@ export function guardianReport(s: AiAccount, goalWanted?: string): ToolResult {
         if (!sets.length) return;
         const best = sets[0];
         const label = GOAL_LABELS[g].toLowerCase();
-        const verdict = best.current || best.scorePct <= 0.005
-            ? `the chips you have on (${setText(equipped.map(a => a.chip.id))}) are already the best for ${label}`
-            : `equip ${setText(best.chips)} for ${label}: ${pct(best.scorePct)} over the chips you have on now (${setText(equipped.map(a => a.chip.id)) || 'none'})`;
-        out.push(i === 0 ? `Headline: ${verdict}.` : `For ${label}: ${verdict}.`);
-        // Sets that score the same (a chip that adds nothing either way) aren't a ranking.
+        // The change itself ("swap Fetch for Scout"): sets that tie list the
+        // fewest swaps first, and a list of whole sets was read wrong by the
+        // 4B ("keep your current setup").
+        const now = equipped.map(a => a.chip.id);
+        const take = best.chips.filter(id => !now.includes(id));
+        const drop = now.filter(id => !best.chips.includes(id));
+        const change = !take.length ? '' : drop.length ? `swap ${setText(drop)} for ${setText(take)}` : `add ${setText(take)}`;
+        const verdict = best.current || best.scorePct <= 0.005 || !change
+            ? `keep the chips you have on (${setText(now)}): they're already the best for ${label}`
+            : `for ${label}, ${change} (${pct(best.scorePct)}), so you run ${setText(best.chips)}`;
+        out.push(i === 0 ? `Headline: ${verdict}.` : `${verdict.charAt(0).toUpperCase()}${verdict.slice(1)}.`);
         const tied = sets.slice(1).filter(x => Math.abs(x.scorePct - best.scorePct) < 0.005);
         const after = sets.slice(1 + tied.length, 4 + tied.length).slice(0, 3);
-        if (tied.length) out.push(`  Just as good for ${label}: ${tied.slice(0, 3).map(x => setText(x.chips)).join('; ')}.`);
         if (after.length) out.push(`  Next best for ${label}: ${after.map(x => `${setText(x.chips)} ${pct(x.scorePct)}`).join('; ')}.`);
     });
     if (!out.length) return { title: 'Guardian chips', text: 'Headline: no chips owned that fit the Guardian\'s slots yet.' };

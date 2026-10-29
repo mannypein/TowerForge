@@ -75,11 +75,11 @@ describe('which tier to farm', () => {
 });
 
 describe('Guardian chips', () => {
-    it('gives the best set for the goal and for coins, ties as just as good', () => {
+    it('says the swap to make for the goal and for coins', () => {
+        // Equipped: Attack, Bounty, Fetch. Ties list the fewest swaps first.
         const r = guardianReport(load('late'));
-        expect(r.text).toMatch(/^Headline: equip .*Scout.* for push further.*: \+[\d.]+% over the chips you have on now \(Attack, Bounty, Fetch\)\./);
-        expect(r.text).toMatch(/For more coins \(econ\): equip .*Summon/);
-        expect(r.text).toMatch(/Just as good for /);
+        expect(r.text).toMatch(/^Headline: for push further.*, swap Fetch for Scout \(\+[\d.]+%\), so you run Attack, Bounty, Scout\./m);
+        expect(r.text).toMatch(/^For more coins \(econ\), swap Fetch for Summon \(\+[\d.]+%\)/m);
         expect(guardianReport(load('mid')).text).toMatch(/^Headline: the Guardian isn't unlocked/);
     });
 });

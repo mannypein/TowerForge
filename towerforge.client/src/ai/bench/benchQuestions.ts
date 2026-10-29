@@ -31,6 +31,9 @@ export interface BenchQuestion {
         notUpgrades?: string[];            // upgrades it must have dropped ("… instead?")
     };
     mustNot?: RegExp[];
+    // A question about what the account has now: the data's headline (a
+    // recommendation) isn't what it asks for.
+    noHeadline?: boolean;
 }
 
 export const BENCH_QUESTIONS: BenchQuestion[] = [
@@ -67,7 +70,7 @@ export const BENCH_QUESTIONS: BenchQuestion[] = [
     // ── Levels and the account ───────────────────────────────────
     { id: 'lab-level', q: 'What level is my super crit mult lab?', accounts: ['late'], expect: { tool: ['levels', 'none'] } },
     { id: 'vault', q: 'What have I bought in the vault?', accounts: ['late'], expect: { tool: ['none', 'levels'] } },
-    { id: 'guardian-chips', q: 'Which guardian chips am I using?', accounts: ['late'], expect: { tool: ['none', 'levels', 'guardian'] } },
+    { id: 'guardian-chips', q: 'Which guardian chips am I using?', accounts: ['late'], expect: { tool: ['none', 'levels', 'guardian'] }, noHeadline: true },
     { id: 'guardian-best', q: 'Which guardian chips should I use?', accounts: ['late'], expect: { tool: 'guardian' } },
     { id: 'level-gt', q: 'what level is my Golden Tower?', expect: { tool: ['levels', 'none'] } },
     { id: 'level-ws', q: "What's my workshop damage level?", expect: { tool: ['levels', 'none'] } },

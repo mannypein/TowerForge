@@ -70,6 +70,12 @@ describe('headline', () => {
         expect(gradeHeadline('Headline: about W6,400 on T19 (between W6,100 and W6,700), with the damage …', 'Around wave 6,100.').ok).toBe(false);
     });
 
+    it('wants the Guardian chip to put in', () => {
+        const data = 'Headline: for push further, swap Fetch for Scout (+0.97%), so you run Attack, Bounty, Scout.';
+        expect(gradeHeadline(data, 'Swap Fetch out for Scout.').ok).toBe(true);
+        expect(gradeHeadline(data, 'Keep your current setup (Attack, Bounty, Fetch).').ok).toBe(false);
+    });
+
     it('has nothing to check without a headline', () => {
         expect(gradeHeadline('Saved runs: 8', 'Orbs do most of it.').ok).toBeNull();
     });
