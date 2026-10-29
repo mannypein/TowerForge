@@ -10,7 +10,10 @@
 //   • levelsOf — current levels of upgrades named in words;
 //   • tournamentOutlook — the Tournament page's estimate for this week;
 //   • runsReport — the saved runs, with damage by source;
-//   • tierOutlook — how far the same damage gets on another tier.
+//   • tierOutlook — how far the same damage gets on another tier;
+//   • labBoostsReport — the Labs page's Lab boosts and lab times;
+//   • shardPlanReport — Modules → Shard plan, per type.
+//  What If also has the What If page's tournament mode.
 //  Pure functions — no store imports.
 // ============================================================
 
@@ -20,7 +23,7 @@ import { applyGoal, chosenReport, effectiveBuild, runModels, snapshotFromState }
 import { groupPath, mergeRepeats, simulateCategoryPath, simulateMedalPath, simulateShardPaths, simulateStonePath } from '../engine/optimizer';
 import { changeCost, upgradeTargets, whatIf } from '../engine/whatIf';
 import type { Change, Costs, UpgradeTarget } from '../engine/whatIf';
-import { buildTournamentModel, heatOf, newestTournament, withTournamentBuild } from '../engine/tournamentModel';
+import { buildTournamentModel, heatOf, newestTournament, tournamentWhatIf, withTournamentBuild } from '../engine/tournamentModel';
 import { leagueMoves, leagueStats, placed } from '../engine/tourneyHistory';
 import type { Ticks } from '../engine/tournamentModel';
 import { buildRunLengthModel, deathWave, killedBy, pathRunGains } from '../engine/runLength';
@@ -31,8 +34,14 @@ import { formatGameNumber } from '../engine/gameNumbers';
 import { formatLabTime } from '../engine/upgradeCosts';
 import { activeLoadout } from '../engine/statHelpers';
 import { lockedNotes } from '../engine/unlocks';
+import { boostSettings, boostsForLabs, cellIncome, hoursOnHand, labHours, planLabBoosts } from '../engine/labBoosts';
+import { labTimerLeft } from '../engine/labTimer';
+import { planTypeShards } from '../engine/shardPlan';
 import { labFinishAt } from '../engine/labTimer';
-import { UWS, UW_UNLOCK_COSTS, presetLabel } from '../constants/gameData';
+import { LABS, RELICS, UWS, UW_UNLOCK_COSTS, presetLabel } from '../constants/gameData';
+import { VAULT_SECTIONS } from '../constants/vaultData';
+import { vaultKeys, vaultLevel } from '../engine/vault';
+import { activeChips } from '../engine/guardian';
 import { GAME_LEAGUES } from '../constants/gameExportMaps';
 import { BOTS_CONFIG, botsForPreset } from '../constants/botData';
 import { RARITIES, rarityStars } from '../constants/moduleRarities';
@@ -42,7 +51,7 @@ import { HEAT_CONDITIONS } from '../constants/tournamentData';
 
 // Everything the tools read: the account plus a few things the pages keep.
 export type AiAccount = AccountState & Pick<AppState,
-    'currencies' | 'labsRunning' | 'tourneyLog' | 'tierWaves' | 'botLoadouts'> & Partial<Pick<AppState, 'tourneyRecords'>>;
+    'currencies' | 'labsRunning' | 'tourneyLog' | 'tierWaves' | 'botLoadouts'> & Partial<Pick<AppState, 'tourneyRecords' | 'vaultLevels'>>;
 
 // The Tournament page's settings (components/common/tourneySim.ts).
 export interface AiTourneySettings {
@@ -63,6 +72,10 @@ const pct = (v: number) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(2)}%`;
 const buildOf = (s: AiAccount) => effectiveBuild(s.profile.build as BuildType, s.importedBattles);
 
 // ── Account summary ───────────────────────────────────────────
+// The labs named in the summary (the rest: the levels tool).
+const KEY_LABS = ['Damage Lab', 'Attack Speed Lab', 'Critical Factor Lab', 'Super Crit Mult Lab', 'Health Lab',
+    'Defense % Lab', 'Enemy HP Lvl Skip Lab', 'Enemy Atk Lvl Skip Lab', 'Coins/Kill Lab', 'Cash Bonus Lab'];
+
 export function accountSummary(s: AiAccount, now = Date.now()): string {
     const p = s.profile;
     const lines: string[] = [];
@@ -101,7 +114,8 @@ export function accountSummary(s: AiAccount, now = Date.now()): string {
             const lv = s.moduleState.slotLevels?.[type]?.main ?? 0;
             const stars = rarityStars(m?.rarity);
             const rarity = stars ? `Ancestral ${stars}★` : RARITIES.find(r => r.k === m?.rarity)?.label ?? m?.rarity;
-            return m ? `${type}: ${m.name} (${rarity}, slot Lv ${lv})` : `${type}: empty`;
+            const subs = (m?.subs ?? []).filter(x => x.effect).map(x => `${x.effect} ${x.rar}`);
+            return m ? `${type}: ${m.name} (${rarity}, slot Lv ${lv}${subs.length ? `; substats ${subs.join(', ')}` : ''})` : `${type}: empty`;
         });
         lines.push(`Modules equipped: ${mods.join('; ')}.`);
     }
@@ -122,6 +136,30 @@ export function accountSummary(s: AiAccount, now = Date.now()): string {
             const left = done ? Math.max(0, (done - now) / 3600000) : null;
             return `${l.lab} to Lv ${lv}${left !== null ? (left > 0 ? ` (${formatLabTime(left)} left)` : ' (done)') : ''}`;
         }).join('; ')}.`);
+    }
+
+    // Labs: how many, and the main ones (any lab's level: the levels tool).
+    const labs = LABS.flatMap(g => g.l).filter(([n]) => (s.labData[n] ?? 0) > 0);
+    if (labs.length) {
+        const maxed = labs.filter(([n, max]) => (s.labData[n] ?? 0) >= max).length;
+        const key = KEY_LABS.flatMap(n => {
+            const max = labs.find(([x]) => x === n)?.[1];
+            return max ? [`${n} ${s.labData[n]}/${max}`] : [];
+        });
+        lines.push(`Labs: ${labs.length} researched, ${maxed} maxed${key.length ? `; ${key.join(', ')}` : ''}.`);
+    }
+    const relics = Object.values(RELICS).flat().filter(([k]) => (s.relicData?.[k] ?? 0) !== 0)
+        .map(([k, name, , , unit]) => `${name} ${s.relicData[k] > 0 && unit !== 's' ? '+' : ''}${s.relicData[k]}${unit}`);
+    if (relics.length) lines.push(`Relic bonuses: ${relics.join(', ')}.`);
+    const vault = s.vaultLevels ?? {};
+    const bought = VAULT_SECTIONS.flatMap(sec => sec.upgrades).filter(u => vaultLevel(vault, u) > 0);
+    if (bought.length) {
+        const maxedV = bought.filter(u => vaultLevel(vault, u) >= u.costs.length).length;
+        lines.push(`Vault: ${bought.length} upgrades bought (${maxedV} maxed), ${vaultKeys(vault).spent.toLocaleString()} keys spent.`);
+    }
+    const chips = activeChips(s.guardianData, s.activePreset);
+    if (chips.length) {
+        lines.push(`Guardian chips equipped: ${chips.map(a => `${a.chip.name} (${a.chip.stats.map((st, k) => `${st.name} ${a.levels[k]}/${st.max}`).join(', ')})`).join('; ')}.`);
     }
 
     const runs = [...s.importedBattles].sort((a, b) => (b.time ?? 0) - (a.time ?? 0)).slice(0, 5);
@@ -485,12 +523,29 @@ function campaignSetup(s: AiAccount): WhatIfSetup {
     return { base: snapshotFromState(campaign), models: runModels(campaign), report: chosenReport(campaign) };
 }
 
-export function whatIfChanges(s: AiAccount, asks: AiChangeAsk[]): ToolResult {
+// What If's tournament mode, as on the What If page (tournamentWhatIf): the
+// tournament build on the newest tournament run, under this week's battle
+// conditions ticked on the Tournament page. null without a tournament run.
+function tournamentSetup(s: AiAccount, sim: AiTourneySettings): WhatIfSetup | null {
+    const idx = newestTournament(s);
+    if (idx < 0) return null;
+    const entry = s.tourneyLog?.[runKey(s.importedBattles[idx])];
+    const league = (sim.league || s.profile.currentLeague || s.profile.league || '') as League;
+    const last: Ticks = entry ? Object.fromEntries(entry.conditions.map(k => [k, true])) : sim.recent;
+    const lastLeague = (entry?.league || league) as League;
+    const t = buildTournamentModel(s, { league, week: sim.week, last, lastLeague, preset: sim.preset, loadout: sim.loadout }, buildOf(s));
+    return t ? tournamentWhatIf(t, sim.week, last, lastLeague) : null;
+}
+
+// `tourney`: What If for tournaments (the question asked about them).
+export function whatIfChanges(s: AiAccount, asks: AiChangeAsk[], tourney?: AiTourneySettings): ToolResult {
     const build = buildOf(s);
-    const { base, models, report } = campaignSetup(s);
+    const inTourney = tourney ? tournamentSetup(s, tourney) : null;
+    const { base, models, report } = inTourney ?? campaignSetup(s);
     const targets = upgradeTargets(base);
     const changes: Change[] = [];
     const notes: string[] = [];
+    if (tourney && !inTourney) notes.push('There are no tournament runs saved yet, so this is for campaign runs.');
     for (const ask of asks.slice(0, 4)) {
         const missing = missingUw(s, ask.upgrade);
         if (missing) { notes.push(missing); continue; }
@@ -516,18 +571,20 @@ export function whatIfChanges(s: AiAccount, asks: AiChangeAsk[]): ToolResult {
     // Under a tenth of a wave reads "+0.0 waves": lead with what does change.
     const flat = !!r.waves && Math.abs(r.waves.gained) < 0.05;
     if (r.waves && !flat) {
-        out.push(`Headline: ${what} gives about ${r.waves.gained >= 0 ? '+' : ''}${r.waves.gained.toFixed(1)} waves (runs end around W${r.waves.from.toLocaleString()} now, W${r.waves.to.toLocaleString()} after). It costs ${cost}.`);
+        out.push(`Headline: ${what} gives about ${r.waves.gained >= 0 ? '+' : ''}${r.waves.gained.toFixed(1)} ${inTourney ? 'tournament waves this week' : 'waves'} (runs end around W${r.waves.from.toLocaleString()} now, W${r.waves.to.toLocaleString()} after). It costs ${cost}.`);
     } else if (r.waves) {
         out.push(`Headline: ${what} doesn't change where your runs end (about +0.0 waves; they end around W${r.waves.from.toLocaleString()}): it gives ${pct(r.damagePct)} damage`
             + `${r.survivalPct !== null ? ` and ${pct(r.survivalPct)} survival` : ''}. It costs ${cost}.`);
-        // eHP runs end when enemies out-damage the tower's health (Run Length on attack).
-        if (build === 'eHP' && Math.abs(r.damagePct) >= 0.05) {
-            out.push('Why no waves: with an eHP build, TowerForge measures how far runs go by survival (they end when enemies out-damage your health), so damage alone doesn\'t move it.');
-        }
     } else {
         out.push(`Headline: ${what} gives ${pct(r.survivalPct ?? r.damagePct)} ${r.survivalPct !== null ? 'survival' : 'damage'}. It costs ${cost}.`);
     }
-    out.push(...notes, `Details (campaign runs; damage measured on your T${report?.tier ?? '?'} run that ended at W${report?.wave.toLocaleString() ?? '?'}):`);
+    // eHP runs end when enemies out-damage the tower's health (Run Length on attack).
+    if (build === 'eHP' && (!r.waves || flat) && Math.abs(r.damagePct) >= 0.05 && Math.abs(r.survivalPct ?? 0) < 0.05) {
+        out.push(`Why: with an eHP build, TowerForge measures how far runs go by survival (they end when enemies out-damage your health), so damage alone doesn't move it (this adds ${pct(r.damagePct)} damage).`);
+    }
+    out.push(...notes, inTourney
+        ? `Details (tournaments: the tournament build set on the Tournament page, this week's battle conditions ticked there; damage measured on your tournament run that ended at W${report?.wave.toLocaleString() ?? '?'}):`
+        : `Details (campaign runs; damage measured on your T${report?.tier ?? '?'} run that ended at W${report?.wave.toLocaleString() ?? '?'}):`);
     out.push(`All damage ${pct(r.damagePct)}.`);
     if (build === 'Glass Cannon') out.push(`Push (flat damage + level skip) ${pct(r.pushPct)}.`);
     if (r.spread) out.push(`Run to run: ${r.spread.min.toFixed(1)} to ${r.spread.max.toFixed(1)} waves across the last ${r.spread.runs} runs.`);
@@ -540,7 +597,7 @@ export function whatIfChanges(s: AiAccount, asks: AiChangeAsk[]): ToolResult {
         .sort((a, b) => Math.abs(b.waves!) - Math.abs(a.waves!)).slice(0, 4);
     if (links.length) out.push(`Where the waves come from: ${links.map(l => `${l.label} ${l.waves! >= 0 ? '+' : ''}${l.waves!.toFixed(1)}`).join('; ')}.`);
     out.push(`Total cost: ${costsText(r.costs)}.`);
-    return { title: 'What If', text: out.join('\n') };
+    return { title: inTourney ? 'What If — tournament' : 'What If', text: out.join('\n') };
 }
 
 // ── Tournament ────────────────────────────────────────────────
@@ -702,4 +759,90 @@ export function tierOutlook(s: AiAccount, target: number): ToolResult {
         ...model.used.map((d, i) => `- T${model.tier} W${d.run.wave.toLocaleString()} → T${to} W${waves[i].toLocaleString()}`),
     ];
     return { title: `T${model.tier} → T${to}`, text: out.join('\n') };
+}
+
+// ── Lab boosts ────────────────────────────────────────────────
+// The Labs page's Lab boosts (engine/labBoosts.ts): cells an hour from the
+// runs, the fastest even boosts they keep up on every lab slot, what the
+// cells held keep going above that, each lab being researched at its
+// boost, and how long a lab named in the question takes at each speed.
+const speedsText = (speeds: number[]) => speeds.map(v => (v > 1 ? `×${v}` : 'no boost')).join(', ');
+const cellsText = (v: number) => (v < 1e6 ? Math.round(v).toLocaleString() : num(v));
+const hoursText = (h: number) => (h === Infinity ? 'for good' : h >= 48 ? `${Math.floor(h / 24).toLocaleString()} days` : `${Math.floor(h)} hours`);
+
+export function labBoostsReport(s: AiAccount, query = '', now = Date.now()): ToolResult {
+    const running = (s.labsRunning ?? []).filter(l => l.lab);
+    const income = cellIncome(s.importedBattles);
+    const set = boostSettings(s.profile, income, running.length);
+    const out: string[] = [];
+    if (set.budget <= 0) {
+        out.push('Headline: TowerForge doesn\'t know how many cells you make yet: import game data with runs that record cells (or type cells an hour on the Labs page), and it works out the boosts they keep up.');
+    } else {
+        const plan = planLabBoosts(set.budget, set.slots);
+        const held = s.currencies?.cells ?? 0;
+        out.push(`Headline: with about ${cellsText(set.budget)} cells an hour, your ${set.slots} lab${set.slots > 1 ? 's' : ''} can all run at ${speedsText(plan.best.speeds)} — the fastest even boosts those cells keep up, ${cellsText(plan.best.cellsPerHour)} cells an hour.`);
+        out.push(`Cells an hour: ${cellsText(set.perRunHour)} while in a run × ${set.hoursPerDay.toFixed(1)} hours a day in runs${income ? ` (from your last ${income.runs} runs)` : ''}.`);
+        if (plan.part) out.push(`Spare: ${cellsText(plan.spare)} cells an hour, enough for one lab at ×${plan.part.speed} for ${plan.part.hoursPerDay.toFixed(1)} hours a day.`);
+        if (plan.higher.length) {
+            out.push(`Faster than that costs more than you make; the ${cellsText(held)} cells you hold keep each going for a while: ${plan.higher.map(h =>
+                `${speedsText(h.speeds)} for ${cellsText(h.cellsPerHour)} cells an hour, kept going ${hoursText(hoursOnHand(h.cellsPerHour, set.budget, held))}`).join('; ')}.`);
+        }
+        if (running.length) {
+            const left = running.map(l => labTimerLeft(l, now) ?? 0);
+            const boosts = boostsForLabs(left, plan.best.speeds);
+            out.push(`Labs researching (the fastest boost on the one with the most time left): ${running.map((l, i) => {
+                const lv = l.toLevel ?? (s.labData[l.lab!] ?? 0) + 1;
+                if (left[i] <= 0) return `${l.lab} Lv ${lv} is done`;
+                return `${l.lab} Lv ${lv}: ${formatLabTime(left[i] / 3600)} left${boosts[i] > 1 ? `, ${formatLabTime(left[i] / 3600 / boosts[i])} at ×${boosts[i]}` : ''}`;
+            }).join('; ')}.`);
+        }
+    }
+    // A lab named in the question: its next level and the rest, at each speed.
+    const lab = query ? findTargets(upgradeTargets(snapshotFromState(s)).filter(t => t.kind === 'lab'), query)[0] : undefined;
+    if (lab) {
+        const hours = labHours(lab.key, s.labData, s.relicData);
+        if (!hours) out.push(`${lab.label} is maxed (level ${lab.current}).`);
+        else {
+            const at = (h: number | null) => (h === null ? 'unknown' : [1, 2, 4, 6, 8]
+                .map(v => `${formatLabTime(h / v)} ${v > 1 ? `at ×${v}` : 'unboosted'}`).join(', '));
+            out.push(`${lab.label} (level ${hours.cur} of ${hours.max}): the next level takes ${at(hours.next)}; all ${hours.max - hours.cur} levels left take ${at(hours.toMax)}.`);
+        }
+    }
+    return { title: 'Lab boosts', text: out.join('\n') };
+}
+
+// ── Module shard plan ─────────────────────────────────────────
+// Modules → Shard plan (engine/shardPlan.ts): each type's saved shards on
+// its own main and assist slot, in order of gain per shard, and the best
+// levels for every shard of the type (Restore moves them).
+const SHARD_TYPE_NAMES = ['cannon', 'armor', 'generator', 'core'] as const;
+const capital = (w: string) => w.charAt(0).toUpperCase() + w.slice(1);
+
+export function shardPlanReport(s: AiAccount, query = ''): ToolResult {
+    const l = query.toLowerCase();
+    const asked = SHARD_TYPE_NAMES.filter(t => l.includes(t));
+    const types = asked.length ? asked : SHARD_TYPE_NAMES;
+    const plans = types.map(t => planTypeShards(s.moduleState, s.labData, t, s.currencies?.[`${t}Shards`] ?? 0)).filter(p => p.main.module);
+    if (!plans.length) return { title: 'Shard plan', text: 'Headline: no module is equipped in these slots, so there\'s nothing for the shards to level.' };
+    const slot = (name: string, p: { module: { name: string } | null; from: number; to: number }) =>
+        `${name} slot (${p.module?.name ?? 'empty'}) Lv ${p.from}${p.to !== p.from ? ` → ${p.to}` : ' (no change)'}`;
+    const out: string[] = [];
+    const top = [...plans].sort((a, b) => b.gainPct - a.gainPct)[0];
+    out.push(`Headline: ${asked.length === 1 ? `your ${top.type} shards` : `of your shards, ${top.type} gain the most`}: ${slot('main', top.main)}${top.assist ? `, ${slot('assist', top.assist)}` : ''}`
+        + ` — ${top.shards.toLocaleString()} shards and ${num(top.coins)} coins for +${top.gainPct.toFixed(2)}% on the ${top.type} main effect.`);
+    for (const p of plans) {
+        out.push(`${capital(p.type)}: ${p.saved.toLocaleString()} shards saved. Plan: ${slot('main', p.main)}${p.assist ? `; ${slot('assist', p.assist)}` : '; assist slot locked'}`
+            + ` — costs ${p.shards.toLocaleString()} shards and ${num(p.coins)} coins, +${p.gainPct.toFixed(2)}% on the main effect, ${p.left.toLocaleString()} shards left.`);
+        if (p.next) out.push(`  Save next for: ${p.next.pos} slot Lv ${p.next.from} → ${p.next.to}, ${p.next.shards.toLocaleString()} shards for +${p.next.gainPct.toFixed(2)}%.`);
+        for (const c of p.pastCap) {
+            out.push(`  The ${c.pos} slot is ${c.levels} levels past its module's rarity cap: those levels add nothing (Restore gives back ${c.shards.toLocaleString()} shards and ${num(c.coins)} coins).`);
+        }
+        if (p.best && p.best.vsPlanPct > 0.005) {
+            out.push(`  Best levels for all ${Math.round(p.best.total).toLocaleString()} ${p.type} shards (in both slots' levels and saved): main Lv ${p.best.main}, assist Lv ${p.best.assist}, +${p.best.vsPlanPct.toFixed(2)}% over the plan`
+                + `${p.best.restore.length ? ` — Restore the ${p.best.restore.join(' and ')} slot in the game first (it gives every shard and coin back), then level back up` : ''}`
+                + `${p.best.coins > 0 ? `; ${num(p.best.coins)} coins more` : ''}.`);
+        }
+    }
+    out.push('Each type\'s shards only level its own slots; levels past a module\'s rarity cap add nothing.');
+    return { title: `Shard plan${asked.length === 1 ? ` — ${asked[0]}` : ''}`, text: out.join('\n') };
 }

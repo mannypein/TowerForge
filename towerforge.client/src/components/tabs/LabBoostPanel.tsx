@@ -9,18 +9,16 @@
 // ============================================================
 
 import { useMemo, useState } from 'react';
-import { LABS } from '../../constants/gameData';
 import { formatGameNumber } from '../../engine/gameNumbers';
-import { MAX_LAB_SLOTS, hoursOnHand } from '../../engine/labBoosts';
+import { MAX_LAB_SLOTS, hoursOnHand, labHours } from '../../engine/labBoosts';
 import type { BoostSettings, CellIncome, LabBoostPlan } from '../../engine/labBoosts';
-import { formatLabTime, labLevelCost } from '../../engine/upgradeCosts';
+import { formatLabTime } from '../../engine/upgradeCosts';
 import NumericInput from '../common/NumericInput';
 import { CurrencyField } from '../common/CurrencyBar';
 import type { LabData, Profile, RelicData } from '../../types/gameTypes';
 
 // Cells as the game writes big numbers, with commas below a million.
 const cells = (v: number) => (v < 1e6 ? Math.round(v).toLocaleString() : formatGameNumber(v));
-const LAB_MAX = new Map(LABS.flatMap(g => g.l.map(([name, max]) => [name, max] as const)));
 
 function lastsText(hours: number): string {
     if (hours === Infinity) return 'kept up';
@@ -28,20 +26,6 @@ function lastsText(hours: number): string {
     return hours >= 48 ? `${Math.floor(hours / 24)} days` : `${Math.floor(hours)} h`;
 }
 
-// Research hours for a lab's next level and for the rest of it, at ×1.
-function labHours(lab: string, labData: LabData, relics: RelicData) {
-    const cur = labData[lab] ?? 0;
-    const max = LAB_MAX.get(lab) ?? cur;
-    if (cur >= max) return null;
-    const next = labLevelCost(lab, cur + 1, labData, relics);
-    let toMax: number | null = 0;
-    for (let lv = cur + 1; lv <= max; lv++) {
-        const c = labLevelCost(lab, lv, labData, relics);
-        if (!c) { toMax = null; break; }
-        toMax += c.hours;
-    }
-    return { cur, max, next: next?.hours ?? null, toMax };
-}
 
 export default function LabBoostPanel({ settings, income, plan, profile, cellsHeld, openLabs, defaultLab, labData, relicData, onProfile }: {
     settings: BoostSettings;

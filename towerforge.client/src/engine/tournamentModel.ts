@@ -23,6 +23,7 @@ import { heatConditions, leagueConditions } from './battleConditions';
 import type { TourneyConditions } from './battleConditions';
 import { LEAGUE_HEAT } from '../constants/tournamentData';
 import type { HeatKey, LeagueHeat } from '../constants/tournamentData';
+import type { BattleReport } from './battleReport';
 
 export type Ticks = Partial<Record<HeatKey, boolean>>;
 
@@ -85,6 +86,24 @@ export function newestTournament(state: Pick<AccountState, 'importedBattles'>): 
     const idx = state.importedBattles.map((b, i) => ({ b, i })).filter(({ b }) => b.tournament)
         .sort((a, b) => (b.b.time ?? b.i) - (a.b.time ?? a.i))[0]?.i;
     return idx ?? -1;
+}
+
+// What If in tournament mode (the What If page and Ask AI, so both give the
+// same numbers): the tournament build calibrated on the newest tournament
+// run, with runs starting where this week's conditions put them (Glass
+// Cannon; other builds keep the calibration's own conditions).
+export function tournamentWhatIf(t: TournamentModel, week: Ticks, last: Ticks, lastLeague: League | undefined):
+    { base: OptimizerSnapshot; models: GoalModels; report: BattleReport | null } {
+    let models = t.models;
+    if (t.settle && t.run) {
+        const shift = t.settle(week) - t.settle(last, heatOf(lastLeague));
+        const startWave = Math.round(t.run.typicalWave + shift);
+        models = {
+            ...t.models, calibConditions: t.baseline, conditions: t.at(week, startWave),
+            startWave, conditionsAt: (w: number) => t.at(week, w),
+        };
+    }
+    return { base: snapshotFromState(t.account), models, report: t.account.importedBattles[t.calibIdx] ?? null };
 }
 
 // The account with the tournament build in place.

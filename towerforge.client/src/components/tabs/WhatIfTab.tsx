@@ -21,11 +21,10 @@ import { formatGameNumber } from '../../engine/gameNumbers';
 import { formatLabTime } from '../../engine/upgradeCosts';
 import { MEDAL_SYMBOL, presetLabel } from '../../constants/gameData';
 import { HEAT_CONDITIONS, LEAGUE_HEAT } from '../../constants/tournamentData';
-import { buildTournamentModel, heatOf, newestTournament } from '../../engine/tournamentModel';
+import { buildTournamentModel, newestTournament, tournamentWhatIf } from '../../engine/tournamentModel';
 import { runKey } from '../../engine/battleReport';
 import { defaultBattleIndex } from '../../engine/gameExport';
 import { activeLoadout } from '../../engine/statHelpers';
-import type { GoalModels } from '../../engine/accountModels';
 import { keysOf, loadTourneySim, saveTourneySim, ticksOf } from '../common/tourneySim';
 import type { TourneySim } from '../common/tourneySim';
 
@@ -130,16 +129,7 @@ export default function WhatIfTab() {
 
     const setup = useMemo(() => {
         if (mode === 'tournament' && tModel) {
-            let tm: GoalModels = tModel.models;
-            if (tModel.settle && tModel.run) {
-                const week = tModel.settle(sim.week) - tModel.settle(tLast, heatOf(tEntry?.league || tLeague));
-                const startWave = Math.round(tModel.run.typicalWave + week);
-                tm = {
-                    ...tModel.models, calibConditions: tModel.baseline, conditions: tModel.at(sim.week, startWave),
-                    startWave, conditionsAt: (w: number) => tModel.at(sim.week, w),
-                };
-            }
-            return { base: snapshotFromState(tModel.account), models: tm, report: tModel.account.importedBattles[tModel.calibIdx] };
+            return tournamentWhatIf(tModel, sim.week, tLast, (tEntry?.league || tLeague) as League);
         }
         // Campaign: the Optimizer's Battle Report, or your usual campaign run
         // when that's a tournament run (Tournament mode is for those).

@@ -13,7 +13,7 @@
 import { LABS, UWS, WS_STATS, WS_UNLOCK_GROUPS } from '../../constants/gameData';
 import { GAME_CARDS, GAME_LABS, MASTERY_LAB_START } from '../../constants/gameExportMaps';
 import { BOTS_CONFIG } from '../../constants/botData';
-import { battle, gameModule, makeExport, zeros } from '../../test/makeExport';
+import { battle, gameModule, labIndex, makeExport, zeros } from '../../test/makeExport';
 import type { BuildType } from '../../types/gameTypes';
 
 type Raw = Record<string, unknown>;
@@ -115,7 +115,7 @@ type Shares = Partial<Record<'ChainLightningDamage' | 'OrbDamage' | 'BlackHoleDa
 interface Reach { cl?: number; bh?: number; orbs?: number }
 
 // Runs: campaign deaths (with level skips) and tournament runs.
-function runs(list: { tier: number; wave: number; day: number; killer: number; tourney?: boolean; skip?: number; coins?: number; hours?: number; league?: number }[], shares: Shares, tShares?: Shares, reach: Reach = {}): Raw[] {
+function runs(list: { tier: number; wave: number; day: number; killer: number; tourney?: boolean; skip?: number; coins?: number; hours?: number; league?: number }[], shares: Shares, tShares?: Shares, reach: Reach = {}, cellsPerHour = 0): Raw[] {
     return list.map(r => {
         const total = 1e6;
         const enemies = r.wave * 40;
@@ -125,7 +125,7 @@ function runs(list: { tier: number; wave: number; day: number; killer: number; t
             BattleDate: `2026-10-${String(r.day).padStart(2, '0')}T${r.tourney ? '18' : '09'}:00:00Z`,
             Tier: r.tier, Wave: r.wave, KilledBy: r.killer, IsTournament: !!r.tourney,
             GameTime: Math.round(hours * 3600 * 2.5), RealTime: Math.round(hours * 3600),
-            CoinsEarned: r.coins ?? 0, TotalEnemies: enemies, ProjectilesCount: enemies * 3,
+            CoinsEarned: r.coins ?? 0, TotalEnemies: enemies, ProjectilesCount: enemies * 3, CellsEarned: Math.round(cellsPerHour * hours),
             EnemiesHitByChainLightningThisRound: Math.round(enemies * (reach.cl ?? 0)),
             DestroyedInBlackhole: Math.round(enemies * (reach.bh ?? 0)), DestroyedInOrbs: Math.round(enemies * (reach.orbs ?? 0)),
             HealthLevelSkips: Math.floor(r.wave * (r.skip ?? 0)), AttackLevelSkips: Math.floor(r.wave * (r.skip ?? 0) * 0.99),
@@ -136,6 +136,20 @@ function runs(list: { tier: number; wave: number; day: number; killer: number; t
 }
 
 const tierWaves = (waves: number[]) => [0, ...waves];
+
+// Labs being researched at the export: each lab's level and hours left
+// at normal speed, from when this file loads (the game's ResearchCompleteDate).
+function running(labs: string[], hoursLeft: number[]): Raw {
+    const now = Date.now();
+    const done: (string | null)[] = Array(260).fill(null);
+    labs.forEach((name, i) => { done[labIndex(name)] = new Date(now + hoursLeft[i] * 3600_000).toISOString(); });
+    return {
+        ExportedAt: new Date(now).toISOString(),
+        LabActiveBool: labs.map(() => true), LabResearchInt: labs.map(labIndex),
+        LabSpeedUpSpeed: labs.map(() => 1), LabSpeedUpRemainingSeconds: labs.map(() => 0),
+        ResearchCompleteDate: done,
+    };
+}
 
 // ── Early: T5, Silver, one UW, no modules or bots ──────────────
 const early: BenchAccount = {
@@ -156,7 +170,7 @@ const early: BenchAccount = {
             { tier: 4, wave: 870, day: 22, killer: 4, coins: 2.6e8 },
             { tier: 5, wave: 418, day: 23, killer: 3, coins: 1.3e8 },
             { tier: 5, wave: 431, day: 24, killer: 2, coins: 1.35e8 },
-        ], { ProjectilesDamage: 0.71, OrbDamage: 0.18, LandMineDamage: 0.08, ThornDamage: 0.03 }, undefined, { orbs: 0.2 }),
+        ], { ProjectilesDamage: 0.71, OrbDamage: 0.18, LandMineDamage: 0.08, ThornDamage: 0.03 }, undefined, { orbs: 0.2 }, 60),
     }),
 };
 
@@ -188,7 +202,8 @@ const mid: BenchAccount = {
             { tier: 10, wave: 3240, day: 24, killer: 11, skip: 0.21, coins: 7.5e13 },
         ], { ProjectilesDamage: 0.38, OrbDamage: 0.24, ChainLightningDamage: 0.18, DeathWaveDamage: 0.1, BlackHoleDamage: 0.06, ThornDamage: 0.04 },
         { ProjectilesDamage: 0.46, OrbDamage: 0.2, ChainLightningDamage: 0.14, DeathWaveDamage: 0.12, ThornDamage: 0.08 },
-        { cl: 0.45, bh: 0.15, orbs: 0.3 }),
+        { cl: 0.45, bh: 0.15, orbs: 0.3 }, 9000),
+        ...running(['Damage Lab', 'Health Lab', 'Coins/Kill Lab'], [30, 52, 75]),
     }),
 };
 
@@ -225,7 +240,14 @@ const late: BenchAccount = {
             { tier: 0, wave: 438, day: 24, killer: 9, tourney: true, league: 5 },
         ], { OrbDamage: 0.58, ChainLightningDamage: 0.14, BlackHoleDamage: 0.11, DeathWaveDamage: 0.06, ProjectilesDamage: 0.07, SmartMissileDamage: 0.04 },
         { OrbDamage: 0.44, ChainLightningDamage: 0.11, DeathWaveDamage: 0.2, ProjectilesDamage: 0.15, BlackHoleDamage: 0.06, SmartMissileDamage: 0.04 },
-        { cl: 0.7, bh: 0.3, orbs: 0.55 }),
+        { cl: 0.7, bh: 0.3, orbs: 0.55 }, 210000),
+        ...running(['Damage Lab', 'Super Crit Mult Lab', 'Enemy HP Lvl Skip Lab', 'Attack Speed Lab', 'Coins/Kill Lab'], [20, 140, 300, 9, 66]),
+        // Vault: Harmony's card slots and a few Power and Enemy upgrades.
+        Vault: { UpgradesLevel: { 1010: 2, 1030: 1, 1200: 3, 1210: 1, 1810: 2 }, UnlockedGroups: [0, 1, 2] },
+        // Guardian: Attack, Bounty and Fetch equipped.
+        GuardianUnlocked: true, GuardianSlotsUnlocked: 2, GuardianChipSlot: [2, 0, 6],
+        GuardianChipUnlocked: [true, false, true, false, false, true, true, true, true],
+        GuardianChipLevel: Array.from({ length: 27 }, (_, i) => [0, 2, 6].includes(Math.floor(i / 3)) ? 5 + (i % 3) * 2 : 0),
         TournamentRecords: Array.from({ length: 12 }, (_, i) => ({
             TournamentNumber: 300 + i, Date: `2026-${i < 5 ? '09' : '10'}-${String(i < 5 ? 3 + i * 6 : (i - 5) * 3 + 2).padStart(2, '0')}T12:00:00Z`,
             LeagueID: i < 4 ? 4 : 5, Wave: i < 4 ? 1900 + i * 60 : 380 + i * 7, Rank: i < 4 ? [3, 2, 1, 1][i] : [22, 19, 17, 18, 15, 14, 16, 12][i - 4],

@@ -43,7 +43,7 @@ export const BENCH_QUESTIONS: BenchQuestion[] = [
     { id: 'more-coins', q: 'How do I get more coins?', expect: { tool: 'upgrades', currency: ['any', 'coins'], goal: 'coins' } },
     { id: 'labs', q: 'What should I research next in the labs?', expect: { tool: 'upgrades', currency: 'research' } },
     { id: 'medals', q: 'where should my medals go', expect: { tool: 'upgrades', currency: 'medals' } },
-    { id: 'shards', q: "what's the best use of my module shards", accounts: ['mid', 'late'], expect: { tool: 'upgrades', currency: 'shards' } },
+    { id: 'shards', q: "what's the best use of my module shards", accounts: ['mid', 'late'], expect: { tool: ['shard_plan', 'upgrades'] } },
     { id: 'gems', q: 'Should I buy card slots with my gems?', expect: { tool: 'upgrades', currency: 'gems' } },
     { id: 'survive', q: 'How do I survive longer?', expect: { tool: 'upgrades', goal: 'survival' } },
     { id: 'push-cheap', q: "what's the cheapest way to push more waves", expect: { tool: 'upgrades', goal: 'waves' } },
@@ -57,7 +57,17 @@ export const BENCH_QUESTIONS: BenchQuestion[] = [
     { id: 'whatif-compare', q: 'Which is better: maxing black hole duration or golden tower multiplier?', accounts: ['mid', 'late'], expect: { tool: 'what_if', upgrades: ['black hole|bh', 'golden tower|gt'] } },
     { id: 'whatif-plus', q: 'what if I max Smite', accounts: ['late'], expect: { tool: 'what_if', upgrades: ['smite|cl\\+|chain'] } },
 
+    // ── Lab boosts and the shard plan (their pages' plans) ───────
+    { id: 'boost-labs', q: 'What speed should I boost my labs to?', accounts: ['mid', 'late'], expect: { tool: 'lab_boosts' } },
+    { id: 'lab-time', q: 'How long until my damage lab is maxed?', accounts: ['mid', 'late'], expect: { tool: 'lab_boosts' } },
+    { id: 'shard-armor', q: 'How should I spend my armor shards?', accounts: ['late'], expect: { tool: 'shard_plan' } },
+    { id: 'shard-best', q: 'what are the best levels for all my cannon shards', accounts: ['mid', 'late'], expect: { tool: 'shard_plan' } },
+    { id: 'whatif-tourney', q: 'How many tournament waves would maxing CL damage get me?', accounts: ['mid', 'late'], expect: { tool: 'what_if', runs: 'tournament', upgrades: ['cl|chain'] } },
+
     // ── Levels and the account ───────────────────────────────────
+    { id: 'lab-level', q: 'What level is my super crit mult lab?', accounts: ['late'], expect: { tool: ['levels', 'none'] } },
+    { id: 'vault', q: 'What have I bought in the vault?', accounts: ['late'], expect: { tool: ['none', 'levels'] } },
+    { id: 'guardian-chips', q: 'Which guardian chips am I using?', accounts: ['late'], expect: { tool: ['none', 'levels'] } },
     { id: 'level-gt', q: 'what level is my Golden Tower?', expect: { tool: ['levels', 'none'] } },
     { id: 'level-ws', q: "What's my workshop damage level?", expect: { tool: ['levels', 'none'] } },
     { id: 'my-tier', q: 'What tier am I on?', expect: { tool: ['none', 'levels'] } },

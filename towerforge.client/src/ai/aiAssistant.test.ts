@@ -27,6 +27,13 @@ describe('the route, checked against the question', () => {
         expect(readRoute(json({ tool: 'none' }), 'What tier am I on?').tool).toBe('none');
     });
 
+    it('sends module shards alone to the shard plan, and lab boosts to their own', () => {
+        expect(readRoute(json({ tool: 'upgrades', currency: 'shards' }), 'best use of my module shards').tool).toBe('shard_plan');
+        expect(readRoute(json({ tool: 'upgrades', currency: 'research' }), 'what boost should my labs run at').tool).toBe('lab_boosts');
+        expect(readRoute('not json', 'how do I spend my armor shards').tool).toBe('shard_plan');
+        expect(readRoute('not json', 'how fast can I boost my labs').tool).toBe('lab_boosts');
+    });
+
     it('falls back to keywords when the JSON can\'t be read', () => {
         expect(readRoute('not json', 'How do I get more coins?')).toMatchObject({ tool: 'upgrades', goal: 'coins', guessed: true });
     });

@@ -18,9 +18,10 @@
 //  Pure functions — no store imports.
 // ============================================================
 
-import { CELL_BOOSTS } from './upgradeCosts';
+import { CELL_BOOSTS, labLevelCost } from './upgradeCosts';
 import type { BattleReport } from './battleReport';
-import type { Profile } from '../types/gameTypes';
+import type { LabData, Profile, RelicData } from '../types/gameTypes';
+import { LABS } from '../constants/gameData';
 
 const SPEEDS = [1, ...CELL_BOOSTS.map(([speed]) => speed)];
 const COST = [0, ...CELL_BOOSTS.map(([, perHour]) => perHour)];
@@ -93,6 +94,25 @@ export function boostsForLabs(secondsLeft: number[], speeds: number[]): number[]
     const out = secondsLeft.map(() => 1);
     order.forEach(([, i], rank) => { out[i] = sorted[rank] ?? 1; });
     return out;
+}
+
+const LAB_MAX = new Map(LABS.flatMap(g => g.l.map(([name, max]) => [name, max] as const)));
+
+// Research hours for a lab's next level and for the rest of it, at ×1
+// (after lab speed and relics: upgradeCosts.labLevelCost); null when maxed.
+export function labHours(lab: string, labData: LabData, relics: RelicData):
+    { cur: number; max: number; next: number | null; toMax: number | null } | null {
+    const cur = labData[lab] ?? 0;
+    const max = LAB_MAX.get(lab) ?? cur;
+    if (cur >= max) return null;
+    const next = labLevelCost(lab, cur + 1, labData, relics);
+    let toMax: number | null = 0;
+    for (let lv = cur + 1; lv <= max; lv++) {
+        const c = labLevelCost(lab, lv, labData, relics);
+        if (!c) { toMax = null; break; }
+        toMax += c.hours;
+    }
+    return { cur, max, next: next?.hours ?? null, toMax };
 }
 
 export interface CellIncome {

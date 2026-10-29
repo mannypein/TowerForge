@@ -8,9 +8,10 @@
 //  Small models can't do the game's math and don't know the game well,
 //  so each question takes two steps:
 //   1. Route — the model picks which data answers it (JSON, held to a
-//      schema): the Optimizer's next picks, What If for named upgrades,
-//      current levels, the saved runs, another tier, the tournament
-//      estimate, or the game notes.
+//      schema): the Optimizer's next picks, What If for named upgrades
+//      (campaign or tournament), current levels, the saved runs, another
+//      tier, the tournament estimate, lab boosts, the shard plan, or the
+//      game notes. What the question itself settles is checked in code.
 //   2. Answer — the site works that data out (aiTools.ts, the same
 //      engine the pages use) and the model answers from it and the
 //      account summary, written out as it goes.
@@ -22,7 +23,7 @@ import type { WebWorkerMLCEngine } from '@mlc-ai/web-llm';
 import { AI_MODELS, CONTEXT_TOKENS, modelByKey } from './aiModels';
 import type { AiModel } from './aiModels';
 import {
-    accountSummary, bestUpgrades, levelsOf, runsReport, tierOutlook, tournamentOutlook, whatIfChanges,
+    accountSummary, bestUpgrades, labBoostsReport, levelsOf, runsReport, shardPlanReport, tierOutlook, tournamentOutlook, whatIfChanges,
 } from './aiTools';
 import type { AiAccount, AiChangeAsk, AiCurrency, AiRunKind, AiTourneySettings, ToolResult } from './aiTools';
 import { budgetIn, wordsOf } from './aiTools';
@@ -104,7 +105,7 @@ async function modelIdFor(m: AiModel): Promise<string> {
 
 // ── Step 1: route ─────────────────────────────────────────────
 export interface Route {
-    tool: 'upgrades' | 'what_if' | 'levels' | 'runs' | 'tier' | 'tournament' | 'guide' | 'none';
+    tool: 'upgrades' | 'what_if' | 'levels' | 'runs' | 'tier' | 'tournament' | 'lab_boosts' | 'shard_plan' | 'guide' | 'none';
     currency: AiCurrency;
     goal: 'default' | 'waves' | 'damage' | 'coins' | 'survival';
     changes: AiChangeAsk[];
@@ -121,7 +122,7 @@ const UW_NAMES = `UW short names: ${UWS.map(u => `${u.a} ${u.n}`).join(', ')}. U
 const ROUTE_SCHEMA = JSON.stringify({
     type: 'object',
     properties: {
-        tool: { type: 'string', enum: ['upgrades', 'what_if', 'levels', 'runs', 'tier', 'tournament', 'guide', 'none'] },
+        tool: { type: 'string', enum: ['upgrades', 'what_if', 'levels', 'runs', 'tier', 'tournament', 'lab_boosts', 'shard_plan', 'guide', 'none'] },
         currency: { type: 'string', enum: ['any', 'stones', 'coins', 'research', 'shards', 'medals', 'gems', 'bits'] },
         goal: { type: 'string', enum: ['default', 'waves', 'damage', 'coins', 'survival'] },
         changes: {
@@ -142,12 +143,14 @@ const ROUTE_SCHEMA = JSON.stringify({
 
 const ROUTE_PROMPT = `You pick the data that answers a player's question about their account in the mobile game The Tower (idle tower defense). Reply with JSON only.
 tool:
-- "upgrades": what to upgrade or spend on next, and how to get more coins, push further or survive longer. currency: stones (UWs, UW+, card mastery, assist modules), coins (workshop, enhancements), research (labs), shards (module slots), medals (bots), gems (card slots), bits (Guardian chips), or any. goal: waves, damage, coins, survival, or default. runs: tournament when they ask about tournaments, campaign for farming or tiers, else any. budget: how much of that currency they say they have or are about to get (1500 for "I'm about to get 1500 stones"), else 0.
-- "what_if": what specific upgrades would do (waves, damage, coins, cost), or whether one is worth it. changes: each upgrade in the player's words and the level: "max", "+N" (N more levels) or a level number.
+- "upgrades": what to upgrade or spend on next, and how to get more coins, push further or survive longer. currency: stones (UWs, UW+, card mastery, assist modules), coins (workshop, enhancements), research (labs), shards (module slots; questions only about shards go to shard_plan), medals (bots), gems (card slots), bits (Guardian chips), or any. goal: waves, damage, coins, survival, or default. runs: tournament when they ask about tournaments, campaign for farming or tiers, else any. budget: how much of that currency they say they have or are about to get (1500 for "I'm about to get 1500 stones"), else 0.
+- "what_if": what specific upgrades would do (waves, damage, coins, cost), or whether one is worth it. changes: each upgrade in the player's words and the level: "max", "+N" (N more levels) or a level number. runs: tournament when they ask about tournament waves, else any.
 - "levels": the player's current level of specific upgrades. search: the upgrade names.
 - "runs": the player's past runs: waves, what killed them, coins, damage by source (which UW or weapon did the damage), campaign against tournaments. runs: tournament only when the question says tournaments, else any.
 - "tier": how far the player would get on another tier (farming or pushing a higher tier). tier: that tier's number, 0 for "the next tier".
 - "tournament": tournaments: this week's battle conditions, how far tournament runs should get, past tournaments' waves and ranks, leagues.
+- "lab_boosts": speeding labs up with cells: which boost (×1.5 to ×8) their labs can keep, what boosts cost in cells, how long the labs being researched or a named lab take. search: the lab named, else "".
+- "shard_plan": spending Module Shards on module slot levels (main and assist slots): what to level, the best levels for all their shards, Restore. search: the type (cannon, armor, generator or core), else "".
 - "guide": how a game mechanic works or how TowerForge calculates something. search: a few keywords.
 - "none": greetings, questions the account overview answers (their tier, best waves, what they own), and requests that have nothing to do with The Tower (a poem, a joke).
 currency is what they want to spend; "any" when they name more than one (coins and stones) or none.
@@ -170,6 +173,10 @@ Examples:
 "am I going to move up a league" → {"tool":"tournament","currency":"any","goal":"default","changes":[],"search":"","runs":"any","tier":0,"budget":0}
 "what is enemy level skip" → {"tool":"guide","currency":"any","goal":"default","changes":[],"search":"enemy level skip","runs":"any","tier":0,"budget":0}
 Earlier question "how many waves would maxing DW get me", then "and CF instead?" → {"tool":"what_if","currency":"any","goal":"default","changes":[{"upgrade":"CF","level":"max"}],"search":"","runs":"any","tier":0,"budget":0}
+"what speed should I boost my labs to" → {"tool":"lab_boosts","currency":"any","goal":"default","changes":[],"search":"","runs":"any","tier":0,"budget":0}
+"how long until my damage lab is maxed" → {"tool":"lab_boosts","currency":"any","goal":"default","changes":[],"search":"damage lab","runs":"any","tier":0,"budget":0}
+"how should I spend my armor shards" → {"tool":"shard_plan","currency":"any","goal":"default","changes":[],"search":"armor","runs":"any","tier":0,"budget":0}
+"how many tournament waves would maxing CL get me" → {"tool":"what_if","currency":"any","goal":"default","changes":[{"upgrade":"CL","level":"max"}],"search":"","runs":"tournament","tier":0,"budget":0}
 "what keeps killing me" → {"tool":"runs","currency":"any","goal":"default","changes":[],"search":"","runs":"any","tier":0,"budget":0}
 "why is my chain lightning weak in tournaments" → {"tool":"runs","currency":"any","goal":"default","changes":[],"search":"","runs":"tournament","tier":0,"budget":0}
 "how far would I get farming T19" → {"tool":"tier","currency":"any","goal":"default","changes":[],"search":"","runs":"any","tier":19,"budget":0}
@@ -189,6 +196,8 @@ function guessRoute(q: string): Route {
         return { ...base, tool: 'tournament' };
     }
     if (/what if|would .*(max|level)|\bmax(ing)?\b/.test(l)) return { ...base, tool: 'what_if', changes: [{ upgrade: q, level: 'max' }] };
+    if (/\bboost/.test(l) && /\blabs?\b/.test(l)) return { ...base, tool: 'lab_boosts', search: q };
+    if (/\bshards?\b/.test(l) && !/\bstones?\b|\bcoins?\b/.test(l)) return { ...base, tool: 'shard_plan', search: q };
     if (/\b(more|earn|make)\b.*\bcoins?\b|\bincome\b/.test(l)) return { ...base, tool: 'upgrades', goal: 'coins' };
     if (/surviv|stay alive|keep dying/.test(l)) return { ...base, tool: 'upgrades', goal: 'survival' };
     if (/what level|\blevel (is|of)\b|\bmy .+ level\b/.test(l)) return { ...base, tool: 'levels', search: q };
@@ -238,6 +247,9 @@ function checked(r: Route, q: string): Route {
         const kept = out.changes.filter(c => wordsOf(c.upgrade).some(w => w !== '+' && asked.has(w)));
         out.changes = kept.length ? kept : out.changes.slice(-1);
     }
+    // Module shards alone, or boosting labs: their own pages' plans.
+    if (out.tool === 'upgrades' && out.currency === 'shards') out.tool = 'shard_plan';
+    if (out.tool !== 'lab_boosts' && /\bboost/i.test(q) && /\blabs?\b/i.test(q)) out.tool = 'lab_boosts';
     // "What is X?" about the game (not their account) goes to the notes.
     if (out.tool === 'none' && /^\s*(what|how|why)\s+(is|are|does|do)\b/i.test(q) && !/\b(i|my|me|am|i'm)\b/i.test(q)) {
         out.tool = 'guide';
@@ -253,6 +265,8 @@ const routeText = (r: RouteChoice) => [
     (r.tool === 'levels' || r.tool === 'guide') && r.search && `"${r.search}"`,
     r.tool === 'runs' && r.runs,
     r.tool === 'tier' && `T${r.tier || '?'}`,
+    r.tool === 'what_if' && r.runs === 'tournament' && 'tournament',
+    (r.tool === 'lab_boosts' || r.tool === 'shard_plan') && r.search && `"${r.search}"`,
     r.guessed && '(from keywords: the model’s choice couldn’t be read)',
 ].filter(Boolean).join(' · ');
 
@@ -266,8 +280,9 @@ function lookUp(route: Route, question: string, ctx: AiContext): ToolResult[] {
         case 'what_if': {
             const asks = route.changes.length ? route.changes : [{ upgrade: question, level: 'max' }];
             // Each on its own when there are several (to compare), then together.
-            const each = asks.length > 1 ? asks.map(a => whatIfChanges(account, [a])) : [];
-            const together = whatIfChanges(account, asks);
+            const tourney = route.runs === 'tournament' ? ctx.tourney : undefined;
+            const each = asks.length > 1 ? asks.map(a => whatIfChanges(account, [a], tourney)) : [];
+            const together = whatIfChanges(account, asks, tourney);
             return asks.length > 1
                 ? [...each.map((r, i) => ({ ...r, title: `What If — ${asks[i].upgrade}` })), { ...together, title: 'What If — all together' }]
                 : [together];
@@ -280,6 +295,10 @@ function lookUp(route: Route, question: string, ctx: AiContext): ToolResult[] {
             return [tierOutlook(account, route.tier)];
         case 'tournament':
             return [tournamentOutlook(account, ctx.tourney), runsReport(account, 'tournament')];
+        case 'lab_boosts':
+            return [labBoostsReport(account, `${route.search} ${question}`)];
+        case 'shard_plan':
+            return [shardPlanReport(account, `${route.search} ${question}`)];
         case 'guide': {
             const found = searchNotes(`${route.search} ${question}`);
             return [{ title: `Game notes — ${found.map(p => p.heading).slice(0, 2).join(', ') || 'nothing found'}`, text: found.length ? notesText(found) : 'No notes matched.' }];
