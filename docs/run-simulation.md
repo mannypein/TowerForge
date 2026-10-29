@@ -37,9 +37,11 @@ gets) and upgrades aren't in yet.
 Optimizer → Rank by → "How far runs get (waves)" (Glass Cannon, calibrated
 eDPS). Ranks stone upgrades by **flat damage** only (`edpsSurvivalScore`:
 CL, SM, DW, ILM, PS, tower shots, each by its share of the run's damage),
-because orbs, Black Hole, Smite and Consume take a share of an enemy's
+because orbs, Black Hole and Consume take a share of an enemy's
 health (orbs destroy what they touch) and don't fall behind as enemies get
-tougher. Bosses, elites and fleets are immune to orbs, Death Ray and BH —
+tougher. Smite does too, but it reaches the enemies that end runs, so its
+share of their health counts as flat damage they no longer need (2026-10-29,
+[ultimate-weapons.md](ultimate-weapons.md) Chain Lightning). Bosses, elites and fleets are immune to orbs, Death Ray and BH —
 but runs also end to Tanks and Ranged, which aren't: for those, orbs and
 Death Ray stopping more of them counts too (2026-10-22, [optimizer.md](optimizer.md)
 "Orbs and Death Ray against the enemies that end runs"). Each step's gain compounds

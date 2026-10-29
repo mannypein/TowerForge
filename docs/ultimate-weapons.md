@@ -65,6 +65,20 @@ Notion renders client-side, so both were read in a browser: on a fandom tab,
   shots fired × CL chance × chains ÷ enemies reached, and smites per enemy =
   that × CL chance (capped at 100). On a T18 ~W8600 farming run that's about
   4.5, far below the cap.
+- **Smite and how far runs get** (2026-10-29): each proc is a share of the
+  wave's *basic* enemy health ("X% the current wave HP", the game's text in
+  TheTowerSDK's reference tables), the same share at every wave, and only
+  orbs, Death Ray, Shockwave and Black Hole are what bosses and elites are
+  immune to — so Smite takes a fixed part of a run-ending enemy's health
+  and flat damage only has to take the rest. `edps.smiteLog`: on type k,
+  h = smites × share ÷ (k's health multiple × its health lab), worth
+  1 ÷ (1 − h) more flat damage against it, weighted by the run's deaths.
+  Smites on a run-ending enemy = the run's average × basic speed ÷ its
+  speed (it stays in range the whole way; **the code's assumption**). Before
+  this the waves model left Smite out (What If: maxing Smite +36% damage,
+  +0.0 waves on the owner's tournament account). The battle report's Chain
+  Lightning damage includes Smite's (TheTowerSDK, unverified); the
+  calibration takes Smite's estimated part out of CL's share.
 - Not modeled: Chain Thunder (eHP), Lightning Amplifier – Scatter,
   multishot / bounce extra hits.
 

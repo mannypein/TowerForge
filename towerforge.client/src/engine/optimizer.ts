@@ -321,7 +321,7 @@ function killerAttackFactor(snap: OptimizerSnapshot): number {
 function wavesScore(snap: OptimizerSnapshot): number {
     if (!snap.edps) return getEDPS(snap);
     const w = edpsWaves(snap, snap.edps);
-    return w.flat * Math.exp(w.reach + (snap.skipWorth ?? 0) * scoredSkip(snap)) * killerHealthFactor(snap);
+    return w.flat * Math.exp(w.reach + w.smite + (snap.skipWorth ?? 0) * scoredSkip(snap)) * killerHealthFactor(snap);
 }
 
 // Less health on the enemies that end runs works like more damage against

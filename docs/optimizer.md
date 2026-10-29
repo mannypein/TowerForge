@@ -509,8 +509,10 @@ measured from the run's `FlameBotBlocked` (the made-up runs had none).
 - **Glass Cannon, ranked by waves** (Rank by → "How far runs get") —
   `edpsSurvivalScore`: only the flat-damage sources (CL, SM, DW, ILM, PS,
   tower shots), renormalised to their share of the run's damage; orbs, Black
-  Hole, Smite and Consume deal a share of enemy health so they don't move the
-  death wave. Gains become waves and coins per run through Run Length and
+  Hole and Consume deal a share of enemy health so they don't move the
+  death wave. Smite does move it (2026-10-29, `smiteLog`): it reaches the
+  bosses, elites and fleets that end runs, and its share of their health is
+  flat damage they no longer need ([ultimate-weapons.md](ultimate-weapons.md)). Gains become waves and coins per run through Run Length and
   Coins per Run ([run-simulation.md](run-simulation.md)).
   - Enemy Health Level Skip (workshop stat and lab) is scored too: the skip
     chance counts as the flat damage that gains the same waves

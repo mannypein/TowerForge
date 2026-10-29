@@ -284,6 +284,7 @@ interface WaveSplit {
     skipLog: number;      // skip points × skipWorth
     killerLog: number;    // log of the killers' health-lab factor
     reachLog: number;     // fewer run-ending enemies past orbs and Death Ray (edps.reachLog)
+    smiteLog: number;     // Smite's share of the run-ending enemies' health (edps.smiteLog)
 }
 
 export interface WhatIfResult {
@@ -326,7 +327,7 @@ function buildChain(
     report: BattleReport | null, models: GoalModels, split: WaveSplit | null,
 ): ChainLink[] {
     // A part's share of the waves, by its log against the whole gain's.
-    const totalLog = split ? Math.log(split.damage) + split.skipLog + split.killerLog + split.reachLog : 0;
+    const totalLog = split ? Math.log(split.damage) + split.skipLog + split.killerLog + split.reachLog + split.smiteLog : 0;
     const wavesOf = (log: number) => (split && Math.abs(totalLog) > 1e-12 ? (split.waves * log) / totalLog : undefined);
     const links: ChainLink[] = [];
     const add = (l: ChainLink) => {
@@ -417,7 +418,8 @@ function buildChain(
             add({ group: 'Damage to each enemy', label: 'Smite procs per enemy', before: procs0,
                 after: Math.min(100, procs0 * rel(procs(p1), procs(p0))), kind: 'count' });
         }
-        add({ group: 'Damage to each enemy', label: 'Smite (share of health per proc)', before: p0.smite * 100, after: p1.smite * 100, kind: 'percent' });
+        add({ group: 'Damage to each enemy', label: 'Smite (share of health per proc)', before: p0.smite * 100, after: p1.smite * 100, kind: 'percent',
+            waves: wavesOf(split?.smiteLog ?? 0) });
         add({ group: 'Damage to each enemy', label: 'Consume (share of health)', before: p0.consume * 100, after: p1.consume * 100, kind: 'percent' });
         // Enemies that end runs and can be touched (Basic, Fast, Tank, Ranged):
         // the share orbs and Death Ray stop before they reach the tower.
@@ -600,6 +602,7 @@ export function whatIf(
                 killerLog: killers.reduce((sum, [type, share]) =>
                     sum + share * Math.log(healthLabCut(base.labData, type) / healthLabCut(after.labData, type)), 0),
                 reachLog: edpsWaves(cond(after), calib).reach - edpsWaves(cond(base), calib).reach,
+                smiteLog: edpsWaves(cond(after), calib).smite - edpsWaves(cond(base), calib).smite,
             };
         }
         // A longer run: coins for the extra waves, at the new coin bonuses;

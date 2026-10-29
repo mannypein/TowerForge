@@ -11,7 +11,7 @@ import { buildCandidates, goalScore, groupPath, mergeRepeats, pathGain, shardTyp
 import { buildFarmCalibration } from './farming';
 import { buildEhpCalibration } from './ehp';
 import type { OptimizerSnapshot } from './optimizer';
-import { buildEdpsCalibration, edpsScore, edpsSurvivalScore } from './edps';
+import { buildEdpsCalibration, edpsParts, edpsScore, edpsSurvivalScore, smiteLog } from './edps';
 import { UWS, UW_STAT_VALUES, UW_STONE_COSTS, WS_STATS } from '../constants/gameData';
 import { GC_SCORING } from '../constants/optimizerConfig';
 import type { BattleReport } from './battleReport';
@@ -97,6 +97,24 @@ describe('calibrated eDPS', () => {
         expect(calib.smiteProcs).toBeCloseTo(11.1 * 0.185, 6);
         const after = snapshot(report, s => { s.uwData.data.CL!.upOwn = true; });   // Smite Lv 1 = 0.05%
         expect(edpsScore(after, calib)).toBeCloseTo(1 + 0.0005 * 11.1 * 0.185 * 0.5, 8);
+    });
+
+    it('counts Smite on the enemies that end runs as flat damage they no longer need', () => {
+        // 2.05 smites per enemy reached at the run; a Ray (health ×1, speed 0.4)
+        // stays 2.5× as long in range → 5.13 smites × 0.05% = 0.26% of its health;
+        // a Commander (×20, speed 0.2) 10.3 smites, 0.026%.
+        const report = run();
+        const calib = buildEdpsCalibration(snapshot(report), report)!;
+        const after = (killers: OptimizerSnapshot['killers']) => ({ ...snapshot(report, s => { s.uwData.data.CL!.upOwn = true; }), killers });
+        const took = (killer: number, health: number) => 11.1 * 0.185 / killer * 0.0005 / health;
+        const ray = after({ Ray: 1 });
+        expect(smiteLog(ray, calib, edpsParts(ray))).toBeCloseTo(-Math.log(1 - took(0.4, 1)), 9);
+        const mixed = after({ Ray: 0.5, Commander: 0.5 });
+        expect(smiteLog(mixed, calib, edpsParts(mixed)))
+            .toBeCloseTo(-0.5 * Math.log(1 - took(0.4, 1)) - 0.5 * Math.log(1 - took(0.2, 20)), 9);
+        // Without CL+ there's nothing to smite.
+        const none = { ...snapshot(report), killers: { Ray: 1 } };
+        expect(smiteLog(none, calib, edpsParts(none))).toBe(0);
     });
 
     it('counts Flame Bot as flat damage, by its Damage stat and cooldown', () => {

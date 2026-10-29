@@ -73,7 +73,7 @@ import { attackRate, damageMeterFactor } from './guardian';
 import { deathRayRate, orbStats } from './orbs';
 import { armorKeep, crowdFactor, fastUltimateTime, runMix } from './battleConditions';
 import type { RunMix } from './battleConditions';
-import { HEALTH_MULT } from './enemyStats';
+import { HEALTH_MULT, SPEED_RATIO, healthLabCut } from './enemyStats';
 import type { EnemyType } from './enemyStats';
 import type { BattleReport } from './battleReport';
 import { extraDamage } from './battleReport';
@@ -362,11 +362,38 @@ export function reachShares(snap: OptimizerSnapshot, calib: EdpsCalibration, x: 
     return { now: 1 - Math.exp(-(run + more)), run: 1 - Math.exp(-run) };
 }
 
-// The waves score's two damage parts from one read of the account: flat
-// damage (edpsSurvivalScore) and the reach of orbs and Death Ray (reachLog).
-export function edpsWaves(snap: OptimizerSnapshot, calib: EdpsCalibration): { flat: number; reach: number } {
+// Smite on the enemies that end runs, as log(damage-equivalent factor)
+// against the run (0 = no change). Each proc takes its share of the wave's
+// basic enemy health (0.05% → 0.6%, up to 100 procs an enemy), the same
+// share at every wave, so it doesn't fall behind as health grows: flat
+// damage only has to take the rest of a run-ending enemy's health. On type
+// k, Smite takes h = procs × share ÷ (k's health multiple × its health lab),
+// worth 1 ÷ (1 − h) more flat damage against it. Elites, bosses and fleets
+// are immune to orbs, Death Ray, Shockwave and Black Hole, not to Chain
+// Lightning (TheTowerSDK), so Smite reaches them. Procs on a run-ending
+// enemy: the run's average per enemy CL reached × how much longer it stays
+// in range (basic speed ÷ its speed) — it lives through all of it while
+// most enemies die on the way; the code's assumption (2026-10-29: What If
+// had maxing Smite at +36% damage and +0.0 waves).
+export function smiteLog(snap: OptimizerSnapshot, calib: EdpsCalibration, x: EdpsParts): number {
+    if (x.smite <= 0 && calib.anchor.smite <= 0) return 0;
+    const avg = { now: smiteProcs(x, calib.anchor, calib.smiteProcs), then: calib.smiteProcs };
+    let log = 0;
+    for (const [type, share] of Object.entries(snap.killers ?? {}) as [EnemyType, number][]) {
+        const health = HEALTH_MULT[type] * healthLabCut(snap.labData, type);
+        const took = (procs: number, smite: number) =>
+            Math.min(0.95, Math.min(SMITE_CAP, procs / SPEED_RATIO[type]) * smite / Math.max(0.01, health));
+        log += share * Math.log((1 - took(avg.then, calib.anchor.smite)) / (1 - took(avg.now, x.smite)));
+    }
+    return log;
+}
+
+// The waves score's damage parts from one read of the account: flat damage
+// (edpsSurvivalScore), the reach of orbs and Death Ray (reachLog) and Smite
+// on the enemies that end runs (smiteLog).
+export function edpsWaves(snap: OptimizerSnapshot, calib: EdpsCalibration): { flat: number; reach: number; smite: number } {
     const x = edpsParts(snap);
-    return { flat: survivalFrom(snap, calib, x), reach: reachLog(snap, calib, x) };
+    return { flat: survivalFrom(snap, calib, x), reach: reachLog(snap, calib, x), smite: smiteLog(snap, calib, x) };
 }
 
 // Relative eDPS: 1 at the calibration anchor.
