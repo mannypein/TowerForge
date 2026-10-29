@@ -67,6 +67,12 @@ me?"). Started 2026-10-21 as a preview only the owner's account sees.
 
 ## Who sees it
 
+**Everyone, since v2.0.0 (2026-10-29)** — the owner's decision to open it to
+all players as a beta. The tab group no longer has `preview: 'ai'`, `/ai` is
+in the sitemap, and anyone can send a report (signed out, without a name).
+The `"ai"` list in `features.json` no longer matters; `"ai-admin"` still
+opens the owner's AI reports panel. Until then it worked like this:
+
 `TowerForge.Server/Data/PreviewFeatures.cs` reads `features.json` in the data
 directory (`/var/lib/towerforge/features.json` on the server — never in the
 repo, the usernames are private):

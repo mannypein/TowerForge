@@ -37,10 +37,10 @@ describe('tab addresses', () => {
         }
     });
 
-    // Search engines get every tab but the personal ones and previews.
-    it('are all in the sitemap, except Share, Account and preview tabs', () => {
+    // Search engines get every tab but the personal ones.
+    it('are all in the sitemap, except Share and Account', () => {
         const listed = [...sitemap.matchAll(/<loc>https:\/\/towerforge\.net(\/[^<]*)<\/loc>/g)].map(m => m[1]);
-        const wanted = entries.filter(([tab]) => !['share', 'account', 'ai'].includes(tab)).map(([, p]) => p);
+        const wanted = entries.filter(([tab]) => !['share', 'account'].includes(tab)).map(([, p]) => p);
         expect(listed).toEqual(wanted);
     });
 });

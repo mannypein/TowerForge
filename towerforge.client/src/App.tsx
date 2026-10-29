@@ -118,7 +118,8 @@ const TAB_GROUPS: TabGroup[] = [
             { id: 'tourneyhistory', label: 'History', title: 'Tournament History' },
         ],
     },
-    { id: 'ai', label: 'Ask AI', tabs: [{ id: 'ai', label: 'Ask AI' }], preview: 'ai' },
+    // Public since v2.0.0 (a preview for the owner's account before).
+    { id: 'ai', label: 'Ask AI', tabs: [{ id: 'ai', label: 'Ask AI' }] },
     { id: 'creators', label: 'Creator Codes', short: 'Creators', tabs: [{ id: 'creators', label: 'Creator Codes' }] },
 ];
 

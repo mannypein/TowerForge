@@ -36,7 +36,7 @@ export const TAB_PATHS: Record<TabName, string> = {
     runcoins: '/coins-per-run',
     runlength: '/run-length',
     creators: '/creators',
-    ai: '/ai',              // preview: only accounts given "ai" see it (App.tsx)
+    ai: '/ai',
 };
 
 // Other spellings that open a tab: the tab ids (the analytics' page names

@@ -1,12 +1,12 @@
 // ============================================================
-//  TowerForge Companion — Ask AI Tab (preview)
+//  TowerForge Companion — Ask AI Tab (beta)
 //  Ask questions about your own account in plain words. The answers come
 //  from a small open model that runs in this browser on the graphics card
-//  (ai/aiAssistant.ts): downloaded once, nothing sent anywhere. Every
+//  (ai/aiAssistant.ts): downloaded once, run on the player's device. Every
 //  number it gives is worked out by the site (ai/aiTools.ts) — the model
 //  picks what to look at and explains it.
-//  Only accounts given the "ai" preview see this tab (server's
-//  features.json); in development it's always shown.
+//  Open to everyone since v2.0.0. Nothing leaves the device but anonymous
+//  counts and the answers a player chooses to send (👎 → Send).
 // ============================================================
 
 import { Fragment, useEffect, useRef, useState } from 'react';
@@ -155,10 +155,10 @@ function Rate({ id }: { id: string }) {
                         only if you press Send.
                     </p>
                     <textarea rows={2} maxLength={2000} placeholder="What's wrong with it? (optional)" value={note} onChange={e => setNote(e.target.value)} />
-                    {!signedIn && <div className="ai-fine">Sign in (Player → Account) to send it.</div>}
+                    {!signedIn && <div className="ai-fine">You&apos;re not signed in, so it&apos;s sent without a name.</div>}
                     {error && <div className="grd-warn">{error}</div>}
                     <div className="ai-dbg-actions">
-                        <button type="button" className="btn btn-accent" disabled={!signedIn || state === 'sending'} onClick={() => void send()}>
+                        <button type="button" className="btn btn-accent" disabled={state === 'sending'} onClick={() => void send()}>
                             {state === 'sending' ? 'Sending…' : 'Send'}
                         </button>
                         <button type="button" className="btn btn-dim" onClick={() => setAsking(false)}>No thanks</button>
@@ -232,7 +232,7 @@ export default function AiTab() {
     return (
         <div className="ai-tab">
             <div className="relics-note">
-                <strong>Ask AI (preview)</strong> — ask about your account in your own words. It runs on this
+                <strong>Ask AI (beta)</strong> — ask about your account in your own words. It runs on this
                 computer: the model downloads once into your browser, then works offline. Your questions and
                 account stay on this device unless you choose to send an answer to TowerForge (👎 → Send);
                 TowerForge only counts, without your words, what kind of question was asked and how long the

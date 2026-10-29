@@ -10,8 +10,9 @@ namespace TowerForge.Server.Controllers;
 
 // ============================================================
 //  Ask AI reports.
-//  POST: a signed-in account that can see Ask AI (the "ai" preview)
-//  sends an answer it chose to report. Everything else — listing,
+//  POST: anyone using Ask AI (public since v2.0.0) sends an answer
+//  they chose to report — signed in, with their username; signed out,
+//  without one. Rate limited per IP. Everything else — listing,
 //  marking fixed, deleting — is for accounts with the "ai-admin"
 //  preview (the owner; features.json on the server).
 // ============================================================
@@ -37,11 +38,11 @@ public class AiReportsController : ControllerBase
     public record StatusRequest(string Status);
 
     [HttpPost]
+    [AllowAnonymous]
     [RequestSizeLimit(MaxReportBytes)]
     [EnableRateLimiting("ai-report")]
     public async Task<IActionResult> Create([FromBody] JsonElement body)
     {
-        if (!Has("ai")) return Forbid();
         if (body.ValueKind != JsonValueKind.Object)
             return BadRequest(new { error = "A report must be a JSON object." });
         var data = JsonNode.Parse(body.GetRawText())!.AsObject();
