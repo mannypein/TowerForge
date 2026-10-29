@@ -68,7 +68,7 @@ describe('the account summary', () => {
     it('has the labs, the Vault and the Guardian chips', () => {
         const t = accountSummary(load('late'));
         expect(t).toMatch(/Labs: \d+ researched, \d+ maxed; Damage Lab 47\/100, /);
-        expect(t).toMatch(/Vault: 5 upgrades bought \(2 maxed\), [\d,]+ keys spent\./);
+        expect(t).toMatch(/Vault: 5 upgrades bought \(2 maxed\), [\d,]+ keys spent: .*Ad Gem Stack 2\/4/);
         expect(t).toMatch(/Guardian chips equipped: Attack \(.*\); Bounty \(.*\); Fetch \(/);
     });
 });

@@ -250,6 +250,20 @@ function checked(r: Route, q: string): Route {
     // Module shards alone, or boosting labs: their own pages' plans.
     if (out.tool === 'upgrades' && out.currency === 'shards') out.tool = 'shard_plan';
     if (out.tool !== 'lab_boosts' && /\bboost/i.test(q) && /\blabs?\b/i.test(q)) out.tool = 'lab_boosts';
+    // …and only those: "what should I research next" is the labs' picks,
+    // "card slots with my gems" the gem picks (the bench sent them there).
+    if (out.tool === 'lab_boosts' && !/boost|speed|cells?|how long|finish|faster|time|hours?|days?/i.test(q)) {
+        out.tool = 'upgrades';
+        out.currency = 'research';
+    }
+    if (out.tool === 'shard_plan' && !/\bshards?\b/i.test(q)) out.tool = 'upgrades';
+    // Where a named currency should go ("where should my medals go"): its picks.
+    const named = (['stones', 'coins', 'medals', 'gems', 'bits'] as const).find(c => new RegExp(`\\b${c.slice(0, -1)}s?\\b`, 'i').test(q));
+    if (named && /\b(spend|go|use|buy|upgrade|should|best|worth)\b/i.test(q) && ['none', 'guide', 'shard_plan', 'lab_boosts', 'upgrades'].includes(out.tool)
+        && !/\bshards?\b/i.test(q) && (out.tool !== 'upgrades' || out.currency === 'any' || out.currency === 'shards')) {
+        out.tool = 'upgrades';
+        out.currency = named;
+    }
     // "What is X?" about the game (not their account) goes to the notes.
     if (out.tool === 'none' && /^\s*(what|how|why)\s+(is|are|does|do)\b/i.test(q) && !/\b(i|my|me|am|i'm)\b/i.test(q)) {
         out.tool = 'guide';

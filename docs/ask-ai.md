@@ -26,16 +26,22 @@ me?"). Started 2026-10-21 as a preview only the owner's account sees.
   1. *Route*: the model answers in JSON (held to a schema by WebLLM's
      grammar) which data to look at — `upgrades` (a currency, a goal, which
      runs to score on and a budget),
-     `what_if` (upgrades in the player's words and a level), `levels`,
-     `runs` (campaign, tournament or any), `tier` (a tier number),
-     `tournament`, `guide` (keywords) or `none`. Qwen3 starts every reply
+     `what_if` (upgrades in the player's words and a level; campaign or
+     tournament), `levels`, `runs` (campaign, tournament or any), `tier` (a
+     tier number), `tournament`, `lab_boosts`, `shard_plan` (a module
+     type), `guide` (keywords) or `none`. What the question itself settles is
+     checked in code (`checked`): the tier, "… instead?", "what is X", "my
+     runs", module shards alone, lab boosts. Qwen3 starts every reply
      with an empty `<think></think>`, which is stripped before parsing; when
      the JSON still can't be read, keywords pick (and the page says so).
   2. *Answer*: the site works the data out with the same engine the pages
      use (`src/ai/aiTools.ts`): the Optimizer's paths (with what the player
-     can buy now and the picks cheapest first), What If (campaign mode),
-     current levels, the saved runs with damage by source (campaign against
-     tournaments), another tier, the Tournament page's estimate, and a BM25
+     can buy now and the picks cheapest first), What If (campaign, or the
+     What If page's tournament mode — one shared setup,
+     `tournamentModel.tournamentWhatIf`), current levels, the saved runs
+     with damage by source (campaign against tournaments), another tier, the
+     Tournament page's estimate, the Labs page's Lab boosts (and how long a
+     named lab takes at each speed), Modules → Shard plan, and a BM25
      search over the game notes in `docs/` plus the battle conditions' texts
      (`src/ai/aiKnowledge.ts`). The model answers from that and an account
      summary, written out as it goes. "Looked at" under each answer shows
@@ -191,6 +197,29 @@ Qwen3 4B on the RX 7800 XT: 78 asks in about 20 minutes, 9–29 s an answer.
 | 3 — costs said as costs, "enough for it", tier estimate first | 85% | 90% | 93% | 4 |
 | 4 — route checked in code (tier, "instead", "what is") | 86% | 96% | 90% | 5 |
 | 4b — "my runs", tidy-up, tier headline alone (the 18 asks those touch) | 100% | 100% | 100% | 0 |
+| 5 — lab boosts, shard plan, tournament What If (90 asks; 85 asked) | 86% | 89% | 94% | 2 |
+| 5b — the new tools kept to their questions in code (22 asks) | 95% | 100% | 100% | 0 |
+
+Run 5 (2026-10-29): the two new tools pulled old questions to them on every
+account — "what should I research next in the labs" → lab_boosts, "card
+slots with my gems" → shard_plan, "where should my medals go" → none. Fixed
+in `checked`: lab_boosts only for boost / speed / cells / time questions,
+shard_plan only when shards are named, a named currency with spending words
+gets its picks.
+
+**Thinking ("Think before answering") on the 4B**, the 16 weak-spot asks
+(tournament reasons, mechanics, leagues, stones with nothing to buy,
+survival, lab boosts) on the mid and late accounts, read side by side: no
+better. Mechanics answers about the same (level skip right in both); it
+still invents tournament reasons ("enemy composition differences" for CL
+11% vs 14%); it adds its own mistakes ("upgrade Chain Lightning (next UW)"
+on an account that owns it, the boosts it can't afford read as the plan);
+about 70 s an answer against 25 s. Thinking stays off by default.
+
+**Qwen3 8B** couldn't be benched here: the app's browser pane caps a site's
+storage at about 5.9 GB in all, and after removing the 4B download it kept
+counting its 2.13 GB (Cache Storage emptied and deleted, reloads, a second
+address — the quota pool is shared), leaving 3.8 GB for a 4.6 GB model.
 
 Runs 3 and 4 traded fixes for regressions: each new example moved other
 questions ("what tier am I on" → none pulled "move up a league" and "what is
@@ -270,9 +299,8 @@ itself (Hugging Face) is already compressed weights.
 
 ## Not done yet
 
-- Tournament What If (the tool uses campaign mode), Guardian and module
-  questions beyond the summary, and the account summary's labs (only the
-  ones being researched).
+- Guardian chip and module substat *advice* (the summary lists them; no
+  tool ranks them yet), relics and the Vault beyond the summary.
 - `TournamentRecords` (every tournament's wave and rank, 29.1.3) as a tool
   once the fields are confirmed.
 - Learning over time: today it knows what the docs and the engine know;

@@ -34,6 +34,18 @@ describe('the route, checked against the question', () => {
         expect(readRoute('not json', 'how fast can I boost my labs').tool).toBe('lab_boosts');
     });
 
+    it('keeps lab boosts and the shard plan to their questions, and a named currency to its picks', () => {
+        expect(readRoute(json({ tool: 'lab_boosts' }), 'What should I research next in the labs?'))
+            .toMatchObject({ tool: 'upgrades', currency: 'research' });
+        expect(readRoute(json({ tool: 'lab_boosts' }), 'How long until my damage lab is maxed?').tool).toBe('lab_boosts');
+        expect(readRoute(json({ tool: 'shard_plan' }), 'Should I buy card slots with my gems?'))
+            .toMatchObject({ tool: 'upgrades', currency: 'gems' });
+        expect(readRoute(json({ tool: 'none' }), 'where should my medals go')).toMatchObject({ tool: 'upgrades', currency: 'medals' });
+        // A currency picked already, or a goal question, stays.
+        expect(readRoute(json({ tool: 'upgrades', currency: 'coins', goal: 'coins' }), 'how do I get more coins').currency).toBe('coins');
+        expect(readRoute(json({ tool: 'what_if', changes: [{ upgrade: 'CL', level: 'max' }] }), 'is maxing CL worth my stones').tool).toBe('what_if');
+    });
+
     it('falls back to keywords when the JSON can\'t be read', () => {
         expect(readRoute('not json', 'How do I get more coins?')).toMatchObject({ tool: 'upgrades', goal: 'coins', guessed: true });
     });

@@ -155,7 +155,8 @@ export function accountSummary(s: AiAccount, now = Date.now()): string {
     const bought = VAULT_SECTIONS.flatMap(sec => sec.upgrades).filter(u => vaultLevel(vault, u) > 0);
     if (bought.length) {
         const maxedV = bought.filter(u => vaultLevel(vault, u) >= u.costs.length).length;
-        lines.push(`Vault: ${bought.length} upgrades bought (${maxedV} maxed), ${vaultKeys(vault).spent.toLocaleString()} keys spent.`);
+        lines.push(`Vault: ${bought.length} upgrades bought (${maxedV} maxed), ${vaultKeys(vault).spent.toLocaleString()} keys spent: `
+            + `${bought.map(u => `${u.name} ${vaultLevel(vault, u) >= u.costs.length ? 'max' : `${vaultLevel(vault, u)}/${u.costs.length}`}`).join(', ')}.`);
     }
     const chips = activeChips(s.guardianData, s.activePreset);
     if (chips.length) {
