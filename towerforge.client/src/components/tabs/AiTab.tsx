@@ -6,7 +6,8 @@
 //  number it gives is worked out by the site (ai/aiTools.ts) — the model
 //  picks what to look at and explains it.
 //  Open to everyone since v2.0.0. Nothing leaves the device but anonymous
-//  counts and the answers a player chooses to send (👎 → Send).
+//  counts and the answers a player chooses to send (👎 → Send) — the
+//  "How Ask AI works" panel (AiAbout.tsx) says so in plain words.
 // ============================================================
 
 import { Fragment, useEffect, useRef, useState } from 'react';
@@ -22,6 +23,7 @@ import { useAccountStore } from '../../store/useAccountStore';
 import { loadLog, reportOf, updateLog } from '../../ai/aiLog';
 import { sendAiReport } from '../../ai/aiReports';
 import { AiReportsPanel, DebugLog } from './AiDebug';
+import { AiAbout } from './AiAbout';
 
 const SUGGESTIONS = [
     'What should I spend my stones on next?',
@@ -169,6 +171,16 @@ function Rate({ id }: { id: string }) {
     );
 }
 
+// The "How Ask AI works" panel: the intro's link opens it, and so does a
+// link to towerforge.net/ai#how-it-works (the patch notes, Discord).
+const ABOUT_ID = 'how-it-works';
+
+function openAbout(el: HTMLDetailsElement | null) {
+    if (!el) return;
+    el.open = true;
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 function Message({ m, question, model }: { m: AiMessage; question: string; model: string | null }) {
     const [copied, setCopied] = useState(false);
     if (m.role === 'user') return <div className="ai-msg ai-user">{m.text}</div>;
@@ -211,6 +223,7 @@ export default function AiTab() {
     const isAdmin = useAccountStore(a => a.features.includes('ai-admin'));
     const [draft, setDraft] = useState('');
     const endRef = useRef<HTMLDivElement>(null);
+    const aboutRef = useRef<HTMLDetailsElement>(null);
     const gpu = hasWebGpu();
     const model = modelByKey(s.modelKey);
     const ready = s.status === 'ready';
@@ -218,6 +231,7 @@ export default function AiTab() {
     const downloaded = !!s.cached[model.key];
     const running = ready && (s.loadedId === model.f16 || s.loadedId === model.f32);
 
+    useEffect(() => { if (window.location.hash === `#${ABOUT_ID}`) openAbout(aboutRef.current); }, []);
     const { checkCache } = s;
     useEffect(() => { if (gpu) void checkCache(); }, [gpu, checkCache]);
     const last = s.messages[s.messages.length - 1];
@@ -237,8 +251,13 @@ export default function AiTab() {
                 account stay on this device unless you choose to send an answer to TowerForge (👎 → Send);
                 TowerForge only counts, without your words, what kind of question was asked and how long the
                 answer took. It reads the same numbers as the Optimizer, What If and Tournament pages, but
-                it&apos;s a small model and can still get things wrong — check anything important on those pages.
+                it&apos;s a small model and can still get things wrong — check anything important on those pages.{' '}
+                <a href={`#${ABOUT_ID}`} onClick={e => { e.preventDefault(); openAbout(aboutRef.current); }}>
+                    How it works and what it collects ↓
+                </a>
             </div>
+
+            <AiAbout id={ABOUT_ID} panelRef={aboutRef} />
 
             {!gpu && (
                 <div className="grd-warn">

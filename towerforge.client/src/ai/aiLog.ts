@@ -84,6 +84,8 @@ export function flagsOf(e: AiLogEntry): LogFlag[] {
 }
 
 // ── A report (what 👎 → Send sends; what the owner reads) ───────
+// Everything a report sends. The Ask AI page lists it for players
+// (components/tabs/AiAbout.tsx, "Sent only if you press Send"): keep the two in step.
 export interface AiReport {
     question: string;
     answer: string;

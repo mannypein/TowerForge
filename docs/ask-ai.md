@@ -65,6 +65,16 @@ me?"). Started 2026-10-21 as a preview only the owner's account sees.
   each visit. Remove download also deletes the file lists WebLLM leaves.
   The browser may keep counting the space for a while after.
 
+## What players are told
+
+The **How Ask AI works** panel at the top of the page (`components/tabs/AiAbout.tsx`,
+opened by the intro's link or `towerforge.net/ai#how-it-works`) explains it
+for players who aren't technical: what the model is, what it needs, the four
+steps of an answer, what it's bad at, and everything kept on the device or
+sent: the opt-in report's fields (`AiReport` in `ai/aiLog.ts`) and the
+anonymous counts (`ai-answer`, docs/analytics.md). When what's sent changes,
+change the panel too.
+
 ## Who sees it
 
 **Everyone, since v2.0.0 (2026-10-29)** — the owner's decision to open it to

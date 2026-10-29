@@ -6173,6 +6173,279 @@ button.grdg-chip {
     color: var(--text-dim);
 }
 
+/* How Ask AI works (AiAbout.tsx): plain words for every player, so a
+   little larger than the page's notes. Green = stays on the device,
+   gold = sent. */
+.ai-tab .relics-note a {
+    color: var(--accent);
+    white-space: nowrap;
+}
+
+.ai-about {
+    scroll-margin-top: 12px;
+}
+
+.ai-about-body {
+    max-width: 920px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text);
+    overflow-wrap: anywhere;
+}
+
+    .ai-about-body h4 {
+        margin: 18px 0 6px;
+        font-size: 14px;
+        color: var(--text-bright);
+    }
+
+    .ai-about-body p {
+        margin: 0 0 8px;
+    }
+
+    .ai-about-body ul {
+        margin: 0 0 8px;
+        padding-left: 20px;
+    }
+
+    .ai-about-body li + li {
+        margin-top: 4px;
+    }
+
+    .ai-about-body strong {
+        color: var(--text-bright);
+    }
+
+    .ai-about-body a {
+        color: var(--accent);
+    }
+
+.ai-about-body .ai-about-short {
+    padding: 10px 12px 10px 30px;
+    background: var(--accent-glow);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+}
+
+/* The four steps of an answer, in order: four across, two on a tablet, one on a phone. */
+.ai-about-steps {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+    margin: 8px 0 10px;
+    padding: 0;
+    list-style: none;
+    counter-reset: ai-step;
+}
+
+    .ai-about-steps li {
+        counter-increment: ai-step;
+        min-width: 0;
+        padding: 10px;
+        font-size: 12px;
+        color: var(--text-dim);
+        background: var(--bg3);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+    }
+
+        .ai-about-steps li + li {
+            margin-top: 0;
+        }
+
+        .ai-about-steps li::before {
+            content: "Step " counter(ai-step);
+            display: block;
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--accent);
+        }
+
+    .ai-about-steps strong {
+        display: block;
+        margin-bottom: 2px;
+        font-size: 13px;
+    }
+
+    .ai-about-steps span {
+        display: block;
+        margin-top: 6px;
+        font-size: 11px;
+        font-family: var(--font-mono);
+    }
+
+@media (max-width: 760px) {
+    .ai-about-steps {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 420px) {
+    .ai-about-steps {
+        grid-template-columns: 1fr;
+    }
+}
+
+.ai-about-example {
+    margin: 0 0 10px;
+    padding: 8px 10px;
+    font-size: 12px;
+    color: var(--text-dim);
+    border-left: 2px solid var(--accent);
+    background: var(--bg3);
+    border-radius: 0 4px 4px 0;
+}
+
+.ai-about-box {
+    margin: 10px 0;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-left-width: 3px;
+    border-radius: var(--radius-md);
+    background: var(--bg3);
+}
+
+    .ai-about-box.stays {
+        border-left-color: var(--good);
+    }
+
+    .ai-about-box.sent {
+        border-left-color: var(--gold);
+    }
+
+    .ai-about-box > :last-child {
+        margin-bottom: 0;
+    }
+
+.ai-about-tag {
+    display: inline-block;
+    margin-bottom: 6px;
+    padding: 1px 8px;
+    font-size: 12px;
+    font-weight: 700;
+    border-radius: 999px;
+}
+
+.stays > .ai-about-tag {
+    color: var(--good);
+    background: color-mix(in srgb, var(--good) 15%, transparent);
+}
+
+.sent > .ai-about-tag {
+    color: var(--gold);
+    background: var(--gold-glow);
+}
+
+.ai-about-body .ai-about-never {
+    list-style: none;
+    padding-left: 0;
+}
+
+    .ai-about-never li::before {
+        content: "✕";
+        margin-right: 8px;
+        font-weight: 700;
+        color: var(--good);
+    }
+
+/* Where each thing is kept: one row each, stacked so it fits a phone. */
+.ai-about-kept {
+    display: grid;
+    gap: 6px;
+    margin: 6px 0 10px;
+}
+
+.ai-about-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 2px 10px;
+    padding: 8px 10px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+}
+
+.ai-about-what {
+    color: var(--text-bright);
+    font-weight: 700;
+}
+
+.ai-about-where {
+    font-size: 12px;
+    font-weight: 700;
+    text-align: right;
+}
+
+    .ai-about-where.stays {
+        color: var(--good);
+    }
+
+    .ai-about-where.sent {
+        color: var(--gold);
+    }
+
+.ai-about-who {
+    grid-column: 1 / -1;
+    font-size: 12px;
+    color: var(--text-dim);
+}
+
+.ai-about-faq details {
+    padding: 8px 0;
+    border-top: 1px solid var(--border);
+}
+
+    .ai-about-faq details:last-child {
+        border-bottom: 1px solid var(--border);
+    }
+
+.ai-about-faq summary {
+    cursor: pointer;
+    font-weight: 700;
+    color: var(--text-bright);
+}
+
+.ai-about-faq details p {
+    margin: 6px 0 0;
+    color: var(--text-dim);
+}
+
+.ai-about-words {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 6px 14px;
+    margin: 6px 0 0;
+}
+
+    .ai-about-words dt {
+        font-weight: 700;
+        color: var(--text-bright);
+    }
+
+    .ai-about-words dd {
+        margin: 0;
+        color: var(--text-dim);
+    }
+
+@media (max-width: 480px) {
+    .ai-about-words {
+        grid-template-columns: 1fr;
+        gap: 2px;
+    }
+
+        .ai-about-words dd {
+            margin-bottom: 6px;
+        }
+
+    .ai-about-row {
+        grid-template-columns: 1fr;
+    }
+
+    .ai-about-where {
+        text-align: left;
+    }
+}
+
 /* ── Tournaments → History (tnh-) ─────────────────────────── */
 /* League colors: fixed per league, validated as a set on --bg2. */
 .tnh {
