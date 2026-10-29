@@ -25,7 +25,10 @@ export const AI_MODELS: AiModel[] = [
     {
         key: 'qwen3-8b', label: 'Qwen3 8B',
         f16: 'Qwen3-8B-q4f16_1-MLC', f32: 'Qwen3-8B-q4f32_1-MLC',
-        download: '4.6 GB', note: 'Smarter but slower: needs a graphics card with 8 GB or more.',
+        // Test bench 2026-10-29 (docs/ask-ai.md): 92% against the 4B's 86%,
+        // and it quotes plans exactly where the 4B garbles them; on an RX
+        // 7800 XT 30 s an answer against 25 s.
+        download: '4.6 GB', note: 'More accurate answers, about as fast on a strong card: needs a graphics card with 8 GB or more.',
     },
     {
         key: 'qwen3-1.7b', label: 'Qwen3 1.7B',

@@ -264,6 +264,11 @@ function checked(r: Route, q: string): Route {
         out.tool = 'upgrades';
         out.currency = named;
     }
+    // "What should I research next in the labs": lab research (the 8B kept
+    // the currency "any").
+    if (out.tool === 'upgrades' && out.currency === 'any' && !named && /\bresearch\b|\blabs?\b/i.test(q) && out.goal === 'default') {
+        out.currency = 'research';
+    }
     // "What is X?" about the game (not their account) goes to the notes.
     if (out.tool === 'none' && /^\s*(what|how|why)\s+(is|are|does|do)\b/i.test(q) && !/\b(i|my|me|am|i'm)\b/i.test(q)) {
         out.tool = 'guide';

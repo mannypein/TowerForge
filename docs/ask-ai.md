@@ -216,10 +216,26 @@ still invents tournament reasons ("enemy composition differences" for CL
 on an account that owns it, the boosts it can't afford read as the plan);
 about 70 s an answer against 25 s. Thinking stays off by default.
 
-**Qwen3 8B** couldn't be benched here: the app's browser pane caps a site's
-storage at about 5.9 GB in all, and after removing the 4B download it kept
-counting its 2.13 GB (Cache Storage emptied and deleted, reloads, a second
-address — the quota pool is shared), leaving 3.8 GB for a 4.6 GB model.
+**Qwen3 8B** (2026-10-29): the app's browser pane caps a site's storage at
+about 5.9 GB in all and kept counting the removed 4B's 2.13 GB, so it ran in
+the owner's Chrome (Claude in Chrome, 10.7 GB quota; the download and the
+made-up accounts were removed afterwards). All 90 asks with every guard:
+
+| Model | Pass | Route | Headline | Unverified | Time |
+|---|---|---|---|---|---|
+| Qwen3 8B | 92% | 97% | 90% | 2 answers | 30 s an answer, 45 min |
+| Qwen3 4B (run 5, before the last guards) | 86% | 89% | 94% | 2 | 21–25 s |
+
+Read side by side, the 8B quotes the data where the 4B garbles it: the lab
+boosts exactly ("×5, ×5, ×5, ×5, ×4" — the 4B said "×5 for all labs"),
+"TowerForge can't predict if you'll move up" for leagues, the shard plan and
+tournament What If word for word. Both still invent a reason for Chain
+Lightning's smaller tournament share. Its misses: "research next in the
+labs" kept currency "any" (now set from the question in code, for both),
+and the eHP What If answers leave out the damage gain. On the RX 7800 XT the
+8B is about as fast (download 4.6 GB, about 82 s from nothing to the first
+answer). The 4B stays the default — half the download, runs on 4 GB cards —
+and the model picker now says the 8B is the more accurate one.
 
 Runs 3 and 4 traded fixes for regressions: each new example moved other
 questions ("what tier am I on" → none pulled "move up a league" and "what is

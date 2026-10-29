@@ -41,6 +41,7 @@ describe('the route, checked against the question', () => {
         expect(readRoute(json({ tool: 'shard_plan' }), 'Should I buy card slots with my gems?'))
             .toMatchObject({ tool: 'upgrades', currency: 'gems' });
         expect(readRoute(json({ tool: 'none' }), 'where should my medals go')).toMatchObject({ tool: 'upgrades', currency: 'medals' });
+        expect(readRoute(json({ tool: 'upgrades', currency: 'any' }), 'What should I research next in the labs?').currency).toBe('research');
         // A currency picked already, or a goal question, stays.
         expect(readRoute(json({ tool: 'upgrades', currency: 'coins', goal: 'coins' }), 'how do I get more coins').currency).toBe('coins');
         expect(readRoute(json({ tool: 'what_if', changes: [{ upgrade: 'CL', level: 'max' }] }), 'is maxing CL worth my stones').tool).toBe('what_if');
