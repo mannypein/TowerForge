@@ -216,7 +216,30 @@ function guessRoute(q: string): Route {
 const currencyIn = (l: string): AiCurrency => (['stones', 'coins', 'research', 'shards', 'medals', 'gems', 'bits'] as const)
     .find(c => l.includes(c.replace(/s$/, ''))) ?? 'any';
 
-export type RouteChoice = Route & { guessed?: boolean };
+export type RouteChoice = Route & { guessed?: boolean; quick?: boolean };
+
+// Questions whose wording settles the data, routed without the model (its
+// step 1 takes a few seconds before the answer starts). Strict: anything
+// that could be a What If ("max", "worth", "would", "if") or names a tier
+// number goes to the model; so does everything not matched here.
+export function quickRoute(q: string): RouteChoice | null {
+    const l = q.toLowerCase().trim();
+    if (/\b(if|max|maxing|maxed|worth|would|vs|versus|instead|compare|better)\b|\bt(?:ier)?\s?\d/.test(l)) return null;
+    const base: RouteChoice = { tool: 'none', currency: 'any', goal: 'default', changes: [], search: '', runs: /tourn/.test(l) ? 'tournament' : 'any', tier: 0, budget: budgetIn(q), quick: true };
+    if (/^(hi|hey|hello|thanks|thank you|ty)\b[\s!.?]*$/.test(l)) return { ...base, runs: 'any' };
+    if (/^what tier am i (on|at)\b/.test(l)) return { ...base, runs: 'any' };
+    const cur = (['stones', 'medals', 'gems', 'bits'] as const).find(c => new RegExp(`\\b${c.slice(0, -1)}s?\\b`).test(l));
+    if (cur && /\b(spend|use|buy|go|upgrade|put)\b/.test(l) && !/\bshards?\b/.test(l)) return { ...base, tool: 'upgrades', currency: cur, goal: base.runs === 'tournament' ? 'waves' : 'default' };
+    if (/\b(cannon|armor|generator|core|module) shards?\b/.test(l)) return { ...base, tool: 'shard_plan', search: (/\b(cannon|armor|generator|core)\b/.exec(l) ?? [''])[0], runs: 'any' };
+    if (/\bboost/.test(l) && /\blabs?\b/.test(l)) return { ...base, tool: 'lab_boosts', runs: 'any' };
+    if (/\b(which|best|what) tier\b.*\bfarm\b/.test(l)) return { ...base, tool: 'farm_tier', runs: 'any' };
+    if (/\bguardian\b.*\bchips?\b|\bchips?\b.*\bguardian\b/.test(l) && /\b(should|best|equip|use)\b/.test(l)) return { ...base, tool: 'guardian', runs: 'any' };
+    if (/\bwhat keeps killing me\b|\bwhat (killed|kills) me\b|\b(most|more) damage in my runs\b/.test(l)) return { ...base, tool: 'runs' };
+    const level = /^what(?:'s| is) (?:the )?level (?:of )?(?:is )?my (.+?)\??$|^what level is my (.+?)\??$|^what(?:'s| is) my (.+?) level\??$/.exec(l);
+    if (level) return { ...base, tool: 'levels', search: level[1] ?? level[2] ?? level[3], runs: 'any' };
+    if (/^(how (does|do)|what (is|are|does)) /.test(l) && !/\b(i|my|me|am|i'm)\b/.test(l)) return { ...base, tool: 'guide', search: q, runs: 'any' };
+    return null;
+}
 
 // Qwen3 starts every reply with its (here empty) <think></think>.
 export function readRoute(raw: string, q: string): RouteChoice {
@@ -299,6 +322,7 @@ const routeText = (r: RouteChoice) => [
     r.tool === 'what_if' && r.runs === 'tournament' && 'tournament',
     (r.tool === 'lab_boosts' || r.tool === 'shard_plan') && r.search && `"${r.search}"`,
     r.guessed && '(from keywords: the model’s choice couldn’t be read)',
+    r.quick && '(from the question’s wording)',
 ].filter(Boolean).join(' · ');
 
 // ── Step 2: the data ──────────────────────────────────────────
@@ -475,13 +499,15 @@ export const useAiStore = create<AiStore>((set, get) => {
             try {
                 // Follow-ups ("and CF+ instead?") read with the question before.
                 const asked = earlier.length ? `Earlier question, for context: ${earlier[earlier.length - 1]}\nQuestion: ${q}` : q;
-                const routed = await engine.chat.completions.create({
+                // A question its wording settles skips the model's step 1 (a
+                // follow-up never does: it needs the question before).
+                const quick = earlier.length ? null : quickRoute(q);
+                const route = quick ?? readRoute((await engine.chat.completions.create({
                     messages: [{ role: 'system', content: ROUTE_PROMPT }, { role: 'user', content: asked }],
                     temperature: 0, max_tokens: 200,
                     response_format: { type: 'json_object', schema: ROUTE_SCHEMA },
                     extra_body: { enable_thinking: false },
-                });
-                const route = readRoute(routed.choices[0]?.message?.content ?? '', q);
+                })).choices[0]?.message?.content ?? '', q);
 
                 patchLast({ status: 'Reading your account…' });
                 await new Promise(r => setTimeout(r, 30));   // let the page show it

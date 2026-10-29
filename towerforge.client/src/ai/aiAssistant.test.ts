@@ -2,7 +2,9 @@
 // test bench's misses), and the answer's tidy-up.
 
 import { describe, expect, it } from 'vitest';
-import { readRoute, tidy } from './aiAssistant';
+import { quickRoute, readRoute, tidy } from './aiAssistant';
+import { BENCH_QUESTIONS } from './bench/benchQuestions';
+import { gradeRoute } from './bench/benchGrade';
 
 const json = (r: Record<string, unknown>) => JSON.stringify({
     tool: 'none', currency: 'any', goal: 'default', changes: [], search: '', runs: 'any', tier: 0, budget: 0, ...r,
@@ -55,6 +57,22 @@ describe('the route, checked against the question', () => {
 
     it('falls back to keywords when the JSON can\'t be read', () => {
         expect(readRoute('not json', 'How do I get more coins?')).toMatchObject({ tool: 'upgrades', goal: 'coins', guessed: true });
+    });
+});
+
+describe('questions routed from their wording (no model)', () => {
+    it('routes every bench question it takes the way the bench wants, and leaves What Ifs to the model', () => {
+        let taken = 0;
+        for (const qn of BENCH_QUESTIONS) {
+            const r = quickRoute(qn.q);
+            if (!r) continue;
+            taken++;
+            for (const acc of qn.accounts ?? ['early', 'mid', 'late'] as const) expect([qn.id, gradeRoute(qn, acc, r)]).toEqual([qn.id, []]);
+        }
+        expect(taken).toBeGreaterThanOrEqual(15);
+        expect(quickRoute('how many waves would maxing CL get me')).toBeNull();
+        expect(quickRoute('is ps worth it')).toBeNull();
+        expect(quickRoute('how far would I get on T19')).toBeNull();
     });
 });
 
