@@ -30,6 +30,7 @@ import { defaultBattleIndex } from '../engine/gameExport';
 import { formatGameNumber } from '../engine/gameNumbers';
 import { formatLabTime } from '../engine/upgradeCosts';
 import { activeLoadout } from '../engine/statHelpers';
+import { lockedNotes } from '../engine/unlocks';
 import { labFinishAt } from '../engine/labTimer';
 import { UWS, UW_UNLOCK_COSTS, presetLabel } from '../constants/gameData';
 import { GAME_LEAGUES } from '../constants/gameExportMaps';
@@ -194,23 +195,16 @@ function holdLine(s: AiAccount, cur: OptCurrency, picks: OptCandidate[]): string
         + (next && next.costKnown !== false ? ` The next one, ${label(next)}, needs ${amountText(cur, next.cost - left)} more.` : '');
 }
 
-// Why a currency has nothing to buy: what the Optimizer doesn't score.
+// A price against what's held, said outright (a small model reads "costs
+// 50, you hold 160" as short).
 const enoughText = (cost: number, have: number, unit: string) =>
     `you hold ${have.toLocaleString()}, ${have >= cost ? 'enough for it' : `${(cost - have).toLocaleString()} ${unit} short`}`;
 
-function nothingWhy(s: AiAccount, cur: OptCurrency): string {
-    if (cur === 'stones') {
-        const owned = UWS.filter(u => s.uwData.data[u.a]?.own).length;
-        const next = UW_UNLOCK_COSTS[owned];
-        if (owned < UWS.length && next) {
-            return `It doesn't score unlocking a new Ultimate Weapon (it can't know a UW's worth before you own it): your next one costs ${next.toLocaleString()} stones, and ${enoughText(next, s.currencies?.stones ?? 0, 'stones')}.`;
-        }
-    }
-    const bots = botsForPreset(s.botData, s.activePreset);
-    if (cur === 'medals' && !BOTS_CONFIG.some(b => bots[b.name]?.owned)) {
-        return 'You don\'t own a bot yet, and the Optimizer doesn\'t score buying one.';
-    }
-    return 'The upgrades this currency buys don\'t change what this goal measures on this account.';
+// What the Optimizer leaves out for a currency — the note the Optimizer
+// page shows (engine/unlocks.ts): a new UW or bot isn't ranked.
+function unrankedNote(s: AiAccount, snap: ReturnType<typeof snapshotFromState>, cur: OptCurrency): string | undefined {
+    const notes = lockedNotes(snap, { stones: s.currencies?.stones, medals: s.currencies?.medals });
+    return cur === 'stones' ? notes.stones : cur === 'medals' ? notes.bots : undefined;
 }
 
 // The goal the Optimizer page uses for this build (its saved one when it fits).
@@ -356,7 +350,10 @@ export function bestUpgrades(s: AiAccount, currency: AiCurrency, goalWanted?: st
             const cost = costText(c);
             return `${i + 1}. ${c.label} ${c.subLabel} — ${gainText(picks, waves, i)}${cost ? `; costs ${cost}` : ''}`;
         });
-        parts.push(`Next ${CURRENCY_NAMES[cur]}:\n${rows.length ? rows.join('\n') : `nothing the Optimizer can score for this goal. ${nothingWhy(s, cur)}`}`);
+        const unranked = unrankedNote(s, snap, cur);
+        parts.push(`Next ${CURRENCY_NAMES[cur]}:\n${rows.length ? rows.join('\n')
+            : `nothing the Optimizer can score for this goal.${unranked ? '' : ' The upgrades this currency buys don\'t change what this goal measures on this account.'}`}`);
+        if (unranked) parts.push(unranked);
         const hold = holdLine(s, cur, picks);
         if (hold) parts.push(hold);
         // Costs compared by the site: small models misread K, M, B, T, q, Q…

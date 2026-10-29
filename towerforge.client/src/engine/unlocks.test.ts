@@ -8,6 +8,8 @@ import { describe, expect, it } from 'vitest';
 import { parseGameExport } from './gameExport';
 import { enhancementsOpen, labOpen, labsOpen, lockedNotes, workshopOpen } from './unlocks';
 import { makeExport } from '../test/makeExport';
+import { UWS } from '../constants/gameData';
+import { BOTS_CONFIG } from '../constants/botData';
 
 const bits = (n: number) => Array.from({ length: 20 }, (_, i) => i < n);
 
@@ -79,5 +81,22 @@ describe('unlocks', () => {
         expect(notes.modules).toBe('Modules open at Tier 2, wave 90.');
         expect(notes.bots).toContain('No bots unlocked yet');
         expect(notes.guardian).toContain('Guardian isn’t unlocked');
+        // The first of each, with its price.
+        expect(notes.stones).toContain('your first costs 5 stones');
+        expect(notes.bots).toContain('your first costs 150 medals');
+    });
+
+    it('says the next UW and bot aren\'t ranked, with their price against what\'s held', () => {
+        const own = (n: number) => Object.fromEntries(UWS.map((u, i) => [u.a, { own: i < n, sv: [1, 1, 1] as [number, number, number], upOwn: false, upLvl: 0 }]));
+        const bot = { owned: true, medals: [0, 0, 0, 0] };
+        const notes = lockedNotes({ labData: {}, uwData: { data: own(1), stones: 0 }, botData: { 'Golden Bot': bot } as never },
+            { stones: 160, medals: 120 });
+        expect(notes.stones).toBe('Unlocking your next Ultimate Weapon isn’t ranked here: TowerForge measures what a UW adds from your runs, '
+            + 'so it can only rank one you’ve run with. The next costs 50 stones (you hold 160, enough for it).');
+        expect(notes.bots).toContain('The next costs 300 medals (you hold 120, 180 short).');
+        // Everything owned: nothing to say.
+        const all = lockedNotes({ labData: {}, uwData: { data: own(9), stones: 0 },
+            botData: Object.fromEntries(BOTS_CONFIG.map(b => [b.name, bot])) as never });
+        expect([all.stones, all.bots]).toEqual([undefined, undefined]);
     });
 });

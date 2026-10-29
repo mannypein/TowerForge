@@ -212,7 +212,7 @@ export default function OptimizerTab() {
                 } else {
                     setSkipPath([]);
                 }
-                setLocked(lockedNotes(snap));
+                setLocked(lockedNotes(snap, { stones: currencies.stones, medals: currencies.medals }));
                 // Which Guardian chips to equip for the goal (free to swap).
                 setChipSets(bestGuardianChips(snap));
                 setFarmCalib(snap.farm ?? null);

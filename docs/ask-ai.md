@@ -248,10 +248,14 @@ What run 1 found (reading every answer, not just the scores), and the fix:
 
 Gaps the bench showed that aren't the assistant's:
 
-- **The Optimizer doesn't score unlocking a new UW or a bot**, and nothing
-  values UW upgrades for eHP survival — so early and eHP accounts get
-  nothing for stones (and early ones for medals). The assistant now says
-  so; the Optimizer page has the same gap.
+- **The Optimizer doesn't score unlocking a new UW or a bot** — so the early
+  account got nothing for stones and medals. It can't be scored from the
+  run (docs/optimizer.md, "A new UW or bot isn't ranked"); the Stones and
+  Bots panels and the assistant now give the next one's price against what's
+  held. The eHP account's empty stone and medal lists weren't a gap: Chrono
+  Field adds survival only with the CF-Dmg Reduction lab, and Flame Bot's
+  cut is measured from the run's `FlameBotBlocked` (the made-up runs had
+  none).
 - **Smite on the late account**: maxing it is +0.51% damage but +0.0 waves
   (push +0.00%). Health-based damage (Smite, Consume) may be undervalued for
   pushing; worth checking against a real account's What If.

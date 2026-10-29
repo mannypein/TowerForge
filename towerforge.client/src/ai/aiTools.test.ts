@@ -136,7 +136,8 @@ describe('runs and other tiers', () => {
         const a = account();
         const uwData = { ...a.uwData, data: Object.fromEntries(UWS.map(u => [u.a, { own: u.a === 'GT', sv: [3, 5, 3], upOwn: false, upLvl: 0 }])) };
         const r = bestUpgrades({ ...a, uwData }, 'stones', 'waves');
-        expect(r.text).toMatch(/doesn't score unlocking a new Ultimate Weapon .* your next one costs 50 stones/);
+        // The Optimizer page's own note (engine/unlocks.ts).
+        expect(r.text).toMatch(/nothing the Optimizer can score for this goal\.\nUnlocking your next Ultimate Weapon isn’t ranked here: .* The next costs 50 stones/);
     });
 
     it('shows waves, not a compounded percentage, when pushing waves', () => {

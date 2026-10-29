@@ -11,8 +11,8 @@
 //  lack of data; anything that already has levels is open.
 // ============================================================
 
-import { LABS, WS_UNLOCK_GROUPS } from '../constants/gameData';
-import { BOTS_CONFIG, isBotEntryOwned } from '../constants/botData';
+import { LABS, UWS, UW_UNLOCK_COSTS, WS_UNLOCK_GROUPS } from '../constants/gameData';
+import { BOT_UNLOCK_MEDALS, BOTS_CONFIG, isBotEntryOwned } from '../constants/botData';
 import { milestoneReached } from './statHelpers';
 import type { BotData, EnhData, GuardianData, LabData, ModuleState, TierWaves, UWData, WsUnlocked } from '../types/gameTypes';
 
@@ -65,19 +65,42 @@ export type LockedNotes = Partial<Record<'workshop' | 'labs' | 'enhancements' | 
 
 // What the Optimizer leaves out for now, in a line per panel — and why a
 // newer account's panel is empty (no UWs, modules, bots or Guardian yet).
+// A price against what's held: "you hold 160, enough for it".
+function priceText(cost: number, held: number | undefined, unit: string): string {
+    if (held === undefined) return `${cost.toLocaleString()} ${unit}`;
+    return `${cost.toLocaleString()} ${unit} (you hold ${held.toLocaleString()}, ${held >= cost ? 'enough for it' : `${(cost - held).toLocaleString()} short`})`;
+}
+
+// `held`: the stones and medals the player holds, to say whether the next
+// UW or bot is in reach. A new UW or bot isn't ranked: the models measure
+// what each adds from the player's runs (its damage share, its kills), so
+// one never run with scores nothing (or, for Spotlight, which multiplies
+// what's measured, far too much) — tried on made-up accounts 2026-10-28.
 export function lockedNotes(s: {
     progress?: Progress; wsUnlocked?: WsUnlocked; labData: LabData; enhData?: EnhData;
     uwData?: UWData; moduleState?: ModuleState; botData?: BotData; guardian?: GuardianData;
-}): LockedNotes {
+}, held: { stones?: number; medals?: number } = {}): LockedNotes {
     const notes: LockedNotes = {};
-    if (s.uwData && !Object.values(s.uwData.data).some(u => u?.own)) {
-        notes.stones = 'No Ultimate Weapons yet — the stone ranking starts with your first one.';
+    if (s.uwData) {
+        const owned = UWS.filter(u => s.uwData!.data[u.a]?.own).length;
+        const next = UW_UNLOCK_COSTS[owned];
+        if (owned === 0) {
+            notes.stones = `No Ultimate Weapons yet — your first costs ${priceText(next, held.stones, 'stones')}; the stone ranking starts with it.`;
+        } else if (next !== undefined) {
+            notes.stones = `Unlocking your next Ultimate Weapon isn’t ranked here: TowerForge measures what a UW adds from your runs, so it can only rank one you’ve run with. The next costs ${priceText(next, held.stones, 'stones')}.`;
+        }
     }
     if (s.moduleState && s.moduleState.library.length === 0) {
         notes.modules = reached(s.progress, 2, 90) ? 'No modules yet.' : 'Modules open at Tier 2, wave 90.';
     }
-    if (s.botData && !BOTS_CONFIG.some(b => isBotEntryOwned(s.botData![b.name]))) {
-        notes.bots = 'No bots unlocked yet — they’re unlocked with medals on the game’s Bots screen.';
+    if (s.botData) {
+        const owned = BOTS_CONFIG.filter(b => isBotEntryOwned(s.botData![b.name])).length;
+        const next = BOT_UNLOCK_MEDALS[owned];
+        if (owned === 0) {
+            notes.bots = `No bots unlocked yet — they’re bought with medals in the game’s Event Shop; your first costs ${priceText(next, held.medals, 'medals')}.`;
+        } else if (next !== undefined) {
+            notes.bots = `Buying another bot isn’t ranked here: TowerForge measures what a bot adds from your runs, so it can only rank one you’ve run with. The next costs ${priceText(next, held.medals, 'medals')}.`;
+        }
     }
     if (s.guardian && !s.guardian.unlocked) {
         notes.guardian = 'The Guardian isn’t unlocked yet (the game’s Guild → Guardian).';

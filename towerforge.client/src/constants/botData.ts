@@ -17,6 +17,11 @@ import type { BotData, BotEntry, BotLoadouts } from '../types/gameTypes';
 // 11,500 medals). Before v29 the site had 5 levels for every bot.
 export const BOT_PLUS_UNLOCK_STONES = 1250;
 
+// Medals to buy a bot, by how many are owned already (any order: the 1st
+// bot bought costs 150, the 5th 1,200). The wiki's Currency page
+// (2026-10-28); not yet checked against the game's Event Shop.
+export const BOT_UNLOCK_MEDALS = [150, 300, 600, 900, 1200];
+
 interface BotPlusLadder {
     label: string;
     base: number;       // value at level 0 (just unlocked)

@@ -437,6 +437,40 @@ card slot step reads "Buy card slot N". Checked on that account's export in
 the browser (desktop and 375 px) and on the owner's maxed one (nothing
 left out there).
 
+### A new UW or bot isn't ranked (2026-10-28)
+
+The Ask AI test bench's early account (T5, only Golden Tower, no bots) got
+"nothing worth buying" for its stones and medals: the stone path only
+levels UWs already owned, the medal path only bots already owned. Valuing
+an unlock was tried on the bench's made-up accounts by owning the UW (all
+stats at Lv 1, and at Lv 6) or the bot (Lv 0) and scoring the goal:
+
+- Chain Lightning, Smart Missiles, Death Wave, Inner Land Mines, Poison
+  Swamp and Black Hole score **0%** for waves: their damage is calibrated
+  from the run's damage share, and a UW never run with has none.
+- **Spotlight** scores +92% at Lv 1 and +836% at Lv 6 (it multiplies the
+  damage that *is* measured), Black Hole +195% for coins on the late
+  account — far from what one new UW at Lv 1 does.
+- The uncalibrated formula model (no run) gives Infinity on the early
+  account (no damage UW to compare with) and 0% / +17% / +92% on the late
+  one.
+- Bots at Lv 0 score 0% for every goal (Golden Bot's coins and Amplify
+  Bot's damage come from what they did in the run too).
+
+So unlocks aren't scored: a ranking would put Spotlight first every time
+and never Chain Lightning. Instead the Stones and Bots panels say so with
+the price against what's held (`lockedNotes`, held stones and medals): "The
+next costs 50 stones (you hold 160, enough for it)". UW unlock prices are
+`UW_UNLOCK_COSTS` (checked in game); bot prices `BOT_UNLOCK_MEDALS` — 150,
+300, 600, 900, 1,200 medals by bots owned, **from the wiki's Currency page,
+not yet checked in game**. Ask AI reads the same notes. Ranking them would
+need a separate estimate per UW and bot that doesn't come from the run.
+
+Not a gap, though it looked like one on the bench's eHP account: Chrono
+Field upgrades add survival only once the CF-Dmg Reduction lab is unlocked
+(the game's rule; the Labs panel offers that lab), and Flame Bot's cut is
+measured from the run's `FlameBotBlocked` (the made-up runs had none).
+
 ## Paths
 
 - **Stone path** (`simulateStonePath`): UW stats, UW+, card mastery unlocks
