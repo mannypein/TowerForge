@@ -10,7 +10,7 @@ import { upgradeTargets } from '../engine/whatIf';
 import { UWS } from '../constants/gameData';
 import { battle, makeExport } from '../test/makeExport';
 import {
-    accountSummary, bestUpgrades, budgetIn, findTargets, levelFor, levelsOf, runsReport, tierOutlook, whatIfChanges, wordsOf,
+    accountSummary, bestUpgrades, budgetIn, findTargets, levelFor, levelsOf, runsReport, tierOutlook, tournamentOutlook, whatIfChanges, wordsOf,
 } from './aiTools';
 import type { AiAccount } from './aiTools';
 import { searchNotes } from './aiKnowledge';
@@ -85,7 +85,7 @@ describe('what the assistant reads', () => {
     it('works out What If for named upgrades, with costs and waves', () => {
         const r = whatIfChanges(account(), [{ upgrade: 'CL damage', level: '+5' }]);
         expect(r.text).toContain('Chain Lightning — Damage: 10 → 15 (max 32), costs');
-        expect(r.text).toMatch(/^Headline: CL damage \+5 levels gives about \+[\d.]+ waves \(runs end around W[\d,]+ now, W[\d,]+ after\), for [\d,]+ stones\./);
+        expect(r.text).toMatch(/^Headline: CL damage \+5 levels gives about \+[\d.]+ waves \(runs end around W[\d,]+ now, W[\d,]+ after\)\. It costs [\d,]+ stones\./);
         expect(r.text).toContain('Total cost:');
         expect(whatIfChanges(account(), [{ upgrade: 'banana', level: 'max' }]).text).toContain('Couldn\'t find "banana"');
     });
@@ -116,21 +116,79 @@ describe('runs and other tiers', () => {
         }
         // Tougher enemies on T19: fewer waves for the same damage.
         const next = tierOutlook(account(), 19).text;
-        const wave = Number(/runs on T19 would end around W([\d,]+)/.exec(next)![1].replace(/,/g, ''));
+        const wave = Number(/Headline: runs on T19 would end around W([\d,]+)\./.exec(next)![1].replace(/,/g, ''));
         expect(wave).toBeGreaterThan(1000);
         expect(wave).toBeLessThan(8341);
     });
 
-    it('says what can be bought now and puts the cheapest first', () => {
+    it('says what can be bought now, adding the costs up in the Optimizer\'s order', () => {
         const a = account();
-        const r = bestUpgrades({ ...a, currencies: { ...a.currencies, stones: 50 } }, 'stones');
-        expect(r.text).toMatch(/\((you have enough now|more than you have)\)/);
+        const none = bestUpgrades({ ...a, currencies: { ...a.currencies, stones: 0 } }, 'stones');
+        expect(none.text).toMatch(/The 0 stones you hold don't cover the best next buy yet: it needs [\d,]+ more\./);
+        // Enough for the first pick and not the second: only the first is bought.
+        const first = /^1\. .* — .*; costs ([\d,]+) stones$/m.exec(none.text)!;
+        const cost = Number(first[1].replace(/,/g, ''));
+        const one = bestUpgrades({ ...a, currencies: { ...a.currencies, stones: cost } }, 'stones');
+        expect(one.text).toMatch(new RegExp(`With the ${cost.toLocaleString()} stones you hold now: buy [^;]+ — ${cost.toLocaleString()} stones, leaving 0\\. The next one, .+, needs [\\d,]+ more\\.`));
+    });
+
+    it('says why there is nothing to buy', () => {
+        const a = account();
+        const uwData = { ...a.uwData, data: Object.fromEntries(UWS.map(u => [u.a, { own: u.a === 'GT', sv: [3, 5, 3], upOwn: false, upLvl: 0 }])) };
+        const r = bestUpgrades({ ...a, uwData }, 'stones', 'waves');
+        expect(r.text).toMatch(/doesn't score unlocking a new Ultimate Weapon .* your next one costs 50 stones/);
     });
 
     it('shows waves, not a compounded percentage, when pushing waves', () => {
         const r = bestUpgrades(account(), 'stones', 'waves');
         expect(r.text).toMatch(/Next stones:\n1\. .* — [+−][\d.]+ waves/);
         expect(r.text).not.toMatch(/Next stones:\n1\. .* — [+−][\d.]+%/);
+    });
+});
+
+describe('things a small model gets wrong on its own', () => {
+    it('says a UW isn\'t owned instead of trying a lab with its name', () => {
+        const a = account();
+        const uwData = { ...a.uwData, data: { ...a.uwData.data, DW: { own: false, sv: [1, 1, 1] as [number, number, number], upOwn: false, upLvl: 0 } } };
+        const r = whatIfChanges({ ...a, uwData }, [{ upgrade: 'Death Wave', level: 'max' }]);
+        expect(r.text).toMatch(/^Headline: Death Wave isn't unlocked on this account yet/);
+        expect(r.text).not.toMatch(/DW-Health/);
+        expect(whatIfChanges({ ...a, uwData }, [{ upgrade: 'Kill Wall', level: 'max' }]).text).toMatch(/Kill Wall \(Death Wave's UW\+\) isn't unlocked/);
+        // A lab named with the UW's words is still a lab.
+        expect(whatIfChanges({ ...a, uwData }, [{ upgrade: 'death wave health lab', level: '+1' }]).text).not.toMatch(/isn't unlocked/);
+    });
+
+    it('works out the change in coins itself', () => {
+        const r = whatIfChanges(account(), [{ upgrade: 'damage lab', level: '+10' }]);
+        const m = /Coins per hour: ([\d.]+\w?) → ([\d.]+\w?) \(([+−])([\d.]+\w?)\)/.exec(r.text);
+        if (m) expect(m[3]).toBe('+');
+    });
+
+    it('puts campaign and tournament damage side by side', () => {
+        const a = account();
+        const tourney = parseGameExport(makeExport({
+            BattleHistory: [battle({ BattleDate: '2026-10-20T12:00:00Z', Wave: 400, IsTournament: true, KilledBy: 4, DamageDealt: 100, ChainLightningDamage: 10, OrbDamage: 90 })],
+        })).battles;
+        const r = runsReport({ ...a, importedBattles: [...a.importedBattles, ...tourney] }, 'any');
+        expect(r.text).toMatch(/Chain Lightning 30% campaign, 10% tournaments/);
+        expect(r.text).toMatch(/Ultimate Weapons you own that deal no damage of their own: Chrono Field \(it slows enemies\), Golden Tower/);
+    });
+
+    it('spells out the league order and the best rank', () => {
+        const a = account();
+        const tourneyRecords = [
+            { number: 1, date: Date.parse('2026-09-03T12:00:00Z'), league: 'Champion' as const, wave: 1900, rank: 3 },
+            { number: 2, date: Date.parse('2026-09-21T12:00:00Z'), league: 'Champion' as const, wave: 2080, rank: 1 },
+            { number: 3, date: Date.parse('2026-10-02T12:00:00Z'), league: 'Legend' as const, wave: 410, rank: 18 },
+        ];
+        const tourney = parseGameExport(makeExport({
+            BattleHistory: [battle({ BattleDate: '2026-10-20T12:00:00Z', Wave: 400, IsTournament: true, KilledBy: 4 })],
+        })).battles;
+        const r = tournamentOutlook({ ...a, importedBattles: [...a.importedBattles, ...tourney], tourneyRecords },
+            { league: 'Legend', week: {}, recent: {} });
+        expect(r.text).toMatch(/Leagues from lowest to highest: Copper, .*, Champion, Legend, Mythic; the next one up is Mythic, so Legend isn't the highest\./);
+        expect(r.text).toMatch(/Best rank ever: 1, in Champion on 2026-09-21 \(W2,080\)\./);
+        expect(r.text).toMatch(/none are ticked on the Tournament page yet/);
     });
 });
 
@@ -150,7 +208,7 @@ describe('a budget named in the question', () => {
         expect(r.title).toBe('Optimizer — stones (1,500 to spend)');
         const plan = /Plan for 1,500 stones .*:\n((?:\d+\. .*\n?)+)/.exec(r.text);
         expect(plan).not.toBeNull();
-        const costs = [...plan![1].matchAll(/, ([\d.,]+K?) stones$/gm)].map(m => (m[1].endsWith('K') ? parseFloat(m[1]) * 1000 : Number(m[1].replace(/,/g, ''))));
+        const costs = [...plan![1].matchAll(/; costs ([\d.,]+K?) stones$/gm)].map(m => (m[1].endsWith('K') ? parseFloat(m[1]) * 1000 : Number(m[1].replace(/,/g, ''))));
         expect(costs.length).toBeGreaterThan(0);
         expect(costs.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(1500 + 10 * costs.length);   // K rounding
         const spent = Number(/— ([\d,]+) stones in all/.exec(r.text)![1].replace(/,/g, ''));

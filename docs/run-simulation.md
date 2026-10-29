@@ -542,6 +542,12 @@ reports count kills per type, so the mix can be **calibrated per player**.
 
 ## 4. Enemy Level Skip (deterministic)
 
+- What it is: Enemy Level Skip makes enemies weaker. Without it, enemy
+  health (and attack) goes up one level every wave. Each time a level skip
+  happens, that wave's increase is skipped, so every later enemy has less
+  health (or attack) and the run goes further. It doesn't skip waves — that's
+  Wave Skip, a different upgrade. Battle reports count both
+  (`HealthLevelSkips`, `AttackLevelSkips`; `WavesSkipped`).
 - Workshop 0.05%/level, 699 levels → 35%; lab +2%; relics +2%; module
   substats; Enemy Level Skips enhancement ×1.01 … ×1.6. Separate for Health
   and Attack.

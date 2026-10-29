@@ -65,7 +65,8 @@ describe('headline', () => {
     it('wants the gain from What If and the wave from another tier', () => {
         expect(gradeHeadline('Headline: maxing DW gives about +4.2 waves (runs end…', 'About 4.2 more waves.').ok).toBe(true);
         expect(gradeHeadline('Headline: maxing DW gives about +4.2 waves (runs end…', 'About 42 more waves.').ok).toBe(false);
-        expect(gradeHeadline('Headline: with the damage … runs on T19 would end around W6,400 (W6,100–W6,700).', 'Around wave 6,400.').ok).toBe(true);
+        expect(gradeHeadline('Headline: about W6,400 on T19 (between W6,100 and W6,700), with the damage …', 'Around wave 6,400.').ok).toBe(true);
+        expect(gradeHeadline('Headline: about W6,400 on T19 (between W6,100 and W6,700), with the damage …', 'Around wave 6,100.').ok).toBe(false);
     });
 
     it('has nothing to check without a headline', () => {

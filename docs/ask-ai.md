@@ -146,6 +146,116 @@ Substat Eff 23% → 31%, Core Assist Substat Eff 32% → 39%, Cannon Assist Mult
 Eff 49% → 53% (1,488 stones, about +5.7 tournament waves); for campaign
 pushing, Generator Assist Substat Eff 14% → 32% (1,431 stones).
 
+## Test bench (2026-10-28)
+
+A repeatable test of the real model, so a change to the prompts or the tools
+is measured, not guessed. Files in `towerforge.client/src/ai/bench/`:
+
+- `benchAccounts.ts` — three made-up accounts written as the game's export, so
+  they go through Import Game Data like a player's file: **early** (T5, Silver,
+  only Golden Tower, no modules or bots, no level skips), **mid** (T11, Gold,
+  five UWs, Legendary modules, two bots, eHP, two tournament runs) and **late**
+  (T18, Legend, every UW and UW+, Ancestral modules with assists, four bots,
+  Glass Cannon, tournament records). Levels are a share of each max, varied per
+  upgrade; never a real export.
+- `benchQuestions.ts` — 39 questions in players' words (typos, "stonez", short
+  names, follow-ups), 78 asks over the three accounts. Each names the data step
+  1 should pick (tool, currency, goal, runs, budget, tier, the upgrades named).
+- `benchGrade.ts` — grading without a second model: the route; every number in
+  the answer found in the data, the account summary or the question (game
+  letters and rounding allowed; the rest listed to read by hand); the data's
+  headline carried (first pick, plan, What If gain, other tier's wave); only
+  towerforge.net page links; no code words or the data's own section names.
+- `runBench.ts` — the runner. On the dev server (`npm run dev`), in the
+  browser's console:
+
+  ```js
+  const b = await import('/src/ai/bench/runBench.ts');
+  b.runBench({});              // all three accounts; { accounts: ['late'], ids: ['stones'] } for some
+  b.benchSummary();            // progress, scores, failures
+  ```
+
+  It starts the model chosen on the Ask AI page and replaces this browser's
+  TowerForge data with each account (use a browser without data to keep).
+  Results stay in the tab's session storage; a reload (any edit to a file the
+  page imports, docs included, since the game notes are imported) stops the
+  run, and `runBench({ resume: true })` asks only what's left. Don't edit the
+  client while it runs.
+
+Qwen3 4B on the RX 7800 XT: 78 asks in about 20 minutes, 9–29 s an answer.
+
+| Run | Pass | Route | Headline | Unverified numbers |
+|---|---|---|---|---|
+| 1 — before the fixes | 73% | 83% | 88% | 2 answers |
+| 2 — tools, prompts, routing | 87% | 92% | 91% | 5 |
+| 3 — costs said as costs, "enough for it", tier estimate first | 85% | 90% | 93% | 4 |
+| 4 — route checked in code (tier, "instead", "what is") | 86% | 96% | 90% | 5 |
+| 4b — "my runs", tidy-up, tier headline alone (the 18 asks those touch) | 100% | 100% | 100% | 0 |
+
+Runs 3 and 4 traded fixes for regressions: each new example moved other
+questions ("what tier am I on" → none pulled "move up a league" and "what is
+enemy level skip" there too). What held was settling things in code from the
+question itself (`checked` in `aiAssistant.ts`): the tier only from a number
+in the question (none = the next tier), "… instead?" keeps only upgrades the
+question names, "what is X" without "I/my" goes to the notes, "my runs" to
+the runs. `tidy` takes "based on the data provided" out of the answer.
+
+Still weak after run 4 (the 4B's limits, not fixed by prompts): it invents
+reasons when the data has none ("tournament enemies are more resilient" for
+a lower Chain Lightning share), and it still adds generic advice when the
+data says nothing is worth buying.
+
+What run 1 found (reading every answer, not just the scores), and the fix:
+
+- **Step 1 picked the wrong data** for "how do I get more coins" (game notes),
+  "how do I survive longer" (none), "what's my workshop damage level" (notes)
+  on all three accounts; every runs question was read as tournaments; "I have
+  2.4B coins, what should I buy" set the goal to coins; "… instead?" kept the
+  earlier upgrade; "max Smite" became "SM". Fix: examples for each, the UW and
+  UW+ names, "write upgrades in the player's words", and the same three in the
+  keyword fallback.
+- **Asking about a UW the player doesn't own** matched a lab with its name
+  ("maxing Death Wave" → DW-Health lab, "+0.0 waves"). Now `missingUw` says
+  it isn't unlocked and what the next UW costs.
+- **"+0.0 waves" as the headline** when the waves don't move: an eHP build's
+  waves come from survival, so +614% damage read as worthless. Now the
+  headline says what changes and why (eHP: TowerForge measures survival).
+- **It couldn't add up**: "buy both" for two card slots costing 700 gems with
+  420 held; "+9.8M" for 444.78M → 453.58M. Now the site writes what the
+  currency held buys in the Optimizer's order (shards by type) and every
+  coin change.
+- **Costs read as gains** ("will yield 2.16M coins", "would generate 5.67M
+  coins"): every row and What If now says "costs".
+- **"Which UW does the most damage?" → Golden Tower** (it does none). The runs
+  data now names the owned UWs with no damage of their own (Golden Tower,
+  Chrono Field) and the ones under 1%, and puts campaign and tournament
+  shares side by side.
+- **Tournaments**: "move up to Champion" for a Legend player, "no battle
+  conditions this week" for none ticked, a best rank with the wrong date.
+  Now the league order and the next league, "none ticked yet", and the best
+  rank with its date are written out.
+- **"Nothing left worth buying"** with no reason (early and eHP stones, early
+  medals) — the model then made advice up. Now the data gives the reason.
+- **Mechanics**: enemy level skip explained as Wave Skip, Death Penalty's x
+  as damage reduction. The notes gave only formulas; `run-simulation.md` §4
+  now says what level skip is and `module-effects.md` what Death Penalty's x
+  is.
+- **Answers pointed at the data** ("see the Cheapest first list", "the
+  [T10 → T11] section") and invented reasons ("tournament enemies use
+  strategies"). New answer rules: no data section names, no arithmetic, no
+  buys beyond what's held, reasons only from the data or notes, only Tower
+  questions (it wrote a poem).
+
+Gaps the bench showed that aren't the assistant's:
+
+- **The Optimizer doesn't score unlocking a new UW or a bot**, and nothing
+  values UW upgrades for eHP survival — so early and eHP accounts get
+  nothing for stones (and early ones for medals). The assistant now says
+  so; the Optimizer page has the same gap.
+- **Smite on the late account**: maxing it is +0.51% damage but +0.0 waves
+  (push +0.00%). Health-based damage (Smite, Consume) may be undervalued for
+  pushing; worth checking against a real account's What If.
+
 ## Download size
 
 The two WebLLM scripts (the worker and the page's copy) are ~6 MB each.

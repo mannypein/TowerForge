@@ -31,7 +31,8 @@ import { formatGameNumber } from '../engine/gameNumbers';
 import { formatLabTime } from '../engine/upgradeCosts';
 import { activeLoadout } from '../engine/statHelpers';
 import { labFinishAt } from '../engine/labTimer';
-import { UWS, presetLabel } from '../constants/gameData';
+import { UWS, UW_UNLOCK_COSTS, presetLabel } from '../constants/gameData';
+import { GAME_LEAGUES } from '../constants/gameExportMaps';
 import { BOTS_CONFIG, botsForPreset } from '../constants/botData';
 import { RARITIES, rarityStars } from '../constants/moduleRarities';
 import { BUILD_GOALS, GOAL_LABELS } from '../constants/optimizerConfig';
@@ -154,6 +155,64 @@ function held(s: AiAccount, c: OptCurrency): number | null {
     return { stones: cur.stones, coins: cur.coins, medals: cur.medals, gems: cur.gems, bits: cur.bits, shards: null, research: null }[c];
 }
 
+// What the player holds buys, in the Optimizer's order: the model can't add
+// costs up, and two picks it can afford one by one may be more than it holds
+// together. Module shards go by type (each type only levels its own slots).
+const SHARD_TYPES = ['cannon', 'armor', 'generator', 'core'] as const;
+function holdLine(s: AiAccount, cur: OptCurrency, picks: OptCandidate[]): string | null {
+    const c = s.currencies;
+    if (!c || !picks.length) return null;
+    const label = (p: OptCandidate) => `${p.label} ${p.subLabel}`;
+    if (cur === 'shards') {
+        const left: Record<string, number> = Object.fromEntries(SHARD_TYPES.map(t => [t, c[`${t}Shards`] ?? 0]));
+        const typeOf = (p: OptCandidate) => SHARD_TYPES.find(t => p.label.toLowerCase().startsWith(t));
+        const now: string[] = [];
+        const short: string[] = [];
+        for (const p of picks) {
+            const t = typeOf(p);
+            if (!t || p.costKnown === false) continue;
+            if (p.cost <= left[t]) { left[t] -= p.cost; now.push(label(p)); }
+            else short.push(`${label(p)} needs ${num(p.cost - left[t])} more ${t} shards`);
+        }
+        return `Shards you hold: ${SHARD_TYPES.map(t => `${t} ${num(c[`${t}Shards`] ?? 0)}`).join(', ')}.`
+            + (now.length ? ` They buy now: ${now.join('; ')}.` : ' They don\'t cover any of these yet.')
+            + (short.length ? ` Not yet: ${short.join('; ')}.` : '');
+    }
+    const have = held(s, cur);
+    if (have === null) return null;
+    const name = CURRENCY_NAMES[cur].split(' (')[0];
+    let left = have;
+    const now: OptCandidate[] = [];
+    for (const p of picks) {
+        if (p.costKnown === false || p.cost > left) break;
+        left -= p.cost;
+        now.push(p);
+    }
+    const next = picks[now.length];
+    if (!now.length) return `The ${amountText(cur, have)} ${name} you hold don't cover the best next buy yet: it needs ${amountText(cur, Math.max(0, picks[0].cost - have))} more.`;
+    return `With the ${amountText(cur, have)} ${name} you hold now: buy ${now.map(label).join('; ')} — ${amountText(cur, have - left)} ${name}, leaving ${amountText(cur, left)}.`
+        + (next && next.costKnown !== false ? ` The next one, ${label(next)}, needs ${amountText(cur, next.cost - left)} more.` : '');
+}
+
+// Why a currency has nothing to buy: what the Optimizer doesn't score.
+const enoughText = (cost: number, have: number, unit: string) =>
+    `you hold ${have.toLocaleString()}, ${have >= cost ? 'enough for it' : `${(cost - have).toLocaleString()} ${unit} short`}`;
+
+function nothingWhy(s: AiAccount, cur: OptCurrency): string {
+    if (cur === 'stones') {
+        const owned = UWS.filter(u => s.uwData.data[u.a]?.own).length;
+        const next = UW_UNLOCK_COSTS[owned];
+        if (owned < UWS.length && next) {
+            return `It doesn't score unlocking a new Ultimate Weapon (it can't know a UW's worth before you own it): your next one costs ${next.toLocaleString()} stones, and ${enoughText(next, s.currencies?.stones ?? 0, 'stones')}.`;
+        }
+    }
+    const bots = botsForPreset(s.botData, s.activePreset);
+    if (cur === 'medals' && !BOTS_CONFIG.some(b => bots[b.name]?.owned)) {
+        return 'You don\'t own a bot yet, and the Optimizer doesn\'t score buying one.';
+    }
+    return 'The upgrades this currency buys don\'t change what this goal measures on this account.';
+}
+
 // The goal the Optimizer page uses for this build (its saved one when it fits).
 export function goalFor(build: BuildType, wanted?: string): OptGoal {
     const goals = BUILD_GOALS[build] ?? [];
@@ -162,7 +221,7 @@ export function goalFor(build: BuildType, wanted?: string): OptGoal {
 
 function costText(c: OptCandidate): string {
     if (c.costType === 'research') {
-        return c.hours !== undefined ? `${formatLabTime(c.hours)} of research${c.coins ? `, ${num(c.coins)} coins` : ''}` : '';
+        return c.hours !== undefined ? `${formatLabTime(c.hours)} of research${c.coins ? ` and ${num(c.coins)} coins` : ''}` : '';
     }
     if (c.costKnown === false) return '';
     const unit = { stones: 'stones', coins: 'coins', medals: 'medals', shards: 'shards', gems: 'gems', bits: 'bits', research: '' }[c.costType];
@@ -181,6 +240,8 @@ export function budgetIn(q: string): number {
 
 // What the player asked for beyond the currency.
 export interface UpgradeAsk {
+    // The goal came from the question (not the Optimizer page's).
+    goalAsked?: boolean;
     // What they have or will have to spend, in the asked currency ("I'm
     // about to get 1500 stones"); 0 or missing: none named.
     budget?: number;
@@ -226,6 +287,7 @@ const wavesText = (w: number) => `${w >= 0 ? '+' : '−'}${Math.abs(w) >= 10 ? M
 export function bestUpgrades(s: AiAccount, currency: AiCurrency, goalWanted?: string, ask: UpgradeAsk = {}): ToolResult {
     const build = buildOf(s);
     const goal = goalFor(build, goalWanted);
+    const askedFor = ask.goalAsked && goalWanted && goalWanted !== goal ? (GOAL_LABELS as Record<string, string>)[goalWanted] ?? goalWanted : null;
     const { account, note } = scoredOn(s, ask);
     const snap = snapshotFromState(account);
     const models = runModels(account);
@@ -238,6 +300,7 @@ export function bestUpgrades(s: AiAccount, currency: AiCurrency, goalWanted?: st
     const budget = ask.budget && ask.budget > 0 ? ask.budget : null;
     const parts: string[] = [`Goal: ${GOAL_LABELS[goal]}. ${inWaves ? 'Each pick shows the waves it adds' : `Each pick's gain is in ${metric}`}, in the order the Optimizer would buy them.`];
     if (note) parts.push(note);
+    if (askedFor) parts.push(`They asked about ${askedFor.toLowerCase()}, which TowerForge doesn't score for a ${build} build: these picks are for ${GOAL_LABELS[goal].toLowerCase()} instead.`);
     let stones: OptCandidate[] | null = null;
     for (const cur of wanted) {
         // The stone path is one path in buy order; the others are lists.
@@ -276,10 +339,11 @@ export function bestUpgrades(s: AiAccount, currency: AiCurrency, goalWanted?: st
                 parts.push(`Plan for ${amountText(cur, budget)} ${name}: nothing fits — the best next ${name} buy, ${next.label} ${next.subLabel}, costs ${costText(next)}.`);
             } else {
                 parts.push(`Plan for ${amountText(cur, budget)} ${name} (the Optimizer's path, cut where the ${name} run out${inOrder ? '; each upgrade\'s levels together' : ''}):\n`
-                    + plan.map((c, i) => `${i + 1}. ${c.label} ${c.subLabel} — ${gainText(plan, waves, i)}, ${costText(c)}`).join('\n'));
+                    + plan.map((c, i) => `${i + 1}. ${c.label} ${c.subLabel} — ${gainText(plan, waves, i)}; costs ${costText(c)}`).join('\n'));
                 const total = waves ? wavesText(waves.reduce((a, w) => a + w, 0)) : null;
                 parts.push(`Headline: with ${amountText(cur, budget)} ${name}, buy ${plan.map(c => `${c.label} ${c.subLabel}`).join('; ')} — ${amountText(cur, spent)} ${name} in all${total ? `, about ${total}` : ''}.`
-                    + (next ? ` The next buy after that is ${next.label} ${next.subLabel} for ${costText(next)}.` : ''));
+                    + (next ? ` The next buy after that is ${next.label} ${next.subLabel} for ${costText(next)}.`
+                        : ` That's everything the Optimizer scores for ${name}: ${amountText(cur, budget - spent)} ${name} would be left.`));
             }
             continue;
         }
@@ -288,13 +352,13 @@ export function bestUpgrades(s: AiAccount, currency: AiCurrency, goalWanted?: st
         const picks = path.slice(0, PICKS);
         const waves = inWaves && picks.length ? rowWaves(picks, models, inOrder) : null;
         if (picks[0]) parts.push(`Headline: the best next ${name} buy is ${picks[0].label} ${picks[0].subLabel}${costText(picks[0]) ? ` for ${costText(picks[0])}` : ''} (${gainText(picks, waves, 0)}).`);
-        const have = held(s, cur);
         const rows = picks.map((c, i) => {
             const cost = costText(c);
-            const afford = have !== null && c.cost > 0 && c.costKnown !== false ? (c.cost <= have ? ' (you have enough now)' : ' (more than you have)') : '';
-            return `${i + 1}. ${c.label} ${c.subLabel} — ${gainText(picks, waves, i)}${cost ? `, ${cost}` : ''}${afford}`;
+            return `${i + 1}. ${c.label} ${c.subLabel} — ${gainText(picks, waves, i)}${cost ? `; costs ${cost}` : ''}`;
         });
-        parts.push(`Next ${CURRENCY_NAMES[cur]}:\n${rows.length ? rows.join('\n') : 'nothing left worth buying'}`);
+        parts.push(`Next ${CURRENCY_NAMES[cur]}:\n${rows.length ? rows.join('\n') : `nothing the Optimizer can score for this goal. ${nothingWhy(s, cur)}`}`);
+        const hold = holdLine(s, cur, picks);
+        if (hold) parts.push(hold);
         // Costs compared by the site: small models misread K, M, B, T, q, Q…
         const priced = picks.filter(c => c.cost > 0 && c.costKnown !== false);
         if (priced.length > 1) {
@@ -360,6 +424,28 @@ export function findTargets(targets: UpgradeTarget[], query: string): UpgradeTar
     return sameUw.length > 1 ? sameUw.map(x => x.t) : [top.t];
 }
 
+// A UW or UW+ named in the words that this account doesn't own: What If
+// can't try it, and the words would otherwise match a lab ("maxing Death
+// Wave" → the DW-Health lab) and read "+0.0 waves".
+export function missingUw(s: AiAccount, words: string): string | null {
+    const w = wordsOf(words);
+    if (w.includes('lab') || w.includes('labs') || w.includes('research')) return null;
+    for (const u of UWS) {
+        const d = s.uwData.data[u.a];
+        const namesUw = wordsOf(u.n).every(x => w.includes(x));
+        const namesPlus = wordsOf(u.up).every(x => w.includes(x)) || (namesUw && (w.includes('+') || w.includes('plus')));
+        if (namesPlus && !d?.upOwn) {
+            return `${u.up} (${u.n}'s UW+) isn't unlocked on this account yet${d?.own ? '' : `, and neither is ${u.n}`}: it adds nothing until you unlock it.`;
+        }
+        if (namesUw && !d?.own) {
+            const next = UW_UNLOCK_COSTS[UWS.filter(x => s.uwData.data[x.a]?.own).length];
+            return `${u.n} isn't unlocked on this account yet: you don't own it, so it adds nothing until you unlock it.`
+                + (next ? ` Your next Ultimate Weapon costs ${next.toLocaleString()} stones: ${enoughText(next, s.currencies?.stones ?? 0, 'stones')}.` : '');
+        }
+    }
+    return null;
+}
+
 // "max", "+5", "next", "20" → a level for the target.
 export function levelFor(t: UpgradeTarget, level: string): number | null {
     const l = level.trim().toLowerCase();
@@ -409,6 +495,8 @@ export function whatIfChanges(s: AiAccount, asks: AiChangeAsk[]): ToolResult {
     const changes: Change[] = [];
     const notes: string[] = [];
     for (const ask of asks.slice(0, 4)) {
+        const missing = missingUw(s, ask.upgrade);
+        if (missing) { notes.push(missing); continue; }
         const found = findTargets(targets, ask.upgrade);
         if (!found.length) { notes.push(`Couldn't find "${ask.upgrade}" on this account.`); continue; }
         for (const t of found) {
@@ -419,22 +507,37 @@ export function whatIfChanges(s: AiAccount, asks: AiChangeAsk[]): ToolResult {
             notes.push(`${t.label}: ${t.current} → ${lv} (max ${t.max}), costs ${costsText(changeCost(base, t, lv))}.`);
         }
     }
-    if (!changes.length) return { title: 'What If', text: notes.join('\n') || 'No change to try.' };
+    // Nothing to try (a UW not owned): that is the answer, so it's the headline.
+    if (!changes.length) return { title: 'What If', text: notes.length ? `Headline: ${notes.join('\n')}` : 'No change to try.' };
     const r = whatIf(base, changes, targets, build, report, models);
     const out: string[] = [];
     // One sentence to quote (small models copy numbers best from a sentence).
-    const gain = r.waves
-        ? `about ${r.waves.gained >= 0 ? '+' : ''}${r.waves.gained.toFixed(1)} waves (runs end around W${r.waves.from.toLocaleString()} now, W${r.waves.to.toLocaleString()} after)`
-        : `${pct(r.survivalPct ?? r.damagePct)} ${r.survivalPct !== null ? 'survival' : 'damage'}`;
     const asked = (a: AiChangeAsk) => (/^\+\s*\d+$/.test(a.level.trim()) ? `${a.upgrade} ${a.level.trim()} levels`
         : /\d/.test(a.level) ? `${a.upgrade} to level ${/\d+/.exec(a.level)![0]}` : `maxing ${a.upgrade}`);
-    out.push(`Headline: ${asks.map(asked).join(' and ')} gives ${gain}, for ${costsText(r.costs)}.`);
+    const what = asks.map(asked).join(' and ');
+    const cost = costsText(r.costs);
+    // Under a tenth of a wave reads "+0.0 waves": lead with what does change.
+    const flat = !!r.waves && Math.abs(r.waves.gained) < 0.05;
+    if (r.waves && !flat) {
+        out.push(`Headline: ${what} gives about ${r.waves.gained >= 0 ? '+' : ''}${r.waves.gained.toFixed(1)} waves (runs end around W${r.waves.from.toLocaleString()} now, W${r.waves.to.toLocaleString()} after). It costs ${cost}.`);
+    } else if (r.waves) {
+        out.push(`Headline: ${what} doesn't change where your runs end (about +0.0 waves; they end around W${r.waves.from.toLocaleString()}): it gives ${pct(r.damagePct)} damage`
+            + `${r.survivalPct !== null ? ` and ${pct(r.survivalPct)} survival` : ''}. It costs ${cost}.`);
+        // eHP runs end when enemies out-damage the tower's health (Run Length on attack).
+        if (build === 'eHP' && Math.abs(r.damagePct) >= 0.05) {
+            out.push('Why no waves: with an eHP build, TowerForge measures how far runs go by survival (they end when enemies out-damage your health), so damage alone doesn\'t move it.');
+        }
+    } else {
+        out.push(`Headline: ${what} gives ${pct(r.survivalPct ?? r.damagePct)} ${r.survivalPct !== null ? 'survival' : 'damage'}. It costs ${cost}.`);
+    }
     out.push(...notes, `Details (campaign runs; damage measured on your T${report?.tier ?? '?'} run that ended at W${report?.wave.toLocaleString() ?? '?'}):`);
     out.push(`All damage ${pct(r.damagePct)}.`);
     if (build === 'Glass Cannon') out.push(`Push (flat damage + level skip) ${pct(r.pushPct)}.`);
     if (r.spread) out.push(`Run to run: ${r.spread.min.toFixed(1)} to ${r.spread.max.toFixed(1)} waves across the last ${r.spread.runs} runs.`);
-    if (r.coinsRun) out.push(`Coins per run: ${num(r.coinsRun.from)} → ${num(r.coinsRun.to)}.`);
-    if (r.coinsHour) out.push(`Coins per hour: ${num(r.coinsHour.from)} → ${num(r.coinsHour.to)}.`);
+    // The change worked out here: small models subtract wrong.
+    const change = (c: { from: number; to: number }) => `${num(c.from)} → ${num(c.to)} (${c.to >= c.from ? '+' : '−'}${num(Math.abs(c.to - c.from))})`;
+    if (r.coinsRun) out.push(`Coins per run: ${change(r.coinsRun)}.`);
+    if (r.coinsHour) out.push(`Coins per hour: ${change(r.coinsHour)}.`);
     if (r.survivalPct !== null) out.push(`Survival (eHP) ${pct(r.survivalPct)}.`);
     const links = r.chain.filter(l => l.waves !== undefined && Math.abs(l.waves) >= 0.05)
         .sort((a, b) => Math.abs(b.waves!) - Math.abs(a.waves!)).slice(0, 4);
@@ -457,7 +560,10 @@ export function tournamentOutlook(s: AiAccount, sim: AiTourneySettings): ToolRes
     const model = buildTournamentModel(account, { league, week: sim.week, last, lastLeague, preset: sim.preset, loadout: sim.loadout }, build);
     const names = (t: Ticks) => Object.entries(t).filter(([, on]) => on)
         .map(([k]) => HEAT_CONDITIONS.find(c => c.key === k)?.name ?? k);
-    const out: string[] = [`League: ${league || 'unknown'}.`];
+    // The order spelled out: small models put Champion above Legend.
+    const at = GAME_LEAGUES.indexOf(league as typeof GAME_LEAGUES[number]);
+    const up = at >= 0 ? GAME_LEAGUES[at + 1] : undefined;
+    const out: string[] = [`League: ${league || 'unknown'}.${at >= 0 ? ` Leagues from lowest to highest: ${GAME_LEAGUES.join(', ')}; ${up ? `the next one up is ${up}, so ${league} isn't the highest` : `${league} is the highest`}.` : ''}`];
     const runs = s.importedBattles.filter(b => b.tournament).sort((a, b) => (b.time ?? 0) - (a.time ?? 0)).slice(0, 5);
     out.push(`Recent tournament runs: ${runs.map(r => {
         const by = killedBy(r);
@@ -465,7 +571,9 @@ export function tournamentOutlook(s: AiAccount, sim: AiTourneySettings): ToolRes
         return `W${r.wave.toLocaleString()}${by ? ` (killed by ${by})` : ''}${e?.conditions.length ? ` with ${names(Object.fromEntries(e.conditions.map(k => [k, true]))).join(', ')}` : ''}`;
     }).join('; ')}.`);
     const week = names(sim.week);
-    out.push(`This week's battle conditions (ticked on the Tournament page): ${week.length ? week.join(', ') : 'none ticked'}.`);
+    out.push(week.length
+        ? `This week's battle conditions (ticked on the Tournament page): ${week.join(', ')}.`
+        : 'This week\'s battle conditions aren\'t known: none are ticked on the Tournament page yet, so the estimate below leaves them out.');
     if (model?.settle && model.run) {
         const zero = model.settle(last, heatOf(lastLeague));
         const shift = model.settle(sim.week) - zero;
@@ -483,6 +591,9 @@ export function tournamentOutlook(s: AiAccount, sim: AiTourneySettings): ToolRes
                 + `average of the last 10 W${Math.round(st.recentWave ?? 0).toLocaleString()}, best rank ${st.bestRank ?? '—'}, `
                 + `average rank of the last 10 ${st.recentRank?.toFixed(1) ?? '—'}.`);
         }
+        // The best rank with its tournament (the newest when tied).
+        const best = recs.filter(placed).reduce<typeof recs[number] | null>((b, r) => (!b || r.rank <= b.rank ? r : b), null);
+        if (best) out.push(`Best rank ever: ${best.rank}, in ${best.league} on ${day(best.date)} (W${best.wave.toLocaleString()}).`);
         const moves = leagueMoves(recs).slice(-3).map(m => `${m.up ? 'up to' : 'down to'} ${m.to} on ${day(m.date)}`);
         if (moves.length) out.push(`Last league moves: ${moves.join('; ')}.`);
         out.push(`Last 8 tournaments: ${recs.slice(-8).map(r => `${day(r.date)} ${r.league} W${r.wave.toLocaleString()} ${placed(r) ? `rank ${r.rank}` : '(not placed yet)'}`).join('; ')}.`);
@@ -521,6 +632,12 @@ function averageShares(runs: BattleReport[]): [string, number][] {
 
 export type AiRunKind = 'any' | 'campaign' | 'tournament';
 
+// UWs with no damage of their own (docs/ultimate-weapons.md).
+const NO_DAMAGE: Partial<Record<string, string>> = {
+    GT: 'it multiplies the coins from kills while it\'s active',
+    CF: 'it slows enemies',
+};
+
 export function runsReport(s: AiAccount, kind: AiRunKind = 'any'): ToolResult {
     const all = [...s.importedBattles].sort((a, b) => (b.time ?? 0) - (a.time ?? 0));
     if (!all.length) return { title: 'Your runs', text: 'No runs saved yet: import your game data to add your battle history.' };
@@ -530,12 +647,30 @@ export function runsReport(s: AiAccount, kind: AiRunKind = 'any'): ToolResult {
     // Where the damage comes from, campaign against tournaments.
     const farmTier = campaign.length ? [...campaign.reduce((m, r) => m.set(r.tier, (m.get(r.tier) ?? 0) + 1), new Map<number, number>())]
         .sort((a, b) => b[1] - a[1])[0][0] : null;
-    if (farmTier !== null) {
-        const sh = averageShares(campaign.filter(r => r.tier === farmTier && r.wave > 100).slice(0, 5));
-        if (sh.length) out.push(`Damage by source, last campaign runs on T${farmTier}: ${sharesText(sh)}.`);
-    }
+    const cSh = farmTier !== null ? averageShares(campaign.filter(r => r.tier === farmTier && r.wave > 100).slice(0, 5)) : [];
     const tSh = averageShares(tourney.filter(r => r.wave > 10).slice(0, 5));
-    if (tSh.length) out.push(`Damage by source, last tournament runs: ${sharesText(tSh)}.`);
+    if (cSh.length && tSh.length) {
+        // Side by side, so "weaker in tournaments" is read off, not guessed.
+        const share = (sh: [string, number][], n: string) => {
+            const v = sh.find(([x]) => x === n)?.[1];
+            return v === undefined ? 'under 1%' : `${(v * 100).toFixed(v < 0.1 ? 1 : 0)}%`;
+        };
+        const names = [...new Set([...cSh, ...tSh].map(([n]) => n))];
+        out.push(`Damage by source, last campaign runs on T${farmTier} against last tournament runs: ${names.map(n => `${n} ${share(cSh, n)} campaign, ${share(tSh, n)} tournaments`).join('; ')}.`);
+        out.push('The runs only record each source\'s share of the damage, not why a share changes between campaign and tournaments.');
+    } else if (cSh.length) {
+        out.push(`Damage by source, last campaign runs on T${farmTier}: ${sharesText(cSh)}.`);
+    } else if (tSh.length) {
+        out.push(`Damage by source, last tournament runs: ${sharesText(tSh)}.`);
+    }
+    // UWs the player owns that aren't in the damage: say why, so "which UW
+    // does the most damage" isn't answered with one that does none.
+    const sources = new Set([...cSh, ...tSh].map(([n]) => n));
+    const owned = UWS.filter(u => s.uwData.data[u.a]?.own);
+    const noDamage = owned.filter(u => NO_DAMAGE[u.a]).map(u => `${u.n} (${NO_DAMAGE[u.a]})`);
+    const small = owned.filter(u => !NO_DAMAGE[u.a] && !sources.has(u.n)).map(u => u.n);
+    if (noDamage.length) out.push(`Ultimate Weapons you own that deal no damage of their own: ${noDamage.join(', ')}.`);
+    if (small.length && (cSh.length || tSh.length)) out.push(`Ultimate Weapons you own under 1% of the damage in these runs: ${small.join(', ')}.`);
     const list = (kind === 'tournament' ? tourney : kind === 'campaign' ? campaign : all).slice(0, 12);
     out.push(`${kind === 'any' ? 'Newest runs' : `Newest ${kind} runs`}:`);
     for (const r of list) {
@@ -563,7 +698,9 @@ export function tierOutlook(s: AiAccount, target: number): ToolResult {
     const avg = Math.round(waves.reduce((a, w) => a + w, 0) / waves.length);
     const from = model.used.map(d => d.run.wave);
     const out = [
-        `Headline: with the damage and level skip of your last ${from.length} deaths on T${model.tier} (W${Math.min(...from).toLocaleString()}–W${Math.max(...from).toLocaleString()}, about W${model.typicalWave.toLocaleString()}), runs on T${to} would end around W${avg.toLocaleString()} (W${Math.min(...waves).toLocaleString()}–W${Math.max(...waves).toLocaleString()}).`,
+        // The estimate alone in the headline: given a range, the model quotes an end of it.
+        `Headline: runs on T${to} would end around W${avg.toLocaleString()}.`,
+        `From the damage and level skip of your last ${from.length} deaths on T${model.tier} (W${Math.min(...from).toLocaleString()}–W${Math.max(...from).toLocaleString()}); each death alone gives W${Math.min(...waves).toLocaleString()} to W${Math.max(...waves).toLocaleString()}.`,
         `How: each death's basic enemy health on T${model.tier}, and the wave where T${to} enemies reach the same health. Only health is compared: enemies on higher tiers also hit harder, and coins per wave are higher.`,
         ...model.used.map((d, i) => `- T${model.tier} W${d.run.wave.toLocaleString()} → T${to} W${waves[i].toLocaleString()}`),
     ];

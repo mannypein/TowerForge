@@ -132,8 +132,8 @@ export function gradeHeadline(data: string, answer: string): { ok: boolean | nul
         const ok = numbersIn(answer).some(n => close(n.value, Math.abs(want)));
         return ok ? { ok: true, why: '' } : { ok: false, why: `doesn't give the gain ${gain[1]}` };
     }
-    // Another tier: "would end around W6,400".
-    const tier = /Headline: .+? would end around W([\d,]+)/.exec(data);
+    // Another tier: "about W6,400 on T19" (older runs: "would end around W6,400").
+    const tier = /Headline: about W([\d,]+) on T/.exec(data) ?? /Headline: .+? would end around W([\d,]+)/.exec(data);
     if (tier) {
         const want = Number(tier[1].replace(/,/g, ''));
         return numbersIn(answer).some(n => close(n.value, want)) ? { ok: true, why: '' } : { ok: false, why: `doesn't give W${tier[1]}` };

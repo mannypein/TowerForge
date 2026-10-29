@@ -36,7 +36,7 @@ A pasted battle report (as opposed to an imported one) doesn't include boss/elit
 |---|---|---|
 | Amplifying Strike | eDPS | Tower damage × (1 + 4u), u = 1 − e^(−λ·x), λ = boss + elite + fleet kills/s. Your run: 86.5% → ×4.46. |
 | Being Annihilator | eDPS | +x% super crit chance; share of shots that super crit = 6q ÷ (1 + 5q) (each super crit forces 5 more). |
-| Death Penalty | eDPS | × 1 ÷ (1 − x): marked enemies die to one hit. |
+| Death Penalty | eDPS | x% of enemies (5% Epic → 15% Ancestral) are marked when they spawn and die to their first hit, so the rest of the damage only has to kill the other (1 − x): × 1 ÷ (1 − x), x at most 90%. |
 | Project Funding | eDPS | Tower damage × (1 + log10(cash) × x%), never below ×1 (wiki). |
 | Anti-Cube Portal | eDPS | × (1 + (x − 1) × min(1, 7s ÷ shockwave interval)); interval = 20s − 0.15s/level + sub-effects, min 7s. *Assumes the shockwave reaches the enemies the UWs hit.* |
 | Space Displacer | eDPS | Extra Inner Land Mines/s = kills/s × land mine chance (0.6%/level + subs) × x%, each dealing ILM damage (with Charged Mine). |
