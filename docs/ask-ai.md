@@ -406,6 +406,46 @@ Gaps the bench showed that aren't the assistant's:
   (push +0.00%). Health-based damage (Smite, Consume) may be undervalued for
   pushing; worth checking against a real account's What If.
 
+## Player reports
+
+Answers players sent with 👎 → Send (the AI reports panel). Their names and
+numbers stay in the panel, never here; the question goes into the bench.
+
+**1. "What should I do to perform better and get more keys in the Legend
+tournament?"** (2026-10-30, v2.0.1; 53 s.) The route was right (upgrades,
+any currency, waves, tournament runs), but the answer read as farming
+advice: "boosts to your farming efficiency", and the Guardian chips it
+named (Summon, Fetch, Bounty) were the farming preset's. The player's note:
+it doesn't look at their tournament setup, and they don't farm in
+tournaments. Three causes:
+
+- The account summary always showed the preset and module loadout on now —
+  the farming ones. A tournament question's summary now shows the
+  tournament build chosen on the Tournament page (`accountSummary`'s
+  `tourney`, `withTournamentBuild`), and says so, or that none is chosen.
+- The data was only the Optimizer's picks. "Do better in tournaments" with
+  no currency or amount now gets the picks for tournament runs *and* the
+  Tournament outlook (league, recent waves and ranks, this week), whether
+  the route picked the upgrades or the Tournament tool (`lookUp`). The
+  outlook also says TowerForge doesn't know each rank's rewards (keys), so
+  an answer about keys doesn't guess.
+- A new answer rule: a tournament question is about tournament waves and
+  rank, never farming. A league or bracket named ("in the Legend
+  tournament", "my Champion bracket") reads as a tournament question
+  (`TOURNEY_WORDS`; not Gold or Mythic, which are also golden things and a
+  rarity).
+
+Bench question `tourney-keys` (mid and late, must not say "farm"). Rerun of
+the tournament questions on the 4B (2026-10-30): 9 of 9 pass. On the late
+account (Legend, Glass Cannon) the answer now gives the tournament picks
+with their waves and costs (Chrono Field Cooldown +5.8 waves for 178
+stones, WS Attack Critical Chance +25 waves, Range Lab +3.1 waves), every
+number TowerForge's, in 57 s. Still weak: it calls more than one pick "the
+best next stones buy", it doesn't use the ranks it was given (average 16.6
+over the last 10, best 12), and on the mid account (an eHP build in Gold,
+where TowerForge doesn't score tournament waves) it padded the answer with
+levels from the summary and called Legend a "tier".
+
 ## Download size
 
 The two WebLLM scripts (the worker and the page's copy) are ~6 MB each.

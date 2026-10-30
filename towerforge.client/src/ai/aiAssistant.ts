@@ -170,6 +170,7 @@ Unused fields: currency "any", goal "default", changes [], search "", runs "any"
 Examples:
 "what should I spend my stones on" → {"tool":"upgrades","currency":"stones","goal":"default","changes":[],"search":"","runs":"any","tier":0,"budget":0}
 "I'm about to get 1500 stones, how do I do better in tournaments" → {"tool":"upgrades","currency":"stones","goal":"waves","changes":[],"search":"","runs":"tournament","tier":0,"budget":1500}
+"how do I place higher in my Champion bracket" → {"tool":"upgrades","currency":"any","goal":"waves","changes":[],"search":"","runs":"tournament","tier":0,"budget":0}
 "I have 2.4B coins, what should I buy in the workshop" → {"tool":"upgrades","currency":"coins","goal":"default","changes":[],"search":"","runs":"any","tier":0,"budget":2400000000}
 "how do I get more coins" → {"tool":"upgrades","currency":"any","goal":"coins","changes":[],"search":"","runs":"any","tier":0,"budget":0}
 "how do I survive longer" → {"tool":"upgrades","currency":"any","goal":"survival","changes":[],"search":"","runs":"any","tier":0,"budget":0}
@@ -193,6 +194,11 @@ Earlier question "how many waves would maxing DW get me", then "and CF instead?"
 "how does Fast's Ultimate work" → {"tool":"guide","currency":"any","goal":"default","changes":[],"search":"Fast's Ultimate","runs":"any","tier":0,"budget":0}`;
 
 
+// A tournament question: the word, or a league or bracket ("… in the
+// Legend tournament", "my Champion bracket"). Not Gold or Mythic, which
+// are also golden things and a rarity.
+const TOURNEY_WORDS = /tourn|\bleagues?\b|\bbrackets?\b|\b(copper|silver|platinum|champion|legend)\b/i;
+
 // When the model's JSON can't be read: the same choice from keywords.
 function guessRoute(q: string): Route {
     const l = q.toLowerCase();
@@ -201,7 +207,7 @@ function guessRoute(q: string): Route {
     const tier = /\bt(?:ier)?\s?(\d{1,2})\b/.exec(l);
     if (tier && /farm|get to|make it|how far|move up|push/.test(l)) return { ...base, tool: 'tier', tier: Number(tier[1]) };
     if (/\bruns?\b|history|damage (by|from)|killed/.test(l)) return { ...base, tool: 'runs', runs: /tourn/.test(l) ? 'tournament' : 'any' };
-    if (/tourn|tourney|bracket|battle condition/.test(l)) {
+    if (TOURNEY_WORDS.test(l) || /battle condition/.test(l)) {
         if (spend) return { ...base, tool: 'upgrades', currency: currencyIn(l), goal: 'waves', runs: 'tournament' };
         return { ...base, tool: 'tournament' };
     }
@@ -228,7 +234,7 @@ export type RouteChoice = Route & { guessed?: boolean; quick?: boolean };
 export function quickRoute(q: string): RouteChoice | null {
     const l = q.toLowerCase().trim();
     if (/\b(if|max|maxing|maxed|worth|would|vs|versus|instead|compare|better)\b|\bt(?:ier)?\s?\d/.test(l)) return null;
-    const base: RouteChoice = { tool: 'none', currency: 'any', goal: 'default', changes: [], search: '', runs: /tourn/.test(l) ? 'tournament' : 'any', tier: 0, budget: budgetIn(q), quick: true };
+    const base: RouteChoice = { tool: 'none', currency: 'any', goal: 'default', changes: [], search: '', runs: TOURNEY_WORDS.test(l) ? 'tournament' : 'any', tier: 0, budget: budgetIn(q), quick: true };
     if (/^(hi|hey|hello|thanks|thank you|ty)\b[\s!.?]*$/.test(l)) return { ...base, runs: 'any' };
     if (/^what tier am i (on|at)\b/.test(l)) return { ...base, runs: 'any' };
     const cur = (['stones', 'medals', 'gems', 'bits'] as const).find(c => new RegExp(`\\b${c.slice(0, -1)}s?\\b`).test(l));
@@ -267,6 +273,9 @@ export function readRoute(raw: string, q: string): RouteChoice {
 // the earlier upgrade, "what is enemy level skip" sent nowhere).
 function checked(r: Route, q: string): Route {
     const out = { ...r };
+    // A league named is a tournament question ("… in the Legend tournament"),
+    // and the Tournament tool is always about tournament runs.
+    if (out.tool === 'tournament' || (['upgrades', 'what_if'].includes(out.tool) && TOURNEY_WORDS.test(q))) out.runs = 'tournament';
     // A tier is only the one the question names; none named = the next one.
     if (out.tool === 'tier') out.tier = Number(/\bt(?:ier)?\s?(\d{1,2})\b/i.exec(q)?.[1]) || 0;
     // "… in my runs", "what keeps killing me": the saved runs.
@@ -330,10 +339,20 @@ const routeText = (r: RouteChoice) => [
 ].filter(Boolean).join(' · ');
 
 // ── Step 2: the data ──────────────────────────────────────────
-function lookUp(route: Route, question: string, ctx: AiContext): ToolResult[] {
+// "What should I do to perform better and get more keys in the Legend
+// tournament?" (the first player report): the picks scored for tournament
+// runs and where the player stands — league, waves and ranks, this week —
+// whether the route chose the picks or the Tournament tool.
+const ADVICE_WORDS = /\b(what should i|how (do|can|could) i|improve|do better|perform better|upgrade|spend|buy|focus|get more)\b/i;
+const tourneyPicks = (route: Route, ctx: AiContext) => bestUpgrades(ctx.account, route.currency,
+    route.goal === 'default' ? 'waves' : route.goal, { budget: route.budget, runs: 'tournament', tourney: ctx.tourney, goalAsked: route.goal !== 'default' });
+
+export function lookUp(route: Route, question: string, ctx: AiContext): ToolResult[] {
     const { account } = ctx;
     switch (route.tool) {
         case 'upgrades':
+            // A currency or an amount to spend asks for its picks alone.
+            if (route.runs === 'tournament' && route.currency === 'any' && !route.budget) return [tourneyPicks(route, ctx), tournamentOutlook(account, ctx.tourney)];
             return [bestUpgrades(account, route.currency, route.goal === 'default' ? ctx.goal : route.goal,
                 { budget: route.budget, runs: route.runs, tourney: ctx.tourney, goalAsked: route.goal !== 'default' })];
         case 'what_if': {
@@ -353,6 +372,7 @@ function lookUp(route: Route, question: string, ctx: AiContext): ToolResult[] {
         case 'tier':
             return [tierOutlook(account, route.tier)];
         case 'tournament':
+            if (ADVICE_WORDS.test(question)) return [tourneyPicks(route, ctx), tournamentOutlook(account, ctx.tourney)];
             return [tournamentOutlook(account, ctx.tourney), runsReport(account, 'tournament')];
         case 'lab_boosts':
             return [labBoostsReport(account, `${route.search} ${question}`)];
@@ -384,6 +404,7 @@ Rules:
 - When the data says what the player can buy with what they hold now, follow it: never tell them to buy more than that.
 - When the data says there's nothing worth buying, say so with the reason it gives; don't suggest other buys instead.
 - Give only reasons, mechanics and enemy behavior that the data or the game notes state. When they don't say why, say TowerForge can't tell why rather than guessing, and don't add advice the data doesn't give. Asked why something differs between campaign and tournaments, give the measured differences the data lists and nothing else.
+- A question about tournaments is about tournament waves and rank: don't call the picks farming or coin advice, and don't tell them to farm.
 - Write it in your own words: never name the data's own sections or labels ("Headline", "Plan for", titles in [brackets]) and don't mention "the data".
 - Only help with The Tower and TowerForge: for anything else, say in one sentence that you can only help with their Tower account.
 - Use the game's own words: stones, Ultimate Weapons (UWs), UW+, labs, workshop, enhancements, cards, modules, bots, Bot+, Guardian, tiers, waves. ${UW_NAMES}
@@ -552,7 +573,8 @@ export const useAiStore = create<AiStore>((set, get) => {
                 await new Promise(r => setTimeout(r, 30));   // let the page show it
                 const looked = lookUp(route, q, ctx);
                 traced = { route, looked };
-                const summary = accountSummary(ctx.account);
+                // A tournament question sees the tournament build, not the farming one.
+                const summary = accountSummary(ctx.account, Date.now(), route.runs === 'tournament' || route.tool === 'tournament' ? ctx.tourney : undefined);
                 let data = looked.map(r => `[${r.title}]\n${r.text}`).join('\n\n');
                 // Keep everything inside the context with room for the answer.
                 const answerTokens = get().think ? 2048 : 900;

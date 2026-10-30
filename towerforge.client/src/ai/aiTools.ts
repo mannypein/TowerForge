@@ -80,9 +80,15 @@ const buildOf = (s: AiAccount) => effectiveBuild(s.profile.build as BuildType, s
 const KEY_LABS = ['Damage Lab', 'Attack Speed Lab', 'Critical Factor Lab', 'Super Crit Mult Lab', 'Health Lab',
     'Defense % Lab', 'Enemy HP Lvl Skip Lab', 'Enemy Atk Lvl Skip Lab', 'Coins/Kill Lab', 'Cash Bonus Lab'];
 
-export function accountSummary(s: AiAccount, now = Date.now()): string {
+// `tourney`: the question is about tournaments, so the cards, modules, bots
+// and Guardian chips are the tournament build (the preset and module
+// loadout chosen on the Tournament page). Otherwise a player's farming
+// chips (Fetch, Bounty…) read as their tournament setup — the first
+// player report (2026-10-30): "It doesn't look at my tournament setup."
+export function accountSummary(s: AiAccount, now = Date.now(), tourney?: AiTourneySettings): string {
     const p = s.profile;
     const lines: string[] = [];
+    const setup = tourney ? withTournamentBuild(s, tourney.preset, tourney.loadout) : s;
     lines.push(`Build: ${p.build || 'Glass Cannon (not set on the Profile page, so TowerForge assumes it)'}. Highest tier reached: ${p.highestTier ? `T${p.highestTier}` : 'unknown'}`
         + `${p.completedTier ? ` (completed T${p.completedTier})` : ''}. League: ${p.league || 'unknown'}`
         + `${p.currentLeague && p.currentLeague !== p.league ? ` (this week: ${p.currentLeague})` : ''}.`);
@@ -102,7 +108,12 @@ export function accountSummary(s: AiAccount, now = Date.now()): string {
     });
     lines.push(uws.length ? `Ultimate Weapons: ${uws.join('; ')}.` : 'Ultimate Weapons: none owned.');
 
-    const presetIdx = s.activePreset;
+    if (tourney) {
+        lines.push(tourney.preset !== undefined || tourney.loadout !== undefined
+            ? 'The cards, modules, bots and Guardian chips below are their tournament build, chosen on the Tournament page.'
+            : 'No tournament build is chosen on the Tournament page, so the cards, modules, bots and Guardian chips below are the ones they have on now.');
+    }
+    const presetIdx = setup.activePreset;
     const cards = s.cardData.presets?.[presetIdx] ?? [];
     if (cards.length) {
         lines.push(`Cards in ${presetLabel(p.presetNames, presetIdx)}: ${cards.map(n => {
@@ -111,7 +122,7 @@ export function accountSummary(s: AiAccount, now = Date.now()): string {
         }).join(', ')}.`);
     }
 
-    const lo = activeLoadout(s.moduleState);
+    const lo = activeLoadout(setup.moduleState);
     if (lo) {
         const mods = (['cannon', 'armor', 'generator', 'core'] as const).map(type => {
             const m = s.moduleState.library.find(x => x.id === lo.slots[type]?.main);
@@ -124,7 +135,7 @@ export function accountSummary(s: AiAccount, now = Date.now()): string {
         lines.push(`Modules equipped: ${mods.join('; ')}.`);
     }
 
-    const presetBots = botsForPreset(s.botData, s.activePreset);
+    const presetBots = botsForPreset(s.botData, setup.activePreset);
     const bots = BOTS_CONFIG.filter(b => presetBots[b.name]?.owned).map(b => {
         const e = presetBots[b.name]!;
         const lv = b.stats.map((st, i) => `${st.label} ${e.medals?.[i] ?? 0}/${st.values.length}`).join(', ');
@@ -162,7 +173,7 @@ export function accountSummary(s: AiAccount, now = Date.now()): string {
         lines.push(`Vault: ${bought.length} upgrades bought (${maxedV} maxed), ${vaultKeys(vault).spent.toLocaleString()} keys spent: `
             + `${bought.map(u => `${u.name} ${vaultLevel(vault, u) >= u.costs.length ? 'max' : `${vaultLevel(vault, u)}/${u.costs.length}`}`).join(', ')}.`);
     }
-    const chips = activeChips(s.guardianData, s.activePreset);
+    const chips = activeChips(s.guardianData, setup.activePreset);
     if (chips.length) {
         lines.push(`Guardian chips equipped: ${chips.map(a => `${a.chip.name} (${a.chip.stats.map((st, k) => `${st.name} ${a.levels[k]}/${st.max}`).join(', ')})`).join('; ')}.`);
     }
@@ -658,6 +669,8 @@ export function tournamentOutlook(s: AiAccount, sim: AiTourneySettings): ToolRes
         if (moves.length) out.push(`Last league moves: ${moves.join('; ')}.`);
         out.push(`Last 8 tournaments: ${recs.slice(-8).map(r => `${day(r.date)} ${r.league} W${r.wave.toLocaleString()} ${placed(r) ? `rank ${r.rank}` : '(not placed yet)'}`).join('; ')}.`);
     }
+    // Asked for more keys, the answer says this rather than guess.
+    out.push('TowerForge doesn\'t know the rewards for each rank (keys and the rest), so it can\'t say how many a rank gives.');
     return { title: 'Tournament', text: out.join('\n') };
 }
 

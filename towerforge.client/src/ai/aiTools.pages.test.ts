@@ -1,13 +1,16 @@
 // Ask AI: the tools for the Labs page's Lab boosts, Modules → Shard plan,
-// What If's tournament mode and the fuller account summary, on the test
-// bench's made-up accounts (bench/benchAccounts.ts).
+// What If's tournament mode, the fuller account summary and what a
+// tournament question looks at, on the test bench's made-up accounts
+// (bench/benchAccounts.ts).
 
 import { describe, expect, it } from 'vitest';
 import { useGameStore } from '../store/useGameStore';
 import { parseGameExport } from '../engine/gameExport';
 import { BENCH_ACCOUNTS } from './bench/benchAccounts';
 import { accountSummary, farmTiersReport, guardianReport, labBoostsReport, runsReport, shardPlanReport, whatIfChanges } from './aiTools';
-import type { AiAccount } from './aiTools';
+import type { AiAccount, AiTourneySettings } from './aiTools';
+import { lookUp } from './aiAssistant';
+import type { RouteChoice } from './aiAssistant';
 
 function load(key: 'early' | 'mid' | 'late'): AiAccount {
     const a = BENCH_ACCOUNTS.find(x => x.key === key)!;
@@ -100,5 +103,35 @@ describe('the account summary', () => {
         expect(t).toMatch(/Labs: \d+ researched, \d+ maxed; Damage Lab 47\/100, /);
         expect(t).toMatch(/Vault: 5 upgrades bought \(2 maxed\), [\d,]+ keys spent: .*Ad Gem Stack 2\/4/);
         expect(t).toMatch(/Guardian chips equipped: Attack \(.*\); Bounty \(.*\); Fetch \(/);
+    });
+});
+
+// The first player report (2026-10-30): picks for farming and the farming
+// Guardian chips, for "more keys in the Legend tournament".
+describe('a tournament question', () => {
+    const tourney = { league: 'Legend', week: {}, recent: {} } as AiTourneySettings;
+    const q = 'What should I do to perform better and get more keys in the Legend tournament?';
+    const route: RouteChoice = { tool: 'upgrades', currency: 'any', goal: 'default', changes: [], search: '', runs: 'tournament', tier: 0, budget: 0 };
+
+    it('looks at the picks for tournament runs and where the player stands, whichever tool was picked', () => {
+        const account = load('late');
+        const titles = (r: RouteChoice) => lookUp(r, q, { account, tourney }).map(x => x.title);
+        expect(titles(route)).toEqual(['Optimizer — stones, coins, lab research (tournaments)', 'Tournament']);
+        expect(titles({ ...route, tool: 'tournament' })).toEqual(titles(route));
+        // A currency or an amount to spend asks for its picks alone.
+        expect(titles({ ...route, currency: 'stones', budget: 500 })).toEqual(['Optimizer — stones (tournaments, 500 to spend)']);
+        // "How will I do this week" isn't asking what to buy.
+        expect(lookUp({ ...route, tool: 'tournament' }, "How will I do in this week's tournament?", { account, tourney }).map(x => x.title)).toEqual(['Tournament', 'Your runs — tournament']);
+        expect(lookUp(route, q, { account, tourney })[1].text).toMatch(/doesn't know the rewards for each rank \(keys and the rest\)/);
+    });
+
+    it('sees the tournament build in the account summary', () => {
+        const s = load('late');
+        const two: AiAccount = { ...s, profile: { ...s.profile, presets: 2 }, cardData: { ...s.cardData, presets: [s.cardData.presets![0], ['Damage']] } };
+        const t = accountSummary(two, Date.now(), { ...tourney, preset: 1 });
+        expect(t).toMatch(/below are their tournament build, chosen on the Tournament page/);
+        expect(t).toMatch(/Cards in [^:]+: Damage [^,]*\.\n/);
+        expect(accountSummary(two, Date.now(), tourney)).toMatch(/No tournament build is chosen on the Tournament page/);
+        expect(accountSummary(two)).not.toMatch(/tournament build/);
     });
 });

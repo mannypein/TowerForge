@@ -55,6 +55,15 @@ describe('the route, checked against the question', () => {
         expect(readRoute(json({ tool: 'none' }), 'Which guardian chips should I use?').tool).toBe('guardian');
     });
 
+    it('reads a league named as a tournament question, and the Tournament tool as tournament runs', () => {
+        const q = 'What should I do to perform better and get more keys in the Legend tournament?';
+        expect(readRoute(json({ tool: 'upgrades', runs: 'any' }), q).runs).toBe('tournament');
+        expect(readRoute(json({ tool: 'upgrades', runs: 'any' }), 'How do I place higher in my Champion bracket?').runs).toBe('tournament');
+        expect(readRoute(json({ tool: 'tournament', runs: 'any' }), 'Am I going to move up a league?').runs).toBe('tournament');
+        // A rarity isn't a league.
+        expect(readRoute(json({ tool: 'upgrades', runs: 'any' }), 'Which legendary module should I upgrade?').runs).toBe('any');
+    });
+
     it('falls back to keywords when the JSON can\'t be read', () => {
         expect(readRoute('not json', 'How do I get more coins?')).toMatchObject({ tool: 'upgrades', goal: 'coins', guessed: true });
     });

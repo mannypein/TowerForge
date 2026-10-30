@@ -93,6 +93,8 @@ export const BENCH_QUESTIONS: BenchQuestion[] = [
     { id: 'tourney-league', q: 'Am I going to move up a league?', accounts: ['mid', 'late'], expect: { tool: 'tournament' } },
     { id: 'tourney-rank', q: "What's my best tournament rank?", accounts: ['late'], expect: { tool: 'tournament' } },
     { id: 'tourney-none', q: 'How do I do better in tournaments?', accounts: ['early'], expect: { tool: ['upgrades', 'tournament'] } },
+    // From the first player report (2026-10-30): picks for farming, the farming Guardian chips.
+    { id: 'tourney-keys', q: 'What should I do to perform better and get more keys in the Legend tournament?', accounts: ['mid', 'late'], expect: { tool: ['upgrades', 'tournament'], runs: 'tournament' }, mustNot: [/\bfarm/i] },
 
     // ── How the game works ───────────────────────────────────────
     { id: 'guide-cf', q: 'How does Chrono Field work?', accounts: ['late'], expect: { tool: 'guide' } },

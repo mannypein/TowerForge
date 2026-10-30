@@ -97,11 +97,13 @@ export async function runBench(opts: { accounts?: BenchAccountKey[]; ids?: strin
         await useAiStore.getState().ask(q.q, { account, tourney: loadTourneySim() });
         const msgs = useAiStore.getState().messages;
         const reply = msgs[msgs.length - 1];
+        // The summary the answer saw: a tournament question's has the tournament build.
+        const tourney = reply?.routed?.runs === 'tournament' || reply?.routed?.tool === 'tournament' ? loadTourneySim() : undefined;
         const rec: BenchRecord = {
             account: acc, id: q.id, q: q.q,
             routed: reply?.routed ?? null,
             route: reply?.route ?? '',
-            data: [accountSummary(account), ...(reply?.looked ?? []).map(r => `[${r.title}]\n${r.text}`)].join('\n\n'),
+            data: [accountSummary(account, Date.now(), tourney), ...(reply?.looked ?? []).map(r => `[${r.title}]\n${r.text}`)].join('\n\n'),
             answer: reply?.text ?? '',
             ms: Math.round(performance.now() - t0),
         };
