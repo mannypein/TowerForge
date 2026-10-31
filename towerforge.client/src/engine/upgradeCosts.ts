@@ -26,7 +26,7 @@ import { WS_ENH, WS_STATS } from '../constants/gameData';
 import { ENH_COIN_COSTS, WS_COIN_COSTS } from '../constants/workshopCosts';
 import { MODULE_SLOT_COINS, MODULE_SLOT_SHARDS } from '../constants/moduleCosts';
 import { LAB_LEVEL_COSTS } from '../constants/labCosts';
-import type { LabData } from '../types/gameTypes';
+import type { LabData, LabProgress } from '../types/gameTypes';
 
 export type WorkshopSection = 'attack' | 'defense' | 'utility';
 
@@ -140,16 +140,20 @@ export function labSpeed(labs: LabData, relics: Record<string, number>, lab?: st
 }
 
 // Coins and research time for `level` (1 = the first level) of a lab; null
-// when the catalog doesn't have that level.
+// when the catalog doesn't have that level. A level already under way costs
+// the time it has left, and no coins once it's running (`progress`). Whether
+// restarting a stopped lab charges its coins again isn't confirmed, so a
+// stopped level keeps its price.
 export function labLevelCost(
-    lab: string, level: number, labs: LabData, relics: Record<string, number>,
+    lab: string, level: number, labs: LabData, relics: Record<string, number>, progress?: LabProgress,
 ): LabLevelCost | null {
     const row = LAB_LEVEL_COSTS[lab];
     const i = level - 1;
     if (!row || i < 0 || i >= row[0].length) return null;
+    const under = progress?.[lab]?.toLevel === level ? progress[lab] : undefined;
     return {
-        coins: row[1][i] * (1 - 0.003 * Math.min(99, labs['Labs Coin Discount'] ?? 0)),
-        hours: row[0][i] / 60 / labSpeed(labs, relics, lab),
+        coins: under?.running ? 0 : row[1][i] * (1 - 0.003 * Math.min(99, labs['Labs Coin Discount'] ?? 0)),
+        hours: row[0][i] / 60 / labSpeed(labs, relics, lab) * (1 - (under?.done ?? 0)),
     };
 }
 

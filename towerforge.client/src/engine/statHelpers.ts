@@ -24,6 +24,13 @@ export function activeLoadout(ms: ModuleState): Loadout | undefined {
     return ms.loadouts.find(l => l.id === ms.activeLoadout) ?? ms.loadouts[0];
 }
 
+// The loadout a preset uses, when the game's Global Presets say; undefined
+// when they don't or the loadout has since been deleted.
+export function loadoutForPreset(ms: ModuleState, preset: number): string | undefined {
+    const id = ms.loadoutFor?.[preset];
+    return id && ms.loadouts.some(l => l.id === id) ? id : undefined;
+}
+
 // Enhancement data as one preset sees it: that preset's own levels when it
 // has them (imported from the game), else the shared levels.
 export function enhForPreset(enh: EnhData, presetIdx: number): EnhData {

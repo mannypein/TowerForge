@@ -15,7 +15,7 @@ import type { BoostSettings, CellIncome, LabBoostPlan } from '../../engine/labBo
 import { formatLabTime } from '../../engine/upgradeCosts';
 import NumericInput from '../common/NumericInput';
 import { CurrencyField } from '../common/CurrencyBar';
-import type { LabData, Profile, RelicData } from '../../types/gameTypes';
+import type { LabData, LabProgress, Profile, RelicData } from '../../types/gameTypes';
 
 // Cells as the game writes big numbers, with commas below a million.
 const cells = (v: number) => (v < 1e6 ? Math.round(v).toLocaleString() : formatGameNumber(v));
@@ -27,7 +27,7 @@ function lastsText(hours: number): string {
 }
 
 
-export default function LabBoostPanel({ settings, income, plan, profile, cellsHeld, openLabs, defaultLab, labData, relicData, onProfile }: {
+export default function LabBoostPanel({ settings, income, plan, profile, cellsHeld, openLabs, defaultLab, labData, labProgress, relicData, onProfile }: {
     settings: BoostSettings;
     income: CellIncome | null;
     plan: LabBoostPlan;
@@ -36,13 +36,14 @@ export default function LabBoostPanel({ settings, income, plan, profile, cellsHe
     openLabs: string[];           // labs that are open and not maxed
     defaultLab?: string;
     labData: LabData;
+    labProgress: LabProgress;
     relicData: RelicData;
     onProfile: (patch: Partial<Profile>) => void;
 }) {
     const [picked, setPicked] = useState<string | null>(null);
     const lab = picked && openLabs.includes(picked) ? picked
         : defaultLab && openLabs.includes(defaultLab) ? defaultLab : openLabs[0];
-    const hours = useMemo(() => (lab ? labHours(lab, labData, relicData) : null), [lab, labData, relicData]);
+    const hours = useMemo(() => (lab ? labHours(lab, labData, relicData, labProgress) : null), [lab, labData, relicData, labProgress]);
     const { best, spare, higher, part } = plan;
     const speeds = [...new Set([1, ...best.speeds])].sort((a, b) => a - b);
     const typed = profile.cellsPerHour !== undefined || profile.runHoursPerDay !== undefined;
@@ -146,7 +147,7 @@ export default function LabBoostPanel({ settings, income, plan, profile, cellsHe
                             </thead>
                             <tbody>
                                 <tr>
-                                    <td>Lv {hours.cur} → {hours.cur + 1}</td>
+                                    <td>Lv {hours.cur} → {hours.cur + 1}{hours.done > 0 && ` (${Math.floor(hours.done * 100)}% done)`}</td>
                                     {speeds.map(s => <td key={s}>{hours.next !== null ? formatLabTime(hours.next / s) : '—'}</td>)}
                                 </tr>
                                 {hours.max > hours.cur + 1 && (

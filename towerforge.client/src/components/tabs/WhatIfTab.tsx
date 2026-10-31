@@ -85,6 +85,7 @@ export default function WhatIfTab() {
     const uwData = useGameStore(s => s.uwData);
     const relicData = useGameStore(s => s.relicData);
     const botData = useGameStore(s => s.botData);
+    const labProgress = useGameStore(s => s.labProgress);
     const moduleState = useGameStore(s => s.moduleState);
     const battleReportText = useGameStore(s => s.battleReportText);
     const importedBattles = useGameStore(s => s.importedBattles);
@@ -95,9 +96,9 @@ export default function WhatIfTab() {
 
     const account: AccountState = useMemo(() => ({
         activePreset, profile, perkData, wsData, enhData, labData, cardData, uwData, relicData, botData,
-        moduleState, battleReportText, importedBattles, battleReportChoice, guardianData,
+        moduleState, battleReportText, importedBattles, battleReportChoice, guardianData, labProgress,
     }), [activePreset, profile, perkData, wsData, enhData, labData, cardData, uwData, relicData, botData,
-        moduleState, battleReportText, importedBattles, battleReportChoice, guardianData]);
+        moduleState, battleReportText, importedBattles, battleReportChoice, guardianData, labProgress]);
 
     // Hybrid reads as the build its runs behave like (accountModels.effectiveBuild).
     const build = useMemo(() => effectiveBuild(profile.build as BuildType, importedBattles), [profile.build, importedBattles]);
@@ -202,7 +203,7 @@ export default function WhatIfTab() {
                         </label>
                         <label className="tn-field">
                             Preset
-                            <select value={tModel.account.activePreset} onChange={e => setSim({ preset: Number(e.target.value) })}>
+                            <select value={tModel.account.activePreset} onChange={e => setSim({ preset: Number(e.target.value), ...(moduleState.loadoutFor ? { loadout: undefined } : {}) })}>
                                 {Array.from({ length: profile.presets || 2 }, (_, i) => (
                                     <option key={i} value={i}>{presetLabel(profile.presetNames, i)}</option>
                                 ))}

@@ -238,6 +238,10 @@ export interface ModuleState {
     library: ModuleEntry[];
     loadouts: Loadout[];
     activeLoadout?: string;   // id of the equipped loadout (the one the calculators use); default = first
+    // Site preset → the loadout it uses, from the game's Global Presets. Absent
+    // = one equipped loadout whatever the preset (entered by hand, or the game's
+    // presets don't tell modules apart).
+    loadoutFor?: string[];
     assistData: AssistData;
     slotLevels: SlotLevels;
 }
@@ -399,6 +403,7 @@ export interface AppState {
     battleReportChoice: number;        // which report calibrates the optimizer: -1 = pasted, else importedBattles index
     guardianData: GuardianData;
     labsRunning: LabRunning[];    // labs being researched at the last import (29.1.3+ exports)
+    labProgress: LabProgress;     // labs whose next level is under way or part done, at the last import
     tourneyLog: TourneyLog;       // each tournament run's battle conditions, as the player ticked them
     tourneyRecords: TourneyRecord[];   // every tournament played (TournamentRecords, 29.1.3+), oldest first
     vaultLevels: Record<string, number>;   // Vault upgrade levels by the game's vault id (Vault.UpgradesLevel); "g<group>" = 1 for an unlocked section (constants/vaultData.ts)
@@ -421,6 +426,16 @@ export interface TourneyRecord {
     wave: number;
     rank: number;      // 0 = not placed yet
 }
+
+// How far a lab's next level has got (ResearchPercentComplete). Tied to that
+// level: once the lab's level changes, by an edit or an Optimizer step, the
+// next level is charged in full.
+export interface LabLevelProgress {
+    toLevel: number;     // the level under way
+    done: number;        // the share of its research time done, 0–1
+    running?: boolean;   // being researched right now, so its coins are paid
+}
+export type LabProgress = Record<string, LabLevelProgress>;
 
 // A lab being researched when the game exported (LabActiveBool / LabResearchInt,
 // ResearchCompleteDate; the speed-up as of the export).

@@ -80,6 +80,7 @@ export default function LabsTab() {
     const setLabLevel = useGameStore(s => s.setLabLevel);
     const setAllLabs = useGameStore(s => s.setAllLabs);
     const labsRunning = useGameStore(s => s.labsRunning);
+    const labProgress = useGameStore(s => s.labProgress);
     const importedBattles = useGameStore(s => s.importedBattles);
     const cellsHeld = useGameStore(s => s.currencies.cells ?? 0);
     const relicData = useGameStore(s => s.relicData);
@@ -185,7 +186,7 @@ export default function LabsTab() {
                 <LabBoostPanel
                     settings={settings} income={income} plan={plan} profile={profile} cellsHeld={cellsHeld}
                     openLabs={openLabs} defaultLab={labsRunning.find(r => r.lab && openLabs.includes(r.lab))?.lab ?? undefined}
-                    labData={labData} relicData={relicData} onProfile={updateProfile}
+                    labData={labData} labProgress={labProgress} relicData={relicData} onProfile={updateProfile}
                 />
             )}
 

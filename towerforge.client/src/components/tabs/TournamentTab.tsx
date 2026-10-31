@@ -231,8 +231,8 @@ export default function TournamentTab() {
                 <div className="section-head"><h3>Your tournament build</h3></div>
                 <div className="section-body tn-build">
                     <label className="tn-field">
-                        Preset (workshop, cards, bots, Guardian)
-                        <select value={buildPreset} onChange={e => setSim({ preset: Number(e.target.value) })}>
+                        Preset (workshop, cards, bots, Guardian{state.moduleState.loadoutFor ? ', modules' : ''})
+                        <select value={buildPreset} onChange={e => setSim({ preset: Number(e.target.value), ...(state.moduleState.loadoutFor ? { loadout: undefined } : {}) })}>
                             {presets.map(i => <option key={i} value={i}>{presetLabel(state.profile.presetNames, i)}</option>)}
                         </select>
                     </label>

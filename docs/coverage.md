@@ -66,7 +66,7 @@ reports set the baseline, so even unmodeled effects are already in it; only
 | Currency | Status | Notes |
 |---|---|---|
 | Coins: workshop, enhancements | ✅ | Game cost tables, discount labs |
-| Lab time | ✅ | Per hour of research; lab speed and relic |
+| Lab time | ✅ | Per hour of research; lab speed and relic; a part-done level costs the time left, and the level being researched isn't offered (2026-10-31) |
 | Stones: UWs, UW+, masteries, assist modules | ✅ | Bot+ (1,250 stones) not offered |
 | Medals: bots, Bot+, Event Shop trades | ✅ | Bots and Bot+ levels (to v29's 20–25, 2026-10-19) only where a model reads the stat — Echoing Shot among the Bot+ abilities |
 | Module Shards: slot levels | ✅ | Shard cost lab; level caps by rarity. Each type's shards on its own slots: Modules → Shard plan (main vs assist, what to save for, and the best levels for every shard of the type — Restore gives them back) and the Optimizer's per-type value for Event Shop trades and the Vault's daily-mission pick (2026-10-28). Sub-effect slots that levels reveal aren't valued |

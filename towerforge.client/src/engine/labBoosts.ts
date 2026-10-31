@@ -20,7 +20,7 @@
 
 import { CELL_BOOSTS, labLevelCost } from './upgradeCosts';
 import type { BattleReport } from './battleReport';
-import type { LabData, Profile, RelicData } from '../types/gameTypes';
+import type { LabData, LabProgress, Profile, RelicData } from '../types/gameTypes';
 import { LABS } from '../constants/gameData';
 
 const SPEEDS = [1, ...CELL_BOOSTS.map(([speed]) => speed)];
@@ -98,21 +98,23 @@ export function boostsForLabs(secondsLeft: number[], speeds: number[]): number[]
 
 const LAB_MAX = new Map(LABS.flatMap(g => g.l.map(([name, max]) => [name, max] as const)));
 
-// Research hours for a lab's next level and for the rest of it, at ×1
-// (after lab speed and relics: upgradeCosts.labLevelCost); null when maxed.
-export function labHours(lab: string, labData: LabData, relics: RelicData):
-    { cur: number; max: number; next: number | null; toMax: number | null } | null {
+// Research hours left for a lab's next level and for the rest of it, at ×1
+// (after lab speed and relics: upgradeCosts.labLevelCost), with how much of
+// the next level is done already; null when maxed.
+export function labHours(lab: string, labData: LabData, relics: RelicData, progress?: LabProgress):
+    { cur: number; max: number; next: number | null; toMax: number | null; done: number } | null {
     const cur = labData[lab] ?? 0;
     const max = LAB_MAX.get(lab) ?? cur;
     if (cur >= max) return null;
-    const next = labLevelCost(lab, cur + 1, labData, relics);
+    const next = labLevelCost(lab, cur + 1, labData, relics, progress);
     let toMax: number | null = 0;
     for (let lv = cur + 1; lv <= max; lv++) {
-        const c = labLevelCost(lab, lv, labData, relics);
+        const c = labLevelCost(lab, lv, labData, relics, progress);
         if (!c) { toMax = null; break; }
         toMax += c.hours;
     }
-    return { cur, max, next: next?.hours ?? null, toMax };
+    const under = progress?.[lab];
+    return { cur, max, next: next?.hours ?? null, toMax, done: under?.toLevel === cur + 1 ? under.done : 0 };
 }
 
 export interface CellIncome {

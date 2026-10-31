@@ -233,7 +233,7 @@ export function changeCost(snap: OptimizerSnapshot, t: UpgradeTarget, level: num
             let coins = 0;
             let research = 0;
             for (let l = from + 1; l <= level; l++) {
-                const lv = labLevelCost(t.key, l, snap.labData, snap.relicData);
+                const lv = labLevelCost(t.key, l, snap.labData, snap.relicData, snap.labProgress);
                 if (!lv) return {};
                 coins += lv.coins;
                 research += lv.hours;

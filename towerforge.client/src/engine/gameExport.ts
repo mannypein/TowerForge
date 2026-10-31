@@ -27,7 +27,7 @@ import type {
     Currencies, TierWaves, WSPreset, WSCategory, EnhData, EnhCategoryData, UWData,
     CardData, CardEntry, LabData, ModuleState, ModuleEntry, ModuleType, ModuleRarity,
     SubSlot, Loadout, LoadoutSlots, AssistData, League, GuardianData, GuardianPreset,
-    BotLoadouts, LabRunning, TourneyRecord, WsUnlocked,
+    BotLoadouts, LabProgress, LabRunning, TourneyRecord, WsUnlocked,
 } from '../types/gameTypes';
 import { BOTS_CONFIG } from '../constants/botData';
 import { RELIC_CATALOG } from '../constants/relicCatalog';
@@ -66,6 +66,7 @@ export interface GameImport {
     currentLeague: League;             // LeagueID: the league you're in now
     bots: BotImport | null;            // bot levels and which are active, per preset
     labsRunning: LabRunning[] | null;
+    labProgress: LabProgress | null;   // labs whose next level is under way or part done
     labSlots: number | null;           // lab slots owned: LabsUnlocked (bought) + the free one
     tourneyRecords: TourneyRecord[] | null;   // TournamentRecords (29.1.3+); null when the file has none
     relics: RelicImport | null;
@@ -431,7 +432,30 @@ function parseModules(raw: Raw, labs: LabData | null): ModuleImport | null {
         slotLevels[t] = { main: primaryLevels[i] ?? 0, assist: s?.Unlocked === true ? num(s.Level) : 0 };
     });
 
-    return { state: { library, loadouts, activeLoadout: `game-${current}`, assistData, slotLevels }, unnamed };
+    const loadoutFor = parseLoadoutFor(raw, loadouts);
+    return {
+        state: { library, loadouts, activeLoadout: `game-${current}`, ...(loadoutFor ? { loadoutFor } : {}), assistData, slotLevels },
+        unnamed,
+    };
+}
+
+// The loadout each site preset uses: GlobalPresets[i].ModulesIndex, like its
+// workshop, cards, bots and Guardian. Owner's export: 0, 1, 2 on the first
+// three, with module preset "farm" beside workshop preset "GC Farm". Rows all
+// on one module preset don't tell presets apart (no Global Presets yet, or one
+// set of modules for everything), so what's equipped stays. A row on an empty
+// module preset keeps what's equipped too: an empty slot isn't a build.
+function parseLoadoutFor(raw: Raw, loadouts: Loadout[]): string[] | null {
+    const rows = arr(raw.GlobalPresets).filter(isObj).map(g => (typeof g.ModulesIndex === 'number' ? g.ModulesIndex : null));
+    if (new Set(rows).size < 2 || rows.includes(null)) return null;
+    const filled = new Set(loadouts
+        .filter(l => MODULE_TYPES.some(t => l.slots[t].main || l.slots[t].assist))
+        .map(l => l.id));
+    const equipped = `game-${num(raw.CurrentModulePreset)}`;
+    return Array.from({ length: APP_PRESETS }, (_, i) => {
+        const id = `game-${rows[i] ?? 0}`;
+        return filled.has(id) ? id : equipped;
+    });
 }
 
 // Names for the app presets, from the game's presets: a global preset's own
@@ -617,6 +641,7 @@ export function parseGameExport(raw: Raw): GameImport {
         currentLeague: typeof raw.LeagueID === 'number' ? GAME_LEAGUES[raw.LeagueID] ?? '' : '',
         bots: parseBots(raw),
         labsRunning: parseLabsRunning(raw),
+        labProgress: parseLabProgress(raw),
         // LabsUnlocked counts the slots bought with gems, not the free first one:
         // the owner's 4 with 5 labs running, a newer account's 2 with 3 (2026-10-28).
         labSlots: typeof raw.LabsUnlocked === 'number' ? clamp(raw.LabsUnlocked + 1, 1, 5) : null,
@@ -784,6 +809,29 @@ function parseLabsRunning(raw: Raw): LabRunning[] | null {
             exportedAt,
         });
     });
+    return out;
+}
+
+// How far each lab's next level has got: ResearchPercentComplete by lab
+// number, kept when a lab is stopped; ResearchLevel doesn't count that level.
+// Checked on the owner's export (2026-10-21): on all 4 running labs with a
+// table time, time left ÷ (table time × (1 − percent)) gave one lab speed, the
+// ×5.036 the Labs Speed lab and relics give (anchor in upgradeCosts.test.ts).
+// Labs sharing a number in an unknown order (GAME_LAB_GROUPS) are left out.
+function parseLabProgress(raw: Raw): LabProgress | null {
+    if (!Array.isArray(raw.ResearchPercentComplete)) return null;
+    const percent = arr(raw.ResearchPercentComplete).map(num);
+    const levels = arr(raw.ResearchLevel).map(num);
+    const active = arr(raw.LabActiveBool);
+    const running = new Set(arr(raw.LabResearchInt).map(num).filter((_, slot) => active[slot] === true));
+    const out: LabProgress = {};
+    for (const [n, name] of Object.entries(GAME_LABS)) {
+        const lab = Number(n);
+        const done = clamp(percent[lab] ?? 0, 0, 1);
+        if (done > 0 || running.has(lab)) {
+            out[name] = { toLevel: (levels[lab] ?? 0) + 1, done, ...(running.has(lab) ? { running: true } : {}) };
+        }
+    }
     return out;
 }
 

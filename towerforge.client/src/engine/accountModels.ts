@@ -33,7 +33,7 @@ import { LEAGUE_HEAT } from '../constants/tournamentData';
 export type AccountState = Pick<AppState,
     'activePreset' | 'profile' | 'perkData' | 'wsData' | 'enhData' | 'labData' | 'cardData' | 'uwData'
     | 'relicData' | 'botData' | 'moduleState' | 'battleReportText' | 'importedBattles' | 'battleReportChoice'>
-    & Partial<Pick<AppState, 'guardianData' | 'vaultLevels' | 'tierWaves'>>;
+    & Partial<Pick<AppState, 'guardianData' | 'vaultLevels' | 'tierWaves' | 'labProgress'>>;
 
 const copy = <T>(v: T): T => JSON.parse(JSON.stringify(v));
 
@@ -58,6 +58,7 @@ export function snapshotFromState(s: AccountState): OptimizerSnapshot {
         wsData: copy(s.wsData),
         enhData: copy(enhForPreset(s.enhData, s.activePreset)),
         labData: copy(s.labData),
+        labProgress: s.labProgress ? copy(s.labProgress) : undefined,
         cardData: copy(s.cardData),
         perkData: copy(s.perkData),
         uwData: copy(s.uwData),

@@ -33,6 +33,12 @@ describe('lab boosts', () => {
         expect(r.text).toMatch(/Damage Lab \(level 20 of 100\): the next level takes .* unboosted, .* at ×2/);
     });
 
+    it('says how much of a part-done lab is left', () => {
+        const s = { ...load('mid'), labProgress: { 'Damage Lab': { toLevel: 21, done: 0.5 } } };
+        const r = labBoostsReport(s, 'how long until my damage lab is maxed');
+        expect(r.text).toMatch(/Damage Lab \(level 20 of 100\): the next level is 50% done and takes .* unboosted, .* more; all 80 levels left take /);
+    });
+
     it('says so when it doesn\'t know the cells', () => {
         const s = load('mid');
         expect(labBoostsReport({ ...s, importedBattles: [] }).text).toMatch(/^Headline: TowerForge doesn't know how many cells you make yet/);

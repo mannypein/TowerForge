@@ -21,6 +21,7 @@ import type { RunLengthModel } from './runLength';
 import { runWavesChange } from './runLength';
 import { heatConditions, leagueConditions } from './battleConditions';
 import type { TourneyConditions } from './battleConditions';
+import { loadoutForPreset } from './statHelpers';
 import { LEAGUE_HEAT } from '../constants/tournamentData';
 import type { HeatKey, LeagueHeat } from '../constants/tournamentData';
 import type { BattleReport } from './battleReport';
@@ -110,10 +111,12 @@ export function tournamentWhatIf(t: TournamentModel, week: Ticks, last: Ticks, l
 export function withTournamentBuild(state: AccountState, preset?: number, loadout?: string): AccountState {
     const presetOk = preset !== undefined && preset >= 0 && preset < (state.profile.presets || 2);
     const loadoutOk = loadout !== undefined && state.moduleState.loadouts.some(l => l.id === loadout);
+    // Modules picked for the build win; otherwise the preset brings its own.
+    const modules = loadoutOk ? loadout : presetOk ? loadoutForPreset(state.moduleState, preset) : undefined;
     return {
         ...state,
         activePreset: presetOk ? preset : state.activePreset,
-        moduleState: loadoutOk ? { ...state.moduleState, activeLoadout: loadout } : state.moduleState,
+        moduleState: modules ? { ...state.moduleState, activeLoadout: modules } : state.moduleState,
     };
 }
 

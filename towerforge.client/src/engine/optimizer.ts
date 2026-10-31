@@ -169,7 +169,7 @@ import type {
     CardData,
     ModBonuses,
     PerkData,
-    ModuleType, GuardianData, WsUnlocked } from '../types/gameTypes';
+    ModuleType, GuardianData, WsUnlocked, LabProgress } from '../types/gameTypes';
 import { conditioned, conditionedSkip, conditionHealth } from './battleConditions';
 import type { TourneyConditions } from './battleConditions';
 import { activeChips, guardianPreset, withChipLevel } from './guardian';
@@ -182,6 +182,7 @@ export interface OptimizerSnapshot {
     presetIdx: number;
     wsData: WSPreset[];
     labData: LabData;
+    labProgress?: LabProgress;   // next levels under way or part done; omitted = none
     cardData: CardData;
     perkData: PerkData;
     uwData: UWData;
@@ -784,21 +785,34 @@ export function buildCandidates(
         const ilmOwned = !!snap.uwData.data.ILM?.own;
         for (const group of LABS) {
             for (const [labName, maxLv] of group.l) {
-                const curLv = snap.labData[labName] ?? 0;
+                const stored = snap.labData[labName] ?? 0;
+                // The level being researched isn't a choice any more: what's on
+                // offer is the one after it, gain and time alike.
+                const under = snap.labProgress?.[labName];
+                const running = !!under?.running && under.toLevel === stored + 1;
+                const curLv = running ? stored + 1 : stored;
                 if (curLv >= maxLv) continue;
                 // The Labs, or this lab's milestone, not reached yet.
-                if (!labOpen(labName, curLv, snap.progress, ilmOwned)) continue;
+                if (!labOpen(labName, stored, snap.progress, ilmOwned)) continue;
 
                 const after = cloneSnapshot(snap);
                 after.labData[labName] = curLv + 1;
                 const afterEDPS = getScore(after);
-                const delta = edpsDeltaPct(basEDPS, afterEDPS);
-                const research = labLevelCost(labName, curLv + 1, snap.labData, snap.relicData);
+                let before = basEDPS;
+                if (running) {
+                    const researched = cloneSnapshot(snap);
+                    researched.labData[labName] = curLv;
+                    before = getScore(researched);
+                }
+                const delta = edpsDeltaPct(before, afterEDPS);
+                const research = labLevelCost(labName, curLv + 1, snap.labData, snap.relicData, snap.labProgress);
+                const partDone = !running && under?.toLevel === curLv + 1 ? under.done : 0;
 
                 candidates.push({
                     category: 'labs',
                     label: labName,
-                    subLabel: `Lv ${curLv} → ${curLv + 1}`,
+                    subLabel: `Lv ${curLv} → ${curLv + 1}${running ? ` · after the Lv ${curLv} being researched`
+                        : partDone > 0 ? ` · ${Math.floor(partDone * 100)}% done` : ''}`,
                     fromLv: curLv,
                     toLv: curLv + 1,
                     cost: curLv + 1,

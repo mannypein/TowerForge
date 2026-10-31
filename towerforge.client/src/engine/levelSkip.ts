@@ -20,7 +20,7 @@
 //  Pure functions — no store imports.
 // ============================================================
 
-import type { EnhData, LabData, WSPreset } from '../types/gameTypes';
+import type { EnhData, LabData, LabProgress, WSPreset } from '../types/gameTypes';
 import { WS_ENH, WS_STATS } from '../constants/gameData';
 import {
     enhancementCost, enhancementDiscount, formatLabTime, labLevelCost, workshopCost, workshopDiscount,
@@ -50,6 +50,7 @@ export interface SkipSources {
     // Omitted = no discounts.
     labs?: LabData;
     relics?: Record<string, number>;
+    labProgress?: LabProgress;
     // Not bought or reached yet in the game (engine/unlocks.ts): not offered.
     closed?: { workshop?: boolean; lab?: boolean };
 }
@@ -110,7 +111,7 @@ export function nextSkipUpgrades(s: SkipSources): SkipUpgrade[] {
             cost: workshopCost(names.workshop, s.workshop, to, workshopDiscount(labs, 'utility')) ?? 0,
         });
     }
-    const lab = s.lab < LAB_MAX && !s.closed?.lab ? labLevelCost(names.lab, s.lab + 1, labs, s.relics ?? {}) : null;
+    const lab = s.lab < LAB_MAX && !s.closed?.lab ? labLevelCost(names.lab, s.lab + 1, labs, s.relics ?? {}, s.labProgress) : null;
     if (lab) {
         out.push({
             source: 'lab', from: s.lab, to: s.lab + 1,

@@ -33,9 +33,10 @@ import type {
     SlotLevels,
     AssistEntry,
     TabName,
-    GuardianData, LabRunning, TourneyLog, TourneyLogEntry, TourneyRecord,
+    GuardianData, LabProgress, LabRunning, TourneyLog, TourneyLogEntry, TourneyRecord,
 } from '../types/gameTypes';
 import { mergeBattles } from '../engine/battleReport';
+import { loadoutForPreset } from '../engine/statHelpers';
 import { mergeTourneyRecords } from '../engine/tourneyHistory';
 import type { BattleReport } from '../engine/battleReport';
 import { defaultBattleIndex } from '../engine/gameExport';
@@ -87,6 +88,7 @@ const KEYS = {
     modules: 'tc_modules',
     guardian: 'tc_guardian',
     labsRunning: 'tc_labs_running',
+    labProgress: 'tc_lab_progress',
     tourneyLog: 'tc_tourney_log',
     tourneyRecords: 'tc_tourney_records',
     vault: 'tc_vault',
@@ -162,6 +164,13 @@ const defaultModuleState: ModuleState = {
     assistData: {},
     slotLevels: defaultSlotLevels(),
 };
+
+// Modules follow the preset when the game's Global Presets say which it uses
+// (ModuleState.loadoutFor), so the calculators read the right loadout.
+function withPresetLoadout(ms: ModuleState, preset: number): ModuleState {
+    const id = loadoutForPreset(ms, preset);
+    return id && id !== ms.activeLoadout ? { ...ms, activeLoadout: id } : ms;
+}
 
 // Migrate module state: level used to live on each library module; it now
 // lives on the loadout SLOT (account-wide slotLevels). When slotLevels is
@@ -349,6 +358,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     battleReportChoice: -1,
     guardianData: defaultGuardianData(),
     labsRunning: [],
+    labProgress: {},
     tourneyLog: {},
     tourneyRecords: [],
     vaultLevels: {},
@@ -356,7 +366,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
     // ── UI Actions ────────────────────────────────────────────────
     setActiveTab: (tab) => set({ activeTab: tab }),
 
-    setActivePreset: (idx) => set({ activePreset: idx }),
+    setActivePreset: (idx) => {
+        const before = get().moduleState;
+        const moduleState = withPresetLoadout(before, idx);
+        set({ activePreset: idx, moduleState });
+        if (moduleState !== before) saveKey(KEYS.modules, moduleState);
+    },
 
 
 
@@ -380,9 +395,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
         const currencies = { ...DEFAULT_CURRENCIES, ...loadKey<Partial<Currencies>>(KEYS.currencies, {}) };
         const importedBattles = loadKey<BattleReport[]>(KEYS.importedBattles, []);
         const battleReportChoice = loadKey<number>(KEYS.battleReportChoice, -1);
-        const moduleState = migrateModuleState(loadKey<ModuleState>(KEYS.modules, defaultModuleState));
+        // The site opens on its first preset, so its modules go with it.
+        const moduleState = withPresetLoadout(migrateModuleState(loadKey<ModuleState>(KEYS.modules, defaultModuleState)), get().activePreset);
         const guardianData = { ...defaultGuardianData(), ...loadKey<Partial<GuardianData>>(KEYS.guardian, {}) };
         const labsRunning = loadKey<LabRunning[]>(KEYS.labsRunning, []);
+        const labProgress = loadKey<LabProgress>(KEYS.labProgress, {});
         const tourneyLog = loadKey<TourneyLog>(KEYS.tourneyLog, {});
         const tourneyRecords = loadKey<TourneyRecord[]>(KEYS.tourneyRecords, []);
         const vaultLevels = loadKey<Record<string, number>>(KEYS.vault, {});
@@ -391,7 +408,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             profile, tierWaves, wsData, enhData,
             labData, cardData, uwData, relicData,
             perkData, botData, botLoadouts, moduleState, battleReportText, currencies, importedBattles, battleReportChoice,
-            guardianData, labsRunning, tourneyLog, tourneyRecords, vaultLevels,
+            guardianData, labsRunning, labProgress, tourneyLog, tourneyRecords, vaultLevels,
         });
     },
 
@@ -460,13 +477,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
         // entered modules the file can't name yet are kept.
         const importedNames = new Set(imp.modules?.state.library.map(m => m.name));
         const moduleState: ModuleState = imp.modules
-            ? {
+            ? withPresetLoadout({
                 ...imp.modules.state,
                 library: [
                     ...imp.modules.state.library,
                     ...s.moduleState.library.filter(m => !importedNames.has(m.name)),
                 ],
-            }
+            }, s.activePreset)
             : s.moduleState;
         const guardianData = imp.guardian ?? s.guardianData;
         // Bots (29.1.3+ files): medal and Bot+ levels per preset, which bots
@@ -493,6 +510,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         }
         // A snapshot: an older file (no lab timers) clears the last one's.
         const labsRunning = imp.labsRunning ?? [];
+        const labProgress = imp.labProgress ?? {};
         // Relics: the totals of the relics owned (older saves typed them in).
         const relicData = imp.relics ? imp.relics.totals : s.relicData;
         // Every tournament: kept across imports (older files don't have them).
@@ -503,7 +521,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             profile,
             importedBattles: battles,
             battleReportChoice: choice,
-            wsData, enhData, uwData, cardData, perkData, labData, moduleState, guardianData, botData, botLoadouts, labsRunning,
+            wsData, enhData, uwData, cardData, perkData, labData, moduleState, guardianData, botData, botLoadouts, labsRunning, labProgress,
             tourneyRecords, relicData, vaultLevels: imp.vault ?? s.vaultLevels,
         });
         saveKey(KEYS.tourneyRecords, tourneyRecords);
@@ -513,6 +531,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         saveKey(KEYS.bots, botData);
         saveKey(KEYS.botLoadouts, botLoadouts);
         saveKey(KEYS.labsRunning, labsRunning);
+        saveKey(KEYS.labProgress, labProgress);
         saveKey(KEYS.currencies, imp.currencies);
         saveKey(KEYS.tiers, tierWaves);
         saveKey(KEYS.profile, profile);
@@ -877,6 +896,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             battleReportChoice: -1,
             guardianData: defaultGuardianData(),
             labsRunning: [],
+            labProgress: {},
             tourneyLog: {},
             tourneyRecords: [],
             vaultLevels: {},
@@ -894,6 +914,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             wsData: s.wsData,
             enhData: s.enhData,
             labData: s.labData,
+            labProgress: s.labProgress,
             cardData: s.cardData,
             uwData: s.uwData,
             relicData: s.relicData,
@@ -916,7 +937,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         try {
             const data = JSON.parse(json);
             const cardData = migrateCardData(data.cardData ?? defaultCardData);
-            const moduleState = migrateModuleState(data.moduleState ?? defaultModuleState);
+            const moduleState = withPresetLoadout(migrateModuleState(data.moduleState ?? defaultModuleState), get().activePreset);
             set({
                 profile: data.profile ?? defaultProfile,
                 perkData: data.perkData ?? { banned: [] },
@@ -924,6 +945,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
                 wsData: data.wsData ?? Array.from({ length: 5 }, defaultWSPreset),
                 enhData: data.enhData ?? defaultEnhData,
                 labData: data.labData ?? {},
+                labProgress: data.labProgress ?? {},
                 cardData,
                 uwData: data.uwData ?? defaultUWData,
                 relicData: data.relicData ?? {},
@@ -947,6 +969,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
                     tc_ws: data.wsData,
                     tc_enh: data.enhData,
                     tc_labs: data.labData,
+                    tc_lab_progress: data.labProgress ?? {},
                     tc_cards: cardData,
                     tc_uw: data.uwData,
                     tc_relics: data.relicData,

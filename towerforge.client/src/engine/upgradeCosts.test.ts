@@ -53,6 +53,19 @@ describe('lab costs and times', () => {
         expect(skip.hours).toBeCloseTo(10313 / 60 / 2.98, 6);
     });
 
+    // Owner's export (2026-10-21), Dissonant Echo-UW being researched: stored
+    // Lv 13, 47.36% done, ResearchCompleteDate 731.62 h after ExportedAt. The
+    // same lab speed fits all 4 running labs with a table time (11.9135 s of
+    // real time a table minute: ×5.0363).
+    it('matches the timers in the export: lab speed × the share left', () => {
+        const labs = { 'Labs Speed': 99 };
+        const relics = { rLabSpd: 69 };
+        expect(labSpeed(labs, relics)).toBeCloseTo(5.0363, 3);
+        const left = labLevelCost('Dissonant Echo-UW', 14, labs, relics, { 'Dissonant Echo-UW': { toLevel: 14, done: 0.4736, running: true } })!;
+        expect(left.hours).toBeCloseTo(731.62, 0);
+        expect(left.coins).toBe(0);
+    });
+
     it('doesn’t let Labs Speed speed up its own research', () => {
         const own = labLevelCost('Labs Speed', 99, { 'Labs Speed': 98 }, { rLabSpd: 25 })!;
         expect(own.hours).toBeCloseTo(labLevelCost('Labs Speed', 99, {}, {})!.hours / 1.25, 6);

@@ -852,12 +852,13 @@ export function labBoostsReport(s: AiAccount, query = '', now = Date.now()): Too
     // A lab named in the question: its next level and the rest, at each speed.
     const lab = query ? findTargets(upgradeTargets(snapshotFromState(s)).filter(t => t.kind === 'lab'), query)[0] : undefined;
     if (lab) {
-        const hours = labHours(lab.key, s.labData, s.relicData);
+        const hours = labHours(lab.key, s.labData, s.relicData, s.labProgress);
         if (!hours) out.push(`${lab.label} is maxed (level ${lab.current}).`);
         else {
             const at = (h: number | null) => (h === null ? 'unknown' : [1, 2, 4, 6, 8]
                 .map(v => `${formatLabTime(h / v)} ${v > 1 ? `at ×${v}` : 'unboosted'}`).join(', '));
-            out.push(`${lab.label} (level ${hours.cur} of ${hours.max}): the next level takes ${at(hours.next)}; all ${hours.max - hours.cur} levels left take ${at(hours.toMax)}.`);
+            const next = hours.done > 0 ? `the next level is ${Math.floor(hours.done * 100)}% done and takes ${at(hours.next)} more` : `the next level takes ${at(hours.next)}`;
+            out.push(`${lab.label} (level ${hours.cur} of ${hours.max}): ${next}; all ${hours.max - hours.cur} levels left take ${at(hours.toMax)}.`);
         }
     }
     return { title: 'Lab boosts', text: out.join('\n') };

@@ -152,6 +152,15 @@ What each currency buys (wiki Currencies page) and how it's ranked:
   next level and the rest of it from the lab catalog after Labs Speed and
   the Lab Speed relic (`labLevelCost`). Lab slots: `LabsUnlocked` + 1 (see
   game-export-format.md).
+- A lab's next level under way (`labProgress`, from the export's
+  `ResearchPercentComplete`, checked against the timers: game-export-format.md):
+  a part-done level costs only the time left everywhere times are shown, so it
+  ranks higher per hour, marked "75% done". The level being researched right
+  now isn't offered, since it's no longer a choice: the Optimizer offers the one
+  after it, its gain from there and its full time. A stopped level keeps its
+  coins (whether restarting charges them again isn't confirmed); a running
+  one's are paid. The progress counts only for that level, so it stops counting
+  once the lab's level changes.
 - Module slot shards: SDK's table starts at level 2; the wiki's Modules/Cost
   gives level 1 as 7 shards + 10K coins, and its totals then match
   (3,136,095 shards to 300).

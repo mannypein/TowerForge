@@ -204,6 +204,7 @@ export default function OptimizerTab() {
                     );
                     // Only what the account can buy yet (engine/unlocks.ts).
                     const names = SKIP_NAMES[skipKind];
+                    sources.labProgress = snap.labProgress;
                     sources.closed = {
                         workshop: !workshopOpen('utility', names.workshop, sources.workshop, snap.wsUnlocked),
                         lab: !labOpen(names.lab, sources.lab, snap.progress),

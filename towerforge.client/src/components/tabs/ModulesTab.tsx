@@ -11,7 +11,7 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useGameStore } from '../../store/useGameStore';
 import type { ModuleEntry, ModuleType, ModuleRarity, Loadout } from '../../types/gameTypes';
-import { MODULE_MAX_LEVEL } from '../../constants/gameData';
+import { MODULE_MAX_LEVEL, presetLabel } from '../../constants/gameData';
 import NumericInput from '../common/NumericInput';
 import ModuleBadge from '../common/ModuleBadge';
 import TowerArt from '../common/TowerArt';
@@ -212,6 +212,7 @@ export default function ModulesTab() {
     const [slotEdit, setSlotEdit] = useState<{ type: ModuleType; slot: SlotKey } | null>(null);
 
     const profile = useGameStore(s => s.profile);
+    const activePreset = useGameStore(s => s.activePreset);
     const tierWaves = useGameStore(s => s.tierWaves);
     const moduleState = useGameStore(s => s.moduleState);
     const labData = useGameStore(s => s.labData);
@@ -457,10 +458,18 @@ export default function ModulesTab() {
                                 placeholder="Preset name"
                             />
                             {equipped?.id === viewed.id ? (
-                                <span className="modg-equipped-tag">✓ Equipped</span>
+                                <span className="modg-equipped-tag">
+                                    ✓ Equipped{moduleState.loadoutFor && ` in ${presetLabel(profile.presetNames, activePreset)}`}
+                                </span>
                             ) : (
                                 <button className="btn btn-accent" style={{ fontSize: '12px', padding: '3px 10px' }}
-                                    onClick={() => setModuleState({ activeLoadout: viewed.id })}>
+                                    onClick={() => setModuleState({
+                                        activeLoadout: viewed.id,
+                                        // Equipping changes what this preset uses.
+                                        ...(moduleState.loadoutFor
+                                            ? { loadoutFor: moduleState.loadoutFor.map((id, i) => (i === activePreset ? viewed.id : id)) }
+                                            : {}),
+                                    })}>
                                     Equip
                                 </button>
                             )}
@@ -482,6 +491,7 @@ export default function ModulesTab() {
                         <p className="modg-hint">
                             Tap a slot to change its module or level{assistUnlocked ? ', or the assist settings' : ''}.
                             Slot levels are shared by every preset, like in game.
+                            {moduleState.loadoutFor && ' Your game’s Global Presets say which modules each preset uses, so switching preset on another page switches these too.'}
                             {!assistUnlocked && ` Assist slots unlock at Tier ${ASSIST_UNLOCK_TIER} Wave ${ASSIST_UNLOCK_WAVE}.`}
                         </p>
                     </>
