@@ -61,6 +61,7 @@ A pasted battle report (as opposed to an imported one) doesn't include boss/elit
 | Sentry Protocol | — | Not counted: orbs aren't modeled. |
 | Pulsar Harvester | — | Not counted: enemy level reductions aren't modeled. |
 | Infinity Threshold | — | Not counted: upgrade values past the normal level cap aren't known. Values 1000 / 2000 / 3000 / 4000 levels. |
+| Tactical Barrage | — | Not counted: Smart Missiles' Amplifier and explosion radius (which it doubles) and its Homing Missiles aren't modeled. A Homing Missile every 14 / 10 / 6 / 2 s (wiki, TheTowerSDK 0.14.1; added 2026-11-14). |
 
 ## Other module fixes in the same pass
 

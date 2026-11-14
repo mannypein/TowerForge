@@ -214,7 +214,7 @@ Confirmed against 27 real module cards (all the uniques on one account, includin
 | Field | Status | Notes |
 |---|---|---|
 | `ModuleInventory[]` | ✅ | Every module not equipped: `{Guid, InfoIndex, CurrentRarity, Level (0 — levels live on slots), MaxLevelReached, Effects[8], EffectLocked[8] (reroll locks), …}`. |
-| `InfoIndex` | ✅ | Which module it is — the same number for every player (see *Identifying modules* below). Blocks of 10 per type (cannon 1–10, armor 11–20, generator 21–30, core 31–40): 3–6 are the generic modules (no unique effect — skipped), 7–10 the original uniques, then newer uniques in waves from 41. All 27 uniques seen are named; 49 and 52 haven't appeared yet. |
+| `InfoIndex` | ✅ | Which module it is — the same number for every player (see *Identifying modules* below). Blocks of 10 per type (cannon 1–10, armor 11–20, generator 21–30, core 31–40): 3–6 are the generic modules (no unique effect — skipped), 7–10 the original uniques, then newer uniques in waves from 41. All 27 uniques seen are named; 49 hasn't appeared yet. 52 is Tactical Barrage (Core) from TheTowerSDK's module table, not yet seen on an account (see *Identifying modules*). |
 | `CurrentRarity` | ✅ | 10 = Ancestral (max Lv 200), 11–15 = Ancestral ★1–★5 (max 220–300); below that the wiki's order (2 Rare … 9 Mythic+). |
 | `Effects[8]` | ✅ / 🔜 | Effect codes count up from 1 through every (effect, rarity) pair: cannon 1–80, armor 81–154, generator 155–216, core 217–326 — workshop order for cannon/armor/generator, UW order (CL, SM, DW, CF, ILM, GT, PS, BH, SL) for core, one code per rarity the effect can roll. Effects added later are appended: Max Recovery Epic = 328 (327 unconfirmed). Generator 197–204 = Interest/Wave (Epic 197, confirmed) then Recovery Amount. Still unconfirmed: core 297–304 (Poison Swamp Duration / Cooldown). Every slot is pre-rolled (6 for Legendary/Ancestral, 7 at ★1, 8 at ★5); slots 4, 5, 6 and 8 unlock at levels 101, 141, 161 and 241 by `MaxLevelReached`, the rest are always shown. Code 300 shows up only in still-locked slots. |
 | `ModuleEquipped[4]` | ✅ | Primary modules: cannon, armor, generator, core. |
@@ -265,6 +265,8 @@ Main effect: ×value = base[rarity] + Σ level gains × (1 + 4% per Ancestral st
 | 48 | Primordial Collapse | Core | 18b3f2e6-ab0a-4ed2-b81e-56458c544b87 |
 
 Infinity Threshold is newer than the wiki's module pages; its Legendary value (2000 levels) comes from the card, other rarities unknown.
+
+**52 Tactical Barrage (Core), not yet seen on an account** (added 2026-11-14 after a player reported it missing). From TheTowerSDK 0.14.1's module table (`dist/data/modules/info.data.js`), which agrees with every number above from 41 on (41–48, 50, 51, 53). Every other Core unique has its own confirmed number, so a Core module on 52 can only be Tactical Barrage; the import still names it only when its `Effects[]` decode as Core effects (codes 217–326), else it stays unnamed (`UNSEEN_MODULE_NUMBERS`). Its values — a Homing Missile every 14 / 10 / 6 / 2 s (Epic / Legendary / Mythic / Ancestral) — are on the wiki's *Epic Module Unique Effect* page and in the SDK. Move it into the table above once an account with it has been checked.
 
 
 ## Relics

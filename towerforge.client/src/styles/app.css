@@ -532,12 +532,15 @@
     -webkit-overflow-scrolling: touch;
 }
 
-    /* Lines stay readable on wide screens; each page eases in when it opens. */
+    /* Lines stay readable on wide screens; each page eases in when it opens.
+       Fill "backwards", never "both": a kept end state leaves a transform on
+       the page (and the footer), which pins a window opened inside it (What's
+       new, the Optimizer's UW filter) to that element instead of the screen. */
     .tab-content > * {
         max-width: var(--page-max);
         margin-left: auto;
         margin-right: auto;
-        animation: tf-page-in 0.28s ease both;
+        animation: tf-page-in 0.28s ease backwards;
     }
 
 @keyframes tf-page-in {

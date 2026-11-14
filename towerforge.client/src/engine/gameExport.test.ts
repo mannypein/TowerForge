@@ -8,8 +8,8 @@ import { describe, expect, it } from 'vitest';
 import { defaultBattleIndex, isGameExport, isRealRun, parseGameExport } from './gameExport';
 import { MAX_STORED_BATTLES, mergeBattles } from './battleReport';
 import { CARDS, LABS, UWS, WS_ENH, WS_STATS } from '../constants/gameData';
-import { GAME_CARDS, GAME_LABS, MASTERY_LAB_CARDS, MASTERY_LAB_START, CARD_PRESET_SLOTS } from '../constants/gameExportMaps';
-import { SUB_EFFECTS, SUB_RARITIES } from '../constants/moduleData';
+import { GAME_CARDS, GAME_LABS, GAME_MODULES, MASTERY_LAB_CARDS, MASTERY_LAB_START, CARD_PRESET_SLOTS } from '../constants/gameExportMaps';
+import { SUB_EFFECTS, SUB_RARITIES, UNIQUE_EFFECT_MODEL, UNIQUE_MODULES } from '../constants/moduleData';
 import { battle, gameModule, labIndex, makeExport, research, zeros } from '../test/makeExport';
 import { useGameStore } from '../store/useGameStore';
 import { BOTS_CONFIG, botsForPreset, vaultBotRange } from '../constants/botData';
@@ -317,6 +317,25 @@ describe('modules', () => {
         const imp = parseGameExport(makeExport({ ModuleInventory: [gameModule('x', 49, 10, [90, 95])] }));
         expect(imp.modules!.state.library).toHaveLength(0);
         expect(imp.modules!.unnamed).toEqual([expect.objectContaining({ infoIndex: 49, type: 'armor', rarity: 'A' })]);
+    });
+
+    // 52 comes from TheTowerSDK, not yet seen on an account: it only names a
+    // module whose effects are Core effects (codes 217–326).
+    it('names 52 Tactical Barrage only when its effects are Core effects', () => {
+        const imp = parseGameExport(makeExport({
+            ModuleInventory: [gameModule('tb', 52, 8, [220]), gameModule('odd', 52, 10, [90])],
+        }));
+        expect(imp.modules!.state.library).toEqual([expect.objectContaining({ id: 'tb', name: 'Tactical Barrage', type: 'core', rarity: 'M' })]);
+        expect(imp.modules!.unnamed).toEqual([expect.objectContaining({ infoIndex: 52, type: 'armor' })]);
+    });
+
+    it('offers every unique module the game has, Tactical Barrage among the Core ones', () => {
+        expect(UNIQUE_MODULES.core.find(([n]) => n === 'Tactical Barrage')?.[2])
+            .toEqual({ Epic: 14, Legendary: 10, Mythic: 6, Ancestral: 2 });
+        for (const { name, type } of Object.values(GAME_MODULES)) {
+            expect(UNIQUE_MODULES[type].map(([n]) => n)).toContain(name);
+            expect(UNIQUE_EFFECT_MODEL[name]).toBeDefined();
+        }
     });
 
     it('brings presets in game order with the equipped one active', () => {

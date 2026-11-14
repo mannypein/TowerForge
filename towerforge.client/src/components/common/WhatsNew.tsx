@@ -7,6 +7,7 @@
 
 import { useEffect, useState } from 'react';
 import type { MouseEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { WHATS_NEW, markSeen, seenVersion, unseen } from '../../whatsNew';
 import type { WhatsNewEntry } from '../../whatsNew';
 import { TAB_PATHS } from '../../routes';
@@ -69,7 +70,9 @@ export function WhatsNewList({ onClose, onOpen }: { onClose: () => void; onOpen?
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
     }, [onClose]);
-    return (
+    // On document.body: the footer it opens from eases in with a transform,
+    // which would hold a fixed window inside the footer instead of the screen.
+    return createPortal(
         <div className="modal-overlay" onClick={onClose}>
             <div className="modal-box" role="dialog" aria-modal="true" aria-label="What's new in TowerForge" onClick={e => e.stopPropagation()}>
                 <div className="modal-head">
@@ -85,6 +88,7 @@ export function WhatsNewList({ onClose, onOpen }: { onClose: () => void; onOpen?
                     ))}
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body,
     );
 }

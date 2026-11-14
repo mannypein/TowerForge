@@ -47,9 +47,17 @@ export const GAME_MODULES: Record<number, { name: string; type: ModuleType }> = 
     48: { name: 'Primordial Collapse', type: CR },
     50: { name: 'Sentry Protocol', type: AR },
     51: { name: 'Gilded Sniper', type: CN },
+    52: { name: 'Tactical Barrage', type: CR },
     53: { name: 'Infinity Threshold', type: GN },
-    // 49 and 52 not seen yet.
+    // 49 not seen yet.
 };
+
+// Numbers above that come from TheTowerSDK's module table (0.14.1) and haven't
+// been seen on an account yet. The SDK's table agrees with every number seen
+// (41–48, 50, 51, 53), and every other Core unique has its own number, so a
+// Core module on 52 can only be Tactical Barrage; the import still names one
+// only when its effects are that type's (gameExport.ts).
+export const UNSEEN_MODULE_NUMBERS: ReadonlySet<number> = new Set([52]);
 
 // Modules with a unique effect (the ones worth importing).
 export const isUniqueModule = (info: number): boolean =>

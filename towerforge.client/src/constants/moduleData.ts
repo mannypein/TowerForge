@@ -51,6 +51,9 @@ export const UNIQUE_MODULES: Record<ModuleType, [string, string, RarityProgressi
         ['Multiverse Nexus', 'DW, GT and BH always activate together. Cooldown is average +/-[x]s.', { Epic: 20, Legendary: 10, Mythic: 1, Ancestral: -10 }, 's'],
         ['Magnetic Hook', '[x] Inner Land Mines fired at Bosses & Fleets (100% each) entering range. 25% of Elites also targeted.', { Epic: 1, Legendary: 2, Mythic: 3, Ancestral: 4 }, 'mines'],
         ['Primordial Collapse', 'Spawns one additional Black Hole. Damage from enemies within a BH decreased by [x]%', { Epic: 60, Legendary: 65, Mythic: 75, Ancestral: 90 }, '%'],
+        // Wiki (Epic Module Unique Effect) and TheTowerSDK 0.14.1 agree, 2026-11-14.
+        // Seconds between Homing Missiles: lower is stronger.
+        ['Tactical Barrage', 'Doubles Smart Missile\'s Radius and Amplifier lab bonuses. Fires a Homing Missile every [x]s, targeting the enemy with highest missile stack and focusing active Smart Missiles to the new target.', { Epic: 14, Legendary: 10, Mythic: 6, Ancestral: 2 }, 's'],
     ],
 };
 
@@ -177,6 +180,7 @@ export const UNIQUE_EFFECT_MODEL: Record<string, { counted: string; how: string 
     'Multiverse Nexus': { counted: 'eDPS · Coins', how: 'Death Wave, Golden Tower and Black Hole share one cooldown: the average of theirs, shifted by this value.' },
     'Magnetic Hook': { counted: 'eDPS', how: 'Fires Inner Land Mines at bosses, fleets and a quarter of elites — rates from your battle report.' },
     'Primordial Collapse': { counted: 'eDPS · eHP', how: 'An extra Black Hole, and enemies inside holes deal less damage.' },
+    'Tactical Barrage': { counted: 'Not counted', how: 'Smart Missiles’ Amplifier and explosion radius, and the Homing Missiles, aren’t modeled.' },
 };
 
 // ── Display helpers (Modules tab, share card) ─────────────────

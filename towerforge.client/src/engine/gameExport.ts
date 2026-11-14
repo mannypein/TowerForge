@@ -19,7 +19,7 @@ import { isDissonantRun } from './battleReport';
 import { MAX_TIER, WS_STATS, WS_ENH, UWS, LABS, RELICS } from '../constants/gameData';
 import {
     GAME_CARDS, MASTERY_LAB_START, MASTERY_LAB_CARDS, MASTERY_LAB_OTHER, CARD_PRESET_SLOTS, GAME_PERKS, GAME_LABS, GAME_LAB_GROUPS,
-    GAME_MODULES, GAME_MODULE_RARITY, GAME_MODULE_EFFECT_RUNS, MODULE_EFFECT_SLOT_UNLOCK, isUniqueModule,
+    GAME_MODULES, GAME_MODULE_RARITY, GAME_MODULE_EFFECT_RUNS, MODULE_EFFECT_SLOT_UNLOCK, isUniqueModule, UNSEEN_MODULE_NUMBERS,
     GAME_LEAGUES,
 } from '../constants/gameExportMaps';
 import { SUB_EFFECTS, SUB_RARITIES } from '../constants/moduleData';
@@ -393,7 +393,9 @@ function parseModules(raw: Raw, labs: LabData | null): ModuleImport | null {
         if (!isUniqueModule(info)) continue;
         const codes = visibleEffects(m);
         const rarity = GAME_MODULE_RARITY[num(m.CurrentRarity)] ?? null;
-        const def = GAME_MODULES[info];
+        const known = GAME_MODULES[info];
+        const def = known && (!UNSEEN_MODULE_NUMBERS.has(info) || typeOfEffects(arr(m.Effects).map(num)) === known.type)
+            ? known : undefined;
         if (!def || !rarity) {
             const type = def?.type ?? typeOfEffects(arr(m.Effects).map(num));
             if (type) {
