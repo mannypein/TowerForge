@@ -90,6 +90,33 @@ password (Settings → Profile). After that, the `location /analytics { return 4
 block in nginx can become a `proxy_pass http://127.0.0.1:3000;` like the others
 to open the dashboard at `https://towerforge.net/analytics`.
 
+## Counting without the dashboard
+
+Umami's numbers can be read straight from its database, with no login. Send the
+SQL on stdin:
+
+```bash
+ssh ubuntu@towerforge.net "sudo -u postgres psql -d umami" < query.sql
+```
+
+Start the file with `set timezone = 'America/New_York';` for days in US
+Eastern. Page views and events are in `website_event`, filtered by the website
+ID above: `event_type` 1 is a page view and 2 an event (`event_name`); an
+event's details (`step`, `kind`, `device`…) are rows in `event_data`, joined on
+`website_event_id`. `session_id` is a hash of the IP, the browser's user agent
+and a salt that changes at the start of each month (`src/app/api/send/route.ts`
+and `getSalt` in `src/lib/crypto.ts` of Umami 3.4; `SALT_ROTATION` isn't set, so
+it's monthly). So "came back" can only be counted within a month, and a phone
+that changes network counts as someone new. `visit_id` starts again after 30
+minutes idle. Discord's app sends no referrer, so a Discord post shows up as
+`(direct)`.
+
+The server's own counts (shares, accounts, saves) are in
+`/var/lib/towerforge/towerforge.db`. Open it read-only as root (`sqlite3` isn't
+installed, but python3 is) and print counts only, never rows; its timestamps are
+Unix seconds. Discord and Reddit fetching share-link previews show in
+`/var/log/nginx/access.log` (`Discordbot`, `redditbot` on `GET /s/…`).
+
 ## Updating Umami
 
 Pick a new release tag, then on the server:
