@@ -56,8 +56,8 @@ describe('lab boost plan', () => {
 });
 
 // A made-up run that ended at `end` (hours) after `hours` in it.
-const run = (end: number, hours: number, cells: number | undefined): BattleReport => ({
-    time: end * 3600_000, realTimeSec: hours * 3600, raw: cells === undefined ? {} : { CellsEarned: cells },
+const run = (end: number, hours: number, cells: number | undefined, more: Partial<BattleReport> = {}): BattleReport => ({
+    time: end * 3600_000, realTimeSec: hours * 3600, raw: cells === undefined ? {} : { CellsEarned: cells }, ...more,
 } as BattleReport);
 
 describe('cells an hour from runs', () => {
@@ -78,8 +78,25 @@ describe('cells an hour from runs', () => {
         expect(cellIncome([run(5, 5, undefined)])).toBeNull();
     });
 
+    // A player report (2026-11-16): their newest run made 360K an hour, but
+    // a 7-day average of every run (older tiers, tournaments) read less.
+    it('takes the rate from the newest campaign runs on the tier farmed now', () => {
+        const t17 = (end: number) => run(end, 10, 2_000_000, { tier: 17 });
+        const t18 = (end: number, perHour: number) => run(end, 10, perHour * 10, { tier: 18 });
+        const income = cellIncome([
+            t17(10), t17(20), t18(30, 300_000), t18(40, 340_000), t18(50, 350_000), t18(60, 355_000),
+            t18(70, 358_000), t18(80, 360_000), run(81, 1, 5_000, { tier: 0, tournament: true }),
+        ])!;
+        expect(income.tier).toBe(18);
+        expect(income.rateRuns).toBe(5);
+        expect(income.perRunHour).toBeCloseTo((340_000 + 350_000 + 355_000 + 358_000 + 360_000) / 5, 6);
+        // The tournament still counts as time in a run.
+        expect(income.runs).toBe(9);
+        expect(income.share).toBe(1);
+    });
+
     it('uses what the player typed over their runs', () => {
-        const income = { runs: 3, perRunHour: 10_000, share: 0.75, perHour: 7_500 };
+        const income = { runs: 3, rateRuns: 3, tier: 18, perRunHour: 10_000, share: 0.75, perHour: 7_500 };
         const p = (extra: Partial<Profile>) => ({ ...extra }) as Profile;
         expect(boostSettings(p({}), income, 4)).toEqual({ perRunHour: 10_000, hoursPerDay: 18, slots: 4, budget: 7_500 });
         expect(boostSettings(p({ cellsPerHour: 20_000, runHoursPerDay: 12, labSlots: 5 }), income, 4))

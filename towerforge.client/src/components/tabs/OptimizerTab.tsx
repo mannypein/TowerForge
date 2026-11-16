@@ -16,6 +16,7 @@ import { presetLabel, UWS, WS_STATS, WS_ENH, MEDAL_SYMBOL } from '../../constant
 import stoneIcon from '../../assets/stone.png';
 import { simulateStonePath, simulateCategoryPath, simulateMedalPath, simulateShardPaths, shardTypeValues, attachParts, workshopKey, bestGuardianChips } from '../../engine/optimizer';
 import type { ChipSet, ShardTypeValue } from '../../engine/optimizer';
+import { COIN_CAP_DAYS } from '../../engine/coinIncome';
 import ShardIcon from '../common/ShardIcon';
 import { chipById } from '../../constants/guardianData';
 import { guardianPreset } from '../../engine/guardian';
@@ -103,6 +104,8 @@ export default function OptimizerTab() {
     const [skipPath, setSkipPath] = useState<SkipUpgrade[]>([]);
     // Free upgrades reach these in the chosen run: a note on the workshop and skip panels.
     const [freeNote, setFreeNote] = useState<string>();
+    // The most coins one step may cost (a month of the player's coins).
+    const [coinCap, setCoinCap] = useState<number>();
     const [skipFreeNote, setSkipFreeNote] = useState<string>();
     // What's left out for now (not unlocked in the game yet) — a note per panel.
     const [locked, setLocked] = useState<LockedNotes>({});
@@ -214,6 +217,7 @@ export default function OptimizerTab() {
                 const skipKind = pushingWaves ? 'health' : pushingSurvival && snap.skipWorth ? 'attack' : null;
                 const workshop = snap.wsData[snap.presetIdx];
                 setFreeNote(freeFillNote(filledInRun(snap)));
+                setCoinCap(snap.maxStepCoins);
                 setSkipFreeNote(undefined);
                 if (skipKind) {
                     const sources = skipSources(
@@ -257,9 +261,7 @@ export default function OptimizerTab() {
                     for (const cat of CURRENCY_CATS) {
                         if (cat !== 'bots') newResults[cat] = simulateCategoryPath(cat, steps(cat), snap);
                     }
-                    // Medals weigh bot levels against Event Shop trades, valued by
-                    // what the stones and shards (after the ones you hold) buy next;
-                    // shards in the type that gains most, each on its own slots.
+                    // What each type's shards are worth, held and the next 1,000.
                     const shardPaths = simulateShardPaths(steps('modules'), snap);
                     const cur = st.currencies;
                     const shardsHeld = {
@@ -267,9 +269,8 @@ export default function OptimizerTab() {
                         generator: cur.generatorShards ?? 0, core: cur.coreShards ?? 0,
                     };
                     setShardValues(shardTypeValues(shardPaths, shardsHeld));
-                    newResults.bots = simulateMedalPath(
-                        steps('bots'), snap, newResults.stones, cur.stones ?? 0, shardPaths, shardsHeld,
-                    );
+                    // Medals: bots only (simulateMedalPath).
+                    newResults.bots = simulateMedalPath(steps('bots'), snap);
                     if (snap.blend) {
                         for (const cat of ['stones', ...CURRENCY_CATS] as OptCategory[]) {
                             newResults[cat] = attachParts(snap, newResults[cat]);
@@ -369,7 +370,7 @@ export default function OptimizerTab() {
             }
             case 'bots': {
                 const [name, stat] = c.ref ?? [];
-                if (!name || name === 'trade' || stat === undefined) return false;   // trades happen in game
+                if (!name || stat === undefined) return false;
                 if (stat === 'plus') st.setBotPlusLevel(name, st.activePreset, level);
                 else st.setBotMedal(name, st.activePreset, Number(stat), level);
                 return true;
@@ -911,6 +912,13 @@ export default function OptimizerTab() {
                             {group.currency === 'shards' && (
                                 <ShardAdvice values={shardValues} metric={metricLabel} />
                             )}
+                            {(group.currency === 'coins' || group.currency === 'research') && coinCap !== undefined && (
+                                <p className="opt-row-explainer">
+                                    Leaves out anything that costs more than {COIN_CAP_DAYS} days of your coins: over{' '}
+                                    {coinsText(coinCap)} 🪙 for one step (you make about {coinsText(coinCap / COIN_CAP_DAYS)}{' '}
+                                    a day, from your runs of the last 7 days).
+                                </p>
+                            )}
                             {group.currency === 'coins' && runFits && skipPath.length > 0 && runModel && (
                                 <SkipPanel path={skipPath} runModel={runModel} coinsAt={coinsAt} skipScale={conditionedSkip(1, models.conditions)} note={skipFreeNote} />
                             )}
@@ -935,8 +943,9 @@ export default function OptimizerTab() {
                             )}
                             {group.currency === 'medals' && (
                                 <p className="opt-row-explainer">
-                                    Medals also buy 150 Gems a trade. Trade prices reset each event; relics and
-                                    cosmetics aren&apos;t ranked.
+                                    Only bots here: medals are hard to come by, and bot levels are the one thing only
+                                    medals buy. The Event Shop&apos;s stones, shards and gems come from many other places,
+                                    so trading medals for them isn&apos;t suggested. Relics and cosmetics aren&apos;t ranked.
                                 </p>
                             )}
                             {group.currency === 'gems' && (
@@ -1019,6 +1028,18 @@ const pct = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`;
 // Coin prices: whole coins below 1,000 (discounts leave fractions).
 const coinsText = (v: number) => formatGameNumber(v < 1000 ? Math.round(v) : v);
 
+// An empty Bots list: medals go to bots only, and only some bot stats are
+// modeled (docs/optimizer.md, Bots).
+const BOTS_NONE = 'No bot level adds to this goal. Amplify Bot (with Bot Bot beside it) and Flame Bot’s burn count for '
+    + 'damage and waves, Golden Bot for coins and cells, Flame Bot’s damage cut for survival; Thunder Bot isn’t '
+    + 'modeled yet. Keep your medals for the bots.';
+
+// The ⓘ beside each list's title: rows are steps of one upgrade grouped
+// (engine/optimizer.ts groupPath), so a row of 20 levels is 20 buys in a row.
+const HOW_TO_READ = 'Buy from the top down. A row with several levels (Damage Lv 100 → 120) is the next levels of '
+    + 'that upgrade, all bought before the row under it. Stats past level 300 move 10 levels at a time. Two rows '
+    + 'next to each other may take turns: a level of one, then the other.';
+
 // Short badges, so the name keeps its room on a phone.
 const CAT_BADGE: Partial<Record<OptCategory, string>> = {
     workshop: 'WS', labs: 'LAB', enhancements: 'ENH', cards: 'CARD', bots: 'BOT', modules: 'MOD', guardian: 'GRD', botplus: 'BOT+',
@@ -1068,7 +1089,7 @@ function ChipAdvice({ sets, metric, onEquip }: { sets: ChipSet[]; metric: string
 
 // Each type's shards level only its own slots: what the shards held add
 // along that type's path, and what the next 1,000 would — the type to pick
-// for Event Shop trades and the Vault's Daily Mission Shard Type.
+// for the Vault's Daily Mission Shard Type.
 function ShardAdvice({ values, metric }: { values: ShardTypeValue[]; metric: string }) {
     const best = [...values].sort((a, b) => b.next1kPct - a.next1kPct)[0];
     if (!best || !(best.next1kPct > 0)) return null;
@@ -1081,8 +1102,8 @@ function ShardAdvice({ values, metric }: { values: ShardTypeValue[]; metric: str
                 <span className="s-badge">next 1,000</span>
             </div>
             <p className="opt-row-explainer" style={{ padding: '6px 12px 0' }}>
-                Each type&apos;s shards level only its own slots. Picking a type for Event Shop trades or the
-                Vault&apos;s Daily Mission Shard Type? <strong>{name(best.type)}</strong> adds the most {metric} now.
+                Each type&apos;s shards level only its own slots. Picking the Vault&apos;s Daily Mission Shard
+                Type? <strong>{name(best.type)}</strong> adds the most {metric} now.
                 Modules → Shard plan shows which slot each type&apos;s shards should go to.
             </p>
             {values.map(v => (
@@ -1155,6 +1176,7 @@ function OptPanel({
     panel, candidates, locked, note, showAll, onShowMore, gainColor, catStyle, onApply, runGains, blend,
 }: OptPanelProps) {
     const totalWaves = runGains?.reduce((s, g) => s + g.waves, 0) ?? 0;
+    const [howTo, setHowTo] = useState(false);
     const visible = showAll
         ? candidates
         : candidates.slice(0, OPT_DEFAULT_SHOW);
@@ -1163,16 +1185,19 @@ function OptPanel({
         <div className="opt-section">
             <div className="opt-section-head">
                 <span className="opt-section-title">{panel.label}</span>
+                <button type="button" className="opt-howto-btn" aria-expanded={howTo}
+                    aria-label="How to read this list" title={HOW_TO_READ} onClick={() => setHowTo(v => !v)}>ⓘ</button>
                 <span className="s-badge">
                     {candidates.length} upgrades{runGains && totalWaves > 0 ? ` · +${fmtWaves(totalWaves)} waves` : ''}
                 </span>
             </div>
 
+            {howTo && <p className="opt-row-explainer opt-howto">{HOW_TO_READ}</p>}
             {locked && candidates.length > 0 && <div className="opt-locked">🔒 {locked}</div>}
             {note && <p className="opt-row-explainer" style={{ padding: '6px 12px 0' }}>{note}</p>}
             {candidates.length === 0 ? (
                 <div className="opt-empty">
-                    {locked ? `🔒 ${locked}` : 'No upgrades available — all maxed or no data entered.'}
+                    {locked ? `🔒 ${locked}` : panel.cat === 'bots' ? BOTS_NONE : 'No upgrades available — all maxed or no data entered.'}
                 </div>
             ) : (
                 <>

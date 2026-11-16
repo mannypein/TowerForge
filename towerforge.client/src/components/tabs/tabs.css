@@ -3406,6 +3406,31 @@ button.gcard {
     flex: 1;
 }
 
+/* ⓘ beside a list's title: how to read the grouped rows (tap to open). */
+.opt-howto-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    color: var(--text-dim);
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.opt-howto-btn[aria-expanded="true"],
+.opt-howto-btn:hover {
+    color: var(--text-bright);
+    border-color: var(--accent);
+}
+
+.opt-howto {
+    padding: 8px 12px 0;
+}
+
 .opt-empty {
     text-align: center;
     padding: 30px;

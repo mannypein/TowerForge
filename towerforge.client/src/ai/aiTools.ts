@@ -20,7 +20,7 @@
 import type { AppState, BuildType, League, OptCandidate, OptCategory, OptCurrency } from '../types/gameTypes';
 import type { AccountState, GoalModels } from '../engine/accountModels';
 import { applyGoal, chosenReport, effectiveBuild, runModels, snapshotFromState } from '../engine/accountModels';
-import { bestGuardianChips, groupPath, mergeRepeats, simulateCategoryPath, simulateMedalPath, simulateShardPaths, simulateStonePath } from '../engine/optimizer';
+import { bestGuardianChips, groupPath, mergeRepeats, simulateCategoryPath, simulateMedalPath, simulateStonePath } from '../engine/optimizer';
 import { changeCost, upgradeTargets, whatIf } from '../engine/whatIf';
 import type { Change, Costs, UpgradeTarget } from '../engine/whatIf';
 import { buildTournamentModel, heatOf, newestTournament, tournamentWhatIf, withTournamentBuild } from '../engine/tournamentModel';
@@ -377,19 +377,13 @@ export function bestUpgrades(s: AiAccount, currency: AiCurrency, goalWanted?: st
     const parts: string[] = [`Goal: ${GOAL_LABELS[goal]}. ${inWaves ? 'Each pick shows the waves it adds' : `Each pick's gain is in ${metric}`}, in the order the Optimizer would buy them.`];
     if (note) parts.push(note);
     if (askedFor) parts.push(`They asked about ${askedFor.toLowerCase()}, which TowerForge doesn't score for a ${build} build: these picks are for ${GOAL_LABELS[goal].toLowerCase()} instead.`);
-    let stones: OptCandidate[] | null = null;
     for (const cur of wanted) {
         // The stone path is one path in buy order; the others are lists.
         let raw: OptCandidate[] = [];
         const inOrder = cur === 'stones';
-        if (cur === 'stones') raw = stones = simulateStonePath(budget ? 150 : 60, snap);
-        else if (cur === 'medals') {
-            stones ??= simulateStonePath(40, snap);
-            const c = s.currencies;
-            raw = simulateMedalPath(PICKS, snap, stones, c?.stones ?? 0, simulateShardPaths(20, snap), {
-                cannon: c?.cannonShards ?? 0, armor: c?.armorShards ?? 0, generator: c?.generatorShards ?? 0, core: c?.coreShards ?? 0,
-            });
-        } else {
+        if (cur === 'stones') raw = simulateStonePath(budget ? 150 : 60, snap);
+        else if (cur === 'medals') raw = simulateMedalPath(PICKS, snap);
+        else {
             for (const cat of CURRENCY_CATS[cur]) raw.push(...simulateCategoryPath(cat, 30, snap));
             raw.sort((a, b) => b.scorePerCost - a.scorePerCost);
         }
@@ -934,7 +928,7 @@ export function labBoostsReport(s: AiAccount, query = '', now = Date.now()): Too
         const plan = planLabBoosts(set.budget, set.slots);
         const held = s.currencies?.cells ?? 0;
         out.push(`Headline: with about ${cellsText(set.budget)} cells an hour, your ${set.slots} lab${set.slots > 1 ? 's' : ''} can all run at ${speedsText(plan.best.speeds)} — the fastest even boosts those cells keep up, ${cellsText(plan.best.cellsPerHour)} cells an hour.`);
-        out.push(`Cells an hour: ${cellsText(set.perRunHour)} while in a run × ${set.hoursPerDay.toFixed(1)} hours a day in runs${income ? ` (from your last ${income.runs} runs)` : ''}.`);
+        out.push(`Cells an hour: ${cellsText(set.perRunHour)} while in a run × ${set.hoursPerDay.toFixed(1)} hours a day in runs${income ? ` (cells from your newest ${income.rateRuns}${income.tier !== null ? ` Tier ${income.tier}` : ''} runs, hours from your runs of the last 7 days)` : ''}.`);
         if (plan.part) out.push(`Spare: ${cellsText(plan.spare)} cells an hour, enough for one lab at ×${plan.part.speed} for ${plan.part.hoursPerDay.toFixed(1)} hours a day.`);
         if (plan.higher.length) {
             out.push(`Faster than that costs more than you make; the ${cellsText(held)} cells you hold keep each going for a while: ${plan.higher.map(h =>

@@ -1,8 +1,8 @@
 // ============================================================
 //  TowerForge Companion — Lab boosts (Labs page)
 //  The fastest boosts the player's Elite Cells keep up on every lab
-//  slot (engine/labBoosts.ts): cells an hour and hours a day in a run
-//  from their runs (or typed over), the even plan, what the spare cells
+//  slot (engine/labBoosts.ts): cells an hour in a run from their newest
+//  runs on the tier farmed now and hours a day in a run (or typed over), the even plan, what the spare cells
 //  do, the next steps up and how long the cells held keep each going —
 //  then how long a lab's next level and the rest of it take at those
 //  speeds (research time after Labs Speed and the Lab Speed relic).
@@ -74,8 +74,9 @@ export default function LabBoostPanel({ settings, income, plan, profile, cellsHe
                 </div>
                 <p className="labb-note">
                     {income
-                        ? <>From your {income.runs} run{income.runs === 1 ? '' : 's'} in the last 7 days: {cells(income.perRunHour)} cells
-                            an hour in a run, in a run about {Math.round(24 * income.share * 10) / 10} hours a day.</>
+                        ? <>Your newest {income.rateRuns > 1 ? `${income.rateRuns} ` : ''}{income.tier !== null ? `Tier ${income.tier} ` : ''}
+                            run{income.rateRuns === 1 ? '' : 's'}: {cells(income.perRunHour)} cells an hour in a run. Over the
+                            last 7 days you were in a run about {Math.round(24 * income.share * 10) / 10} hours a day.</>
                         : <>Import your game data to read these from your runs, or type them in.</>}
                     {typed && income && (
                         <button className="labb-reset" onClick={() => onProfile({ cellsPerHour: undefined, runHoursPerDay: undefined })}>

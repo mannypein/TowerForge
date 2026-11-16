@@ -78,7 +78,7 @@ export const OPT_PANELS: {
         { cat: 'enhancements', label: 'Enhancements', costType: 'coins', row: 2, maxSteps: 100 },
         { cat: 'labs', label: 'Labs', costType: 'research', row: 2, maxSteps: 100 },
         { cat: 'modules', label: 'Module slot levels', costType: 'shards', row: 2, maxSteps: 60 },
-        { cat: 'bots', label: 'Bots and Event Shop trades', costType: 'medals', row: 2, maxSteps: 40 },
+        { cat: 'bots', label: 'Bots', costType: 'medals', row: 2, maxSteps: 40 },
         { cat: 'cards', label: 'Card slots', costType: 'gems', row: 2, maxSteps: 21 },
         { cat: 'guardian', label: 'Guardian chips', costType: 'bits', row: 2, maxSteps: 60 },
     ];

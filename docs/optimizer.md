@@ -40,23 +40,28 @@ What each currency buys (wiki Currencies page) and how it's ranked:
 | Currency | Ranked | Price source |
 |---|---|---|
 | Stones | UW stats, UW+, card mastery unlocks, assist modules — one path | wiki (see ultimate-weapons.md) |
-| Coins | workshop (per coin), enhancements (per coin) | game table via TheTowerSDK; discount labs |
+| Coins | workshop (per coin), enhancements (per coin); no step dearer than 30 days of the player's coins | game table via TheTowerSDK; discount labs |
 | Lab time | labs (per hour of research) | SDK lab catalog; Labs Speed, relic, Labs Coin Discount |
 | Module Shards | module slot levels, 5 at a time (per shard; coins shown); each type's held shards and next 1,000 (below) | SDK module tables + wiki level 1; Module Shard/Coin Cost labs (1% a level) |
-| Medals | bot stat and Bot+ levels vs Event Shop trades (per medal) | bots: 100 + 40 × (L − 1) a level (wiki bot Cost pages, every bot); Bot+: 100 + 50 × (L − 1), Echoing Shot 100 + 200 × (L − 1); trades 40, 65, 90, 130, 175, 230, then 380 |
+| Medals | bot stat and Bot+ levels only (per medal) | bots: 100 + 40 × (L − 1) a level (wiki bot Cost pages, every bot); Bot+: 100 + 50 × (L − 1), Echoing Shot 100 + 200 × (L − 1) |
 | Gems | card slots: the best owned card not in the preset, into a free slot or the next one bought (per gem) | wiki Cards: 50 → 10,000 gems, 22 slots |
 | Elite Cells | not a path: a table of lab boosts (×1.5 at 15/h … ×8 at 1M/h) and the extra lab hours per cell, on the top lab; the boosts the player's cells keep up are on the Labs page (below) | wiki Currencies, Lab Upgrades |
 | Bits | Guardian chip stats, each equipped chip's next level (per Bit); which chips to equip (free to swap: every owned set that fits the slots, scored for the goal, 2026-10-23 `bestGuardianChips`) | wiki Chips tables and TheTowerSDK guardian upgrades — matched at every level (`constants/guardianData.ts`) |
 | Keys, Guild Tokens | not ranked (Vault, Guild Store) | — |
 
-- **Medal trades** are worth what 15 stones / 250 shards buy next on their own
-  paths (`pathGain`), after the ones already held. Shards come in the type
-  the player picks (wiki Currency/Shards), so a shard trade takes the type
-  whose own path (`simulateShardPaths`) gains most after that type's held
-  shards, and says which ("Event Shop — 250 Core Shards"); the trade price
-  climbs with every shard trade, whatever the type (one Event Shop item).
-  Prices reset each event; the path assumes one event. 150-gem trades aren't
-  valued (gems have no single use to price them).
+- **Medals go to bots only** (owner, 2026-11-16): medals are hard to come by
+  and bot and Bot+ levels are the one thing only medals buy, while the Event
+  Shop's stones, Module Shards and gems come from many other places. Until
+  then the path weighed each trade (40, 65, 90 … 380 medals for 15 stones or
+  250 shards) by what those bought next on their own paths, which put stone
+  trades first on most accounts — over Golden Bot Duration for coins, and as
+  the only medal pick in tournaments, where only Amplify Bot adds waves. An
+  empty Bots list now says which bots count for which goal.
+- **Coin cap** (owner, 2026-11-16, `engine/coinIncome.ts`): no coin, lab or
+  module step is recommended that costs more than 30 days of the player's
+  coins — all coins of the runs of the last 7 days over the time from the
+  first one's start to the newest one's end (gaps included, tournaments too).
+  The Coins and Lab research sections say the cap. No runs: no cap.
 - **Module shards by type** (2026-10-28): each type's shards level only that
   type's slots (wiki Currency/Shards, Modules), so the Module Shards section
   opens with "Your module shards": per type, what the shards held add along
@@ -106,12 +111,10 @@ What each currency buys (wiki Currencies page) and how it's ranked:
   (2026-11-01; the code used to add it anyway, from an old table). On coins it
   multiplies Golden Bot's Bonus over the share of its kills it overlaps, read
   from the run's `GoldenBotCoinsEarned` (game-export-format.md, Battle history);
-  Bot Bot's uptime × range moves that share, the code's assumption. Flame and
-  Thunder Bot aren't modeled, so
-  their levels show no gain: battle reports record Flame Bot kills and hits
-  and Thunder Bot stuns (TheTowerSDK's battle field list), but no bot
-  damage, so there's no share of damage to calibrate them from; Thunder
-  Bot's stuns would need a stun-uptime model in TTT, for a small effect: it
+  Bot Bot's uptime × range moves that share, the code's assumption. Flame Bot's
+  burn counts as flat damage when the run records `FlameBotDamage` (Every
+  damage source, below; `edps.ts`). Thunder Bot isn't modeled: its stuns
+  would need a stun-uptime model in TTT, for a small effect: it
   reaches 2–4% of the owner's enemies (2026-11-01, game-export-format.md). Flame Bot's Damage
   Reduction counts for survival since 2026-10-23 (below). Bot+ unlocks (1,250 stones each, once all five bots are owned) are in
   the stone path since 2026-10-23, scored by what the ability does at level
@@ -153,7 +156,16 @@ What each currency buys (wiki Currencies page) and how it's ranked:
   export (2026-10-28): 30 runs, 203,653 cells an hour in a run, 91.6% of the
   time → 186,624 an hour → ×6 ×6 ×5 ×5 ×5 kept up (155,700) with the spare
   running a third ×6 about 15 hours a day; the owner runs ×6 ×6 ×6 ×5 ×5
-  (203,800), which their 34.95M cells held keep going about 84 days. Lab
+  (203,800), which their 34.95M cells held keep going about 84 days.
+  **Since 2026-11-16** the cells an hour come from the newest campaign runs
+  (up to 5) on the tier the newest one was on, not every run of the 7 days:
+  a player whose newest run made 360K an hour was told five ×6 boosts
+  (300K) were out of reach while their cells still grew. Older tiers and
+  tournaments dragged the average down; the hours a day still count every
+  run. Whether CellsEarned holds every cell a player earns isn't settled:
+  on the owner's exports of 10-17 and 10-21 the runs' CellsEarned summed to
+  18.3M and `TotalCellsEarned_v2` rose 16.0M, but `CurrencyEarnedThisCycle`
+  counted 35.6M (game-export-format.md). Lab
   times: a running lab's normal-speed time left (`labTimerLeft`) ÷ its boost
   — the fastest boosts on the labs with the most time left — and any lab's
   next level and the rest of it from the lab catalog after Labs Speed and
@@ -512,7 +524,9 @@ measured from the run's `FlameBotBlocked` (the made-up runs had none).
     currency above.
   - Shown in blocks of 10 steps, one row per stat or lab in each, so
     one-level steps that take turns (Crit Chance, Crit Factor, Crit Chance…)
-    read as "Crit Chance 40 → 45, Crit Factor 40 → 44".
+    read as "Crit Chance 40 → 45, Crit Factor 40 → 44". The ⓘ by each list's
+    title says so (2026-11-16: a player asked whether a 20-level row meant
+    buying those 20 before the next row — it does).
 - Paths skip anything worth under `GC_SCORING.minGainPct` (0.001%).
 
 ## Build scores (all relative: the player's current setup = 1)

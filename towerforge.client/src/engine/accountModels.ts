@@ -23,6 +23,7 @@ import { buildFarmCalibration } from './farming';
 import { buildEhpCalibration } from './ehp';
 import { buildEdpsCalibration } from './edps';
 import { buildRunLengthModel, killerMix, oneHitEnds, skipWorth } from './runLength';
+import { stepCoinCap } from './coinIncome';
 import type { RunLengthModel, RunStat } from './runLength';
 import { buildRunModel, projectRun, runSettingsFromCards } from './runCoins';
 import type { RunProjection } from './runCoins';
@@ -86,6 +87,7 @@ export function snapshotFromState(s: AccountState): OptimizerSnapshot {
         freeLocked: s.profile.freeLocked?.length ? [...s.profile.freeLocked] : undefined,
         free: freeUpgradeRun(run, s.importedBattles, s.wsData[s.activePreset]) ?? undefined,
         metric: metricOf(effectiveBuild(s.profile.build, s.importedBattles)),
+        maxStepCoins: stepCoinCap(s.importedBattles),
     };
 }
 

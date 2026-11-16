@@ -5,8 +5,8 @@
 //  the next level worth saving for and which slot gives more per shard
 //  from there — and the best main and assist levels for every shard of
 //  the type (in its levels and saved), since Restore gives them back. Which type to pick when the game lets you choose
-//  (Event Shop trades, the Vault's daily missions) depends on the goal,
-//  so the Optimizer ranks that.
+//  (the Vault's daily missions) depends on the goal, so the Optimizer
+//  ranks that.
 // ============================================================
 
 import { useMemo } from 'react';
@@ -167,7 +167,7 @@ export default function ShardPlanPanel({ moduleState, labData, currencies }: {
                 {plans.map(p => <PlanCard key={p.type} plan={p} />)}
             </div>
             <p className="modg-hint">
-                Picking a shard type for Event Shop trades or the Vault&apos;s daily missions? The Optimizer&apos;s Module
+                Picking a shard type for the Vault&apos;s daily missions? The Optimizer&apos;s Module
                 Shards section ranks the types for your goal.
             </p>
         </div>

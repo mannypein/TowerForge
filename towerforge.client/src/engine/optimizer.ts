@@ -45,8 +45,7 @@
 //  • Workshop and labs use the cost tables for every build now.
 //  • Enhancements (coins, discount labs), module slot levels (shards),
 //    bot stats (medals, 100 + 40 × (L − 1)) and card slots (gems) are
-//    priced; medals also weigh Event Shop trades for stones and shards,
-//    valued by what those buy on their own paths.
+//    priced. Medals go to bots only (2026-11-16, simulateMedalPath).
 //
 // ┌──────────────────────────────────────────────────────────┐
 // │  GLASS CANNON OPTIMIZER — STATUS & HANDOFF (2026-06-25)   │
@@ -157,8 +156,8 @@ import { attackLabCut, healthLabCut } from './enemyStats';
 import { assistLevelCost } from './assistModules';
 import type { EnemyType } from './enemyStats';
 import {
-    botMedalCost, botPlusMedalCost, CARD_SLOT_GEMS, enhancementCost, enhancementDiscount, labLevelCost, MEDAL_TRADE_GIVES,
-    MEDAL_TRADE_PRICES, MODULE_SLOT_MAX, moduleSlotCost, workshopCost, workshopDiscount,
+    botMedalCost, botPlusMedalCost, CARD_SLOT_GEMS, enhancementCost, enhancementDiscount, labLevelCost,
+    MODULE_SLOT_MAX, moduleSlotCost, workshopCost, workshopDiscount,
 } from './upgradeCosts';
 import type { EdpsCalibration } from './edps';
 import { BOT_PLUS_UNLOCK_STONES, BOTS_CONFIG, isBotPlusOwned } from '../constants/botData';
@@ -242,6 +241,10 @@ export interface OptimizerSnapshot {
     // score — waves (flat damage + skip, needs `edps`) or survival (`ehp`).
     // coinWeight 0–1 is how much coins count.
     blend?: { push: 'waves' | 'ehp'; coinWeight: number };
+    // The most coins one step of a path may cost: a month of the player's
+    // coins (engine/coinIncome.ts). Dearer steps aren't recommended.
+    // Omitted = no limit (no runs to read income from).
+    maxStepCoins?: number;
     // Tournament battle conditions the score is read under
     // (engine/battleConditions.ts); calibrations are built under them too.
     conditions?: TourneyConditions;
@@ -1145,7 +1148,7 @@ export function applyUpgrade(
         case 'bots': {
             const [name, stat] = c.ref ?? [];
             const entry = name !== undefined ? snap.botData[name] : undefined;
-            if (!entry || stat === undefined || name === 'trade') break;
+            if (!entry || stat === undefined) break;
             if (stat === 'plus') {
                 snap.botData[name] = { ...entry, plusLv: c.toLv };
                 break;
@@ -1189,6 +1192,15 @@ export function applyUpgrade(
 // An upgrade worth recommending: a real gain, not rounding noise.
 const worthIt = (c: OptCandidate) => c.scorePct >= GC_SCORING.minGainPct;
 
+// The coins a step takes (workshop and enhancements cost coins; labs and
+// module levels show theirs beside research or shards) within the cap.
+// A cost that's only a level proxy isn't held against the cap.
+export function affordable(snap: OptimizerSnapshot, c: OptCandidate): boolean {
+    if (!snap.maxStepCoins) return true;
+    const coins = c.costType === 'coins' ? (c.costKnown ? c.cost : undefined) : c.coins;
+    return coins === undefined || coins <= snap.maxStepCoins;
+}
+
 // Steps on one stat or lab as one row: levels, cost and research add up
 // and the gains compound.
 const continues = (row: OptCandidate, c: OptCandidate) =>
@@ -1196,10 +1208,8 @@ const continues = (row: OptCandidate, c: OptCandidate) =>
 
 function mergeInto(row: OptCandidate, c: OptCandidate) {
     row.toLv = c.toLv;
-    row.subLabel = row.ref?.[0] === 'trade'
-        ? `Trades ${row.fromLv + 1}–${c.toLv} this event`
-        // Assist efficiencies are percentages, not levels.
-        : row.category === 'assist' && / Eff$/.test(row.label)
+    // Assist efficiencies are percentages, not levels.
+    row.subLabel = row.category === 'assist' && / Eff$/.test(row.label)
             ? `${row.fromLv}% → ${c.toLv}%`
             : `Lv ${row.fromLv} → ${c.toLv}`;
     row.cost += c.cost;
@@ -1255,8 +1265,9 @@ export function simulateCategoryPath(
     const state = cloneSnapshot(snapshot);
 
     for (let i = 0; i < steps; i++) {
-        // Upgrades worth almost nothing (< minGainPct) aren't recommended.
-        const candidates = buildCandidates(state, cat, onlyType).filter(worthIt);
+        // Upgrades worth almost nothing (< minGainPct) aren't recommended,
+        // nor ones that cost more than a month of the player's coins.
+        const candidates = buildCandidates(state, cat, onlyType).filter(c => worthIt(c) && affordable(state, c));
         if (!candidates.length) break;
 
         const best = candidates[0];
@@ -1284,7 +1295,7 @@ export function simulateShardPaths(steps: number, snapshot: OptimizerSnapshot): 
 
 // What each type's shards are worth: the ones held (spent along that
 // type's path) and the next 1,000 after them — for when the type is the
-// player's pick (Event Shop trades, the Vault's Daily Mission Shard Type).
+// player's pick (the Vault's Daily Mission Shard Type).
 export interface ShardTypeValue { type: ModuleType; held: number; heldPct: number; next1kPct: number }
 export function shardTypeValues(paths: ShardPaths, held: Partial<Record<ModuleType, number>>): ShardTypeValue[] {
     return MODULE_TYPES.map(type => {
@@ -1313,82 +1324,23 @@ export function pathGain(path: OptCandidate[], spent: number, amount: number): n
 
 // ============================================================
 //  SIMULATE MEDAL PATH
-//  Medals buy bot levels, or Event Shop trades: 15 stones or 250
-//  Module Shards each, dearer with every trade of a kind in one event
-//  (40, 65, 90, 130, 175, 230, then 380). A trade is worth what those
-//  stones or shards buy next on their own ranked paths (`stonesHeld`
-//  are spent first). Shards come in the type the player picks, so a
-//  shard trade takes the type whose own path gains most after the
-//  shards of it held. Each step takes the most gain per medal.
+//  Medals go to bot levels and Bot+ levels only, the most gain per medal
+//  first. The Event Shop's trades (stones, Module Shards, gems) aren't
+//  offered: medals are scarce and bots are the one thing only they buy,
+//  while stones, shards and gems come from many other places (owner,
+//  2026-11-16; the path used to weigh trades by what 15 stones or 250
+//  shards bought next, which put them first on most accounts).
 // ============================================================
-export function simulateMedalPath(
-    steps: number,
-    snapshot: OptimizerSnapshot,
-    stonePath: OptCandidate[],
-    stonesHeld: number,
-    shardPaths: Partial<ShardPaths>,
-    shardsHeld: Partial<Record<ModuleType, number>> = {},
-): OptCandidate[] {
-    const path: OptCandidate[] = [];
-    const state = cloneSnapshot(snapshot);
-    const trades = { stones: 0, shards: 0 };
-    const typeTrades: Partial<Record<ModuleType, number>> = {};
-    const tradeRow = (kind: 'stones' | 'shards'): OptCandidate | null => {
-        const k = trades[kind];
-        const price = MEDAL_TRADE_PRICES[Math.min(k, MEDAL_TRADE_PRICES.length - 1)];
-        const amount = MEDAL_TRADE_GIVES[kind];
-        let gain = 0;
-        let type: ModuleType | undefined;
-        if (kind === 'stones') {
-            gain = pathGain(stonePath, stonesHeld + k * amount, amount);
-        } else {
-            for (const t of MODULE_TYPES) {
-                const g = pathGain(shardPaths[t] ?? [], (shardsHeld[t] ?? 0) + (typeTrades[t] ?? 0) * amount, amount);
-                if (g > gain) { gain = g; type = t; }
-            }
-        }
-        if (!(gain >= GC_SCORING.minGainPct)) return null;
-        return {
-            category: 'bots',
-            label: kind === 'stones' ? `Event Shop — ${amount} Stones` : `Event Shop — ${amount} ${cap(type!)} Shards`,
-            subLabel: `Trade ${k + 1} this event`,
-            fromLv: k,
-            toLv: k + 1,
-            cost: price,
-            costType: 'medals',
-            costKnown: true,
-            scorePct: gain,
-            scorePerCost: gain / price,
-            ref: type ? ['trade', kind, type] : ['trade', kind],
-        };
-    };
-    for (let i = 0; i < steps; i++) {
-        const options = [
-            ...buildCandidates(state, 'bots').filter(worthIt).slice(0, 1),
-            tradeRow('stones'),
-            tradeRow('shards'),
-        ].filter((c): c is OptCandidate => c !== null && c.scorePerCost > 0);
-        const best = options.sort((a, b) => b.scorePerCost - a.scorePerCost)[0];
-        if (!best) break;
-        path.push(best);
-        if (best.ref?.[0] === 'trade') {
-            trades[best.ref[1] as 'stones' | 'shards']++;
-            const type = best.ref[2] as ModuleType | undefined;
-            if (type) typeTrades[type] = (typeTrades[type] ?? 0) + 1;
-        } else {
-            applyUpgrade(state, best);
-        }
-    }
-    return groupPath(path);
+export function simulateMedalPath(steps: number, snapshot: OptimizerSnapshot): OptCandidate[] {
+    return simulateCategoryPath('bots', steps, snapshot);
 }
 
 // "Coins and push": each step's own gain in coins per hour and in the push
-// score, replayed along the path (rows show both). Trades keep neither.
+// score, replayed along the path (rows show both).
 export function attachParts(snapshot: OptimizerSnapshot, path: OptCandidate[]): OptCandidate[] {
     const state = cloneSnapshot(snapshot);
     let before = scoreParts(state);
     return path.map(c => {
-        if (c.ref?.[0] === 'trade') return c;
         applyUpgrade(state, c);
         state.modBonuses = readActiveModuleBonuses(
             state.moduleState, state.perkData, state.labData, state.cardData, state.modBonuses.run,

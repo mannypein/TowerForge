@@ -17,8 +17,8 @@
 //    bot Cost pages: 100 for level 1, 1,260 for level 30). Bot+ level L
 //    costs 100 + 50 × (L − 1), or 100 + 200 × (L − 1) for Amplify Bot's
 //    Echoing Shot (wiki bot pages, TheTowerSDK; constants/botData.ts).
-//  - Card slots (gems), Event Shop trades (medals) and Elite Cell lab
-//    boosts: the wiki's Cards and Currencies pages.
+//  - Card slots (gems) and Elite Cell lab boosts: the wiki's Cards and
+//    Currencies pages.
 //  Pure functions — no store imports.
 // ============================================================
 
@@ -116,12 +116,6 @@ export function botPlusMedalCost(from: number, to: number, costStep: number): nu
 // Gems for card slot n (index n − 1; slot 1 is free, 22 can be bought).
 export const CARD_SLOT_GEMS = [0, 50, 100, 200, 300, 400, 500, 600, 750, 1000, 1200, 1400, 1600, 1800,
     2500, 3500, 4500, 5500, 6500, 7500, 8500, 10000];
-
-// Event Shop trades: medals for the 1st, 2nd … trade of one kind in an
-// event (7th and later 380). Each gives 15 stones, 250 Module Shards
-// of one type, or 150 Gems.
-export const MEDAL_TRADE_PRICES = [40, 65, 90, 130, 175, 230, 380];
-export const MEDAL_TRADE_GIVES = { stones: 15, shards: 250, gems: 150 };
 
 // Elite Cell lab boosts: speed and cells per hour, for one lab slot.
 export const CELL_BOOSTS: [number, number][] = [

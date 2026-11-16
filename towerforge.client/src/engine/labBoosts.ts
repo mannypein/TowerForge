@@ -11,8 +11,9 @@
 //  the wiki's "Most Efficient Speed Across 5 Labs" table, row for row.
 //
 //  Cells an hour come from the player's runs (the game's battle history,
-//  CellsEarned): cells over the real time spent in runs, and the share of
-//  the day spent in a run from the gaps between runs. A run's BattleDate
+//  CellsEarned): cells over the real time of the newest campaign runs on
+//  the tier farmed now, and the share of the day spent in a run from the
+//  gaps between all runs of the last 7 days. A run's BattleDate
 //  is when it ended — each run's date is the one before's plus its own
 //  RealTime, give or take a few minutes (owner's export, 2026-10-28).
 //  Pure functions — no store imports.
@@ -118,16 +119,24 @@ export function labHours(lab: string, labData: LabData, relics: RelicData, progr
 }
 
 export interface CellIncome {
-    runs: number;          // runs read (the last 7 days of them)
+    runs: number;          // runs read for the time in a run (the last 7 days of them)
+    rateRuns: number;      // runs the cells an hour come from
+    tier: number | null;   // their tier (null: no campaign run, all runs read)
     perRunHour: number;    // cells an hour while in a run
     share: number;         // share of the time spent in a run (0–1)
     perHour: number;       // cells an hour over the whole day
 }
 
 const WINDOW_MS = 7 * 24 * 3600_000;
+const RATE_RUNS = 5;
 
 // Cells an hour from the imported runs that record their cells, over the
-// last 7 days of them (an account's rate grows as it progresses).
+// last 7 days of them. The rate comes from the newest campaign runs (up to
+// 5) on the tier the newest one was on: the tier being farmed now, at
+// today's upgrades. A 7-day average of every run lagged behind a player's
+// latest runs (2026-11-16: a player making 360K an hour was told five ×6
+// boosts were out of reach), and tournament runs earn cells at another
+// rate. The time spent in a run still counts every run, tournaments too.
 export function cellIncome(battles: BattleReport[]): CellIncome | null {
     const runs = battles
         .filter(b => typeof b.time === 'number' && b.realTimeSec > 0 && typeof b.raw?.CellsEarned === 'number')
@@ -135,15 +144,20 @@ export function cellIncome(battles: BattleReport[]): CellIncome | null {
     if (runs.length === 0) return null;
     const newest = runs[runs.length - 1].time!;
     const recent = runs.filter(b => b.time! >= newest - WINDOW_MS);
-    let cells = 0, inRun = 0, gaps = 0;
+    let inRun = 0, gaps = 0;
     recent.forEach((b, i) => {
-        cells += b.raw!.CellsEarned as number;
         inRun += b.realTimeSec;
         if (i > 0) gaps += Math.max(0, (b.time! - b.realTimeSec * 1000 - recent[i - 1].time!) / 1000);
     });
-    const perRunHour = cells / (inRun / 3600);
+    const campaign = recent.filter(b => !b.tournament);
+    const tier = campaign.length ? campaign[campaign.length - 1].tier ?? null : null;
+    const rated = (tier !== null ? campaign.filter(b => b.tier === tier) : campaign.length ? campaign : recent)
+        .slice(-RATE_RUNS);
+    const cells = rated.reduce((sum, b) => sum + (b.raw!.CellsEarned as number), 0);
+    const ratedTime = rated.reduce((sum, b) => sum + b.realTimeSec, 0);
+    const perRunHour = cells / (ratedTime / 3600);
     const share = inRun / (inRun + gaps);
-    return { runs: recent.length, perRunHour, share, perHour: perRunHour * share };
+    return { runs: recent.length, rateRuns: rated.length, tier, perRunHour, share, perHour: perRunHour * share };
 }
 
 export interface BoostSettings {

@@ -7,7 +7,7 @@ import { useGameStore } from '../store/useGameStore';
 import { readActiveModuleBonuses } from './modBonuses';
 import { runRatesFrom } from './runRates';
 import { parseGameExport } from './gameExport';
-import { buildCandidates, goalScore, groupPath, mergeRepeats, pathGain, shardTypeValues, simulateMedalPath, simulateStonePath } from './optimizer';
+import { affordable, buildCandidates, goalScore, groupPath, mergeRepeats, pathGain, shardTypeValues, simulateCategoryPath, simulateMedalPath, simulateStonePath } from './optimizer';
 import { buildFarmCalibration } from './farming';
 import { buildEhpCalibration } from './ehp';
 import type { OptimizerSnapshot } from './optimizer';
@@ -253,6 +253,23 @@ describe('Glass Cannon workshop and labs', () => {
         expect(dmg.toLv - dmg.fromLv).toBe(10);                           // 6000-level stats move 10 at a time
     });
 
+    // A player report (2026-11-16): steps far past what the player earns
+    // shouldn't be recommended. A month of coins is the most one step costs.
+    it('leaves out steps that cost more than the coin cap', () => {
+        const snap = calibrated();
+        const all = simulateCategoryPath('workshop', 20, snap);
+        const dearest = Math.max(...all.map(c => c.cost));
+        const capped = simulateCategoryPath('workshop', 20, { ...snap, maxStepCoins: dearest / 2 });
+        expect(capped.length).toBeGreaterThan(0);
+        expect(capped.every(c => c.cost <= dearest / 2 * (c.toLv - c.fromLv))).toBe(true);
+        const step = { costType: 'coins', costKnown: true, cost: 100 } as Parameters<typeof affordable>[1];
+        expect(affordable({ ...snap, maxStepCoins: 99 }, step)).toBe(false);
+        expect(affordable({ ...snap, maxStepCoins: 100 }, step)).toBe(true);
+        expect(affordable(snap, step)).toBe(true);                                       // no runs: no cap
+        expect(affordable({ ...snap, maxStepCoins: 1 }, { ...step, costKnown: false })).toBe(true);
+        expect(affordable({ ...snap, maxStepCoins: 99 }, { ...step, costType: 'research', coins: 100 })).toBe(false);
+    });
+
     // Some builds keep a stat low on purpose (an orb build's Range at 0).
     it('leaves out the workshop stats the player unticked', () => {
         const snap = calibrated(s => { s.excludedWorkshop = ['attack|Range', 'attack|Rend Armor Chance']; });
@@ -472,33 +489,23 @@ describe('every currency', () => {
         expect(pathGain(path, 0, 30)).toBeCloseTo(21, 9);     // the path runs out
     });
 
-    it('spends medals on Event Shop trades when bots give nothing, dearer each trade', () => {
-        const stonePath = Array.from({ length: 20 }, () => ({
-            category: 'uw' as const, label: 'x', subLabel: '', fromLv: 0, toLv: 1,
-            cost: 15, costType: 'stones' as const, scorePct: 1, scorePerCost: 1 / 15,
-        }));
-        const rows = simulateMedalPath(5, snapshot(), stonePath, 0, {});
-        expect(rows).toHaveLength(1);
-        expect(rows[0]).toMatchObject({ label: 'Event Shop — 15 Stones', subLabel: 'Trades 1–5 this event' });
-        expect(rows[0].cost).toBe(40 + 65 + 90 + 130 + 175);
+    // Medals are scarce and bots are the one thing only they buy (owner,
+    // 2026-11-16): no Event Shop trades for stones, shards or gems.
+    it('spends medals on bots only, never on Event Shop trades', () => {
+        expect(simulateMedalPath(5, snapshot())).toEqual([]);
+        const snap = snapshot(run(), s => { s.botData = { 'Amplify Bot': { owned: true, medals: [0, 0, 5, 0], plusLv: 0 } }; });
+        const rows = simulateMedalPath(5, snap);
+        expect(rows.length).toBeGreaterThan(0);
+        expect(rows.every(r => r.category === 'bots' && r.label.startsWith('Amplify Bot'))).toBe(true);
     });
 
-    // Shards come in the type picked, and the shards of it already held
-    // go first: Armor's next 1,000 are worth less than Cannon's first.
+    // Each type's shards, held and the next 1,000: Armor's next 1,000 are
+    // worth less than Cannon's first.
     const shardStep = (cost: number, scorePct: number) => ({
         category: 'modules' as const, label: 'x', subLabel: '', fromLv: 0, toLv: 5,
         cost, costType: 'shards' as const, scorePct, scorePerCost: scorePct / cost,
     });
     const shardPaths = { cannon: [shardStep(1000, 5)], armor: [shardStep(1000, 5), shardStep(1000, 3)] };
-
-    it('trades medals for the shard type worth most after the shards held', () => {
-        const rows = simulateMedalPath(6, snapshot(), [], 0, shardPaths, { armor: 1000 });
-        expect(rows.map(r => [r.label, r.subLabel])).toEqual([
-            ['Event Shop — 250 Cannon Shards', 'Trades 1–4 this event'],
-            ['Event Shop — 250 Armor Shards', 'Trades 5–6 this event'],
-        ]);
-        expect(rows[0].ref).toEqual(['trade', 'shards', 'cannon']);
-    });
 
     it('values each type’s held shards and the next 1,000', () => {
         const values = shardTypeValues({ ...shardPaths, generator: [], core: [] }, { armor: 1000 });
