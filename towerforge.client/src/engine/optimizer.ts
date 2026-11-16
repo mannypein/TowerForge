@@ -153,7 +153,7 @@ import { healthSkipChance, skipSources } from './levelSkip';
 import type { SkipKind } from './levelSkip';
 import type { DissonanceAt } from './dissonance';
 import { attackLabCut, healthLabCut } from './enemyStats';
-import { assistLevelCost } from './assistModules';
+import { assistLevelCost, assistLabOf, assistWithLab } from './assistModules';
 import type { EnemyType } from './enemyStats';
 import {
     botMedalCost, botPlusMedalCost, CARD_SLOT_GEMS, enhancementCost, enhancementDiscount, labLevelCost,
@@ -241,7 +241,7 @@ export interface OptimizerSnapshot {
     // score — waves (flat damage + skip, needs `edps`) or survival (`ehp`).
     // coinWeight 0–1 is how much coins count.
     blend?: { push: 'waves' | 'ehp'; coinWeight: number };
-    // The most coins one step of a path may cost: a month of the player's
+    // The most coins one step of a path may cost: 3 days of the player's
     // coins (engine/coinIncome.ts). Dearer steps aren't recommended.
     // Omitted = no limit (no runs to read income from).
     maxStepCoins?: number;
@@ -256,6 +256,19 @@ export const workshopKey = (section: string, stat: string) => `${section}|${stat
 // ── Deep Clone Snapshot ───────────────────────────────────────
 function cloneSnapshot(s: OptimizerSnapshot): OptimizerSnapshot {
     return JSON.parse(JSON.stringify(s));
+}
+
+// A lab's level on a snapshot. An Assist lab moves its slot's efficiency
+// too (kept as a total that holds the lab: assistModules.assistWithLab),
+// and the substats read from it.
+export function setLab(snap: OptimizerSnapshot, lab: string, level: number): void {
+    const from = snap.labData[lab] ?? 0;
+    snap.labData[lab] = level;
+    if (!assistLabOf(lab)) return;
+    snap.moduleState.assistData = assistWithLab(snap.moduleState.assistData, lab, from, level);
+    snap.modBonuses = readActiveModuleBonuses(
+        snap.moduleState, snap.perkData, snap.labData, snap.cardData, snap.modBonuses.run,
+    );
 }
 
 // ── eDPS Delta % ─────────────────────────────────────────────
@@ -819,12 +832,12 @@ export function buildCandidates(
                 if (!labOpen(labName, stored, snap.progress, ilmOwned)) continue;
 
                 const after = cloneSnapshot(snap);
-                after.labData[labName] = curLv + 1;
+                setLab(after, labName, curLv + 1);
                 const afterEDPS = getScore(after);
                 let before = basEDPS;
                 if (running) {
                     const researched = cloneSnapshot(snap);
-                    researched.labData[labName] = curLv;
+                    setLab(researched, labName, curLv);
                     before = getScore(researched);
                 }
                 const delta = edpsDeltaPct(before, afterEDPS);
@@ -1122,7 +1135,7 @@ export function applyUpgrade(
         }
 
         case 'labs': {
-            snap.labData[c.label] = c.toLv;
+            setLab(snap, c.label, c.toLv);
             break;
         }
 
@@ -1266,7 +1279,7 @@ export function simulateCategoryPath(
 
     for (let i = 0; i < steps; i++) {
         // Upgrades worth almost nothing (< minGainPct) aren't recommended,
-        // nor ones that cost more than a month of the player's coins.
+        // nor ones that cost more than 3 days of the player's coins.
         const candidates = buildCandidates(state, cat, onlyType).filter(c => worthIt(c) && affordable(state, c));
         if (!candidates.length) break;
 

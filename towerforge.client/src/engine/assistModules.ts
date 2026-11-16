@@ -12,7 +12,7 @@
 //  Pure functions — no store imports.
 // ============================================================
 
-import type { AssistEntry, LabData, ModuleType } from '../types/gameTypes';
+import type { AssistData, AssistEntry, LabData, ModuleType } from '../types/gameTypes';
 
 export type AssistTier = AssistEntry['rarity'];
 export type AssistKind = 'multEff' | 'subEff';
@@ -36,6 +36,28 @@ export function assistStonesTo(bought: number, to: number): number {
 
 export const assistLabName = (type: ModuleType, kind: AssistKind) =>
     `Assist-${type.charAt(0).toUpperCase() + type.slice(1)} ${kind === 'multEff' ? 'Mult' : 'Substat'}`;
+
+// The Assist lab a lab name is, if any ("Assist-Generator Mult").
+const ASSIST_LAB = /^Assist-(Cannon|Armor|Generator|Core) (Mult|Substat)$/;
+export function assistLabOf(lab: string): { type: ModuleType; kind: AssistKind } | null {
+    const m = ASSIST_LAB.exec(lab);
+    return m ? { type: m[1].toLowerCase() as ModuleType, kind: m[2] === 'Mult' ? 'multEff' : 'subEff' } : null;
+}
+
+// The slots' efficiencies after an Assist lab goes from `from` to `to`
+// levels. Each efficiency is kept as its total %, the lab's levels in it,
+// so a lab level has to move the total too: until 2026-11-16 it didn't,
+// and the Optimizer saw no gain from any Assist lab (a player asked why
+// Assist Module Bonus - Generator was never offered for coins). A locked
+// slot has no efficiency to move. Same object back when nothing changes.
+export function assistWithLab(assistData: AssistData, lab: string, from: number, to: number): AssistData {
+    const which = assistLabOf(lab);
+    const entry = which ? assistData[which.type] : undefined;
+    if (!which || !entry || entry.rarity === 'locked' || to === from) return assistData;
+    const cap = which.kind === 'multEff' ? 130 : 100;
+    const total = Math.min(cap, Math.max(0, (entry[which.kind] ?? 0) + to - from));
+    return { ...assistData, [which.type]: { ...entry, [which.kind]: total } };
+}
 
 export interface AssistPart {
     total: number;      // the efficiency %

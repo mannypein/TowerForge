@@ -26,7 +26,7 @@ import { LABS, UWS, UW_PLUS_DATA, UW_PLUS_UNLOCK_COSTS, UW_STONE_COSTS, WS_ENH, 
 import { BOTS_CONFIG, isBotPlusOwned } from '../constants/botData';
 import type { BuildType, ModuleType, OptCurrency } from '../types/gameTypes';
 import type { OptimizerSnapshot } from './optimizer';
-import { goalScore } from './optimizer';
+import { goalScore, setLab } from './optimizer';
 import { applyGoal } from './accountModels';
 import type { GoalModels } from './accountModels';
 import type { OptGoal } from '../constants/optimizerConfig';
@@ -167,7 +167,7 @@ export function applyChange(snap: OptimizerSnapshot, c: Change): void {
             break;
         }
         case 'lab':
-            snap.labData[c.key] = c.level;
+            setLab(snap, c.key, c.level);     // an Assist lab moves its slot's efficiency too
             break;
         case 'enhancement': {
             if (!snap.enhData.d[a]) snap.enhData.d[a] = [];

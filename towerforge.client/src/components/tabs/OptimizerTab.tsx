@@ -104,7 +104,7 @@ export default function OptimizerTab() {
     const [skipPath, setSkipPath] = useState<SkipUpgrade[]>([]);
     // Free upgrades reach these in the chosen run: a note on the workshop and skip panels.
     const [freeNote, setFreeNote] = useState<string>();
-    // The most coins one step may cost (a month of the player's coins).
+    // The most coins one step may cost (3 days of the player's coins).
     const [coinCap, setCoinCap] = useState<number>();
     const [skipFreeNote, setSkipFreeNote] = useState<string>();
     // What's left out for now (not unlocked in the game yet) — a note per panel.

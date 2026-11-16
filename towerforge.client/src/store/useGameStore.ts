@@ -40,6 +40,7 @@ import { addIncomePoint } from '../engine/career';
 import type { Career, IncomePoint } from '../engine/career';
 import { loadoutForPreset } from '../engine/statHelpers';
 import { emptyDissonance } from '../engine/dissonance';
+import { assistWithLab } from '../engine/assistModules';
 import { mergeTourneyRecords } from '../engine/tourneyHistory';
 import type { BattleReport } from '../engine/battleReport';
 import { defaultBattleIndex } from '../engine/gameExport';
@@ -644,9 +645,19 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     // ── Labs ──────────────────────────────────────────────────────
     setLabLevel: (labName, level) => {
-        const labData = { ...get().labData, [labName]: level };
+        const before = get().labData;
+        const labData = { ...before, [labName]: level };
         set({ labData });
         saveKey(KEYS.labs, labData);
+        // An Assist lab is part of its slot's efficiency (kept as a total):
+        // move the total with it, so the stones bought stay the same.
+        const moduleState = get().moduleState;
+        const assistData = assistWithLab(moduleState.assistData, labName, before[labName] ?? 0, level);
+        if (assistData !== moduleState.assistData) {
+            const next = { ...moduleState, assistData };
+            set({ moduleState: next });
+            saveKey(KEYS.modules, next);
+        }
     },
 
     setAllLabs: (data) => {

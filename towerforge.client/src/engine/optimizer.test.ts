@@ -7,7 +7,7 @@ import { useGameStore } from '../store/useGameStore';
 import { readActiveModuleBonuses } from './modBonuses';
 import { runRatesFrom } from './runRates';
 import { parseGameExport } from './gameExport';
-import { affordable, buildCandidates, goalScore, groupPath, mergeRepeats, pathGain, shardTypeValues, simulateCategoryPath, simulateMedalPath, simulateStonePath } from './optimizer';
+import { affordable, buildCandidates, goalScore, groupPath, mergeRepeats, pathGain, setLab, shardTypeValues, simulateCategoryPath, simulateMedalPath, simulateStonePath } from './optimizer';
 import { buildFarmCalibration } from './farming';
 import { buildEhpCalibration } from './ehp';
 import type { OptimizerSnapshot } from './optimizer';
@@ -177,9 +177,17 @@ describe('card mastery', () => {
 });
 
 describe('assist modules', () => {
-    const assist = (multEff: number, subEff: number, labs: Record<string, number> = {}) => snapshot(null, s => {
+    // `equipped`: a cannon module in the assist slot (Ancestral 5★ at Lv 217).
+    const assist = (multEff: number, subEff: number, labs: Record<string, number> = {}, equipped = false) => snapshot(null, s => {
         s.moduleState.assistData.cannon = { rarity: 'Epic', multEff, subEff };
         s.labData = labs;
+        if (equipped) {
+            const empty = { main: '', assist: '' };
+            s.moduleState.library = [{ id: 'ca', name: 'Test', type: 'cannon', rarity: 'A5', subs: [], mainMult: 0 }];
+            s.moduleState.loadouts = [{ id: 'l', name: 'l', slots: { cannon: { main: '', assist: 'ca' }, armor: empty, generator: empty, core: empty } }];
+            s.moduleState.activeLoadout = 'l';
+            s.moduleState.slotLevels = { cannon: { main: 0, assist: 217 }, armor: { main: 0, assist: 0 }, generator: { main: 0, assist: 0 }, core: { main: 0, assist: 0 } };
+        }
     });
     const find = (snap: OptimizerSnapshot, what: string) =>
         buildCandidates(snap, 'assist').find(c => c.label === `Cannon Assist — ${what}`);
@@ -195,6 +203,18 @@ describe('assist modules', () => {
         expect(find(assist(1, 70), 'Substat Eff')).toBeUndefined();
         expect(find(assist(1, 99, { 'Assist-Cannon Substat': 30 }), 'Substat Eff')).toBeDefined();
         expect(find(assist(1, 100, { 'Assist-Cannon Substat': 30 }), 'Substat Eff')).toBeUndefined();
+    });
+
+    // A player report (2026-11-16): Assist Module Bonus labs were never
+    // offered. A lab level adds the same 1% as a stone level, so it gains the same.
+    it('scores an Assist lab level like the stone level it matches', () => {
+        const snap = assist(48, 23, { 'Assist-Cannon Mult': 18 }, true);
+        const stone = find(snap, 'Mult Eff')!;
+        const lab = buildCandidates(snap, 'labs').find(c => c.label === 'Assist-Cannon Mult')!;
+        expect(stone.scorePct).toBeGreaterThan(0);
+        expect(lab.scorePct).toBeCloseTo(stone.scorePct, 9);
+        setLab(snap, 'Assist-Cannon Mult', 19);
+        expect(snap.moduleState.assistData.cannon.multEff).toBe(49);
     });
 
     it('lets Main Effect stones reach 100% (130% with the Assist Mult lab)', () => {
@@ -254,7 +274,7 @@ describe('Glass Cannon workshop and labs', () => {
     });
 
     // A player report (2026-11-16): steps far past what the player earns
-    // shouldn't be recommended. A month of coins is the most one step costs.
+    // shouldn't be recommended: 3 days of coins is the most one step costs.
     it('leaves out steps that cost more than the coin cap', () => {
         const snap = calibrated();
         const all = simulateCategoryPath('workshop', 20, snap);

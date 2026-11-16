@@ -40,7 +40,7 @@ What each currency buys (wiki Currencies page) and how it's ranked:
 | Currency | Ranked | Price source |
 |---|---|---|
 | Stones | UW stats, UW+, card mastery unlocks, assist modules — one path | wiki (see ultimate-weapons.md) |
-| Coins | workshop (per coin), enhancements (per coin); no step dearer than 30 days of the player's coins | game table via TheTowerSDK; discount labs |
+| Coins | workshop (per coin), enhancements (per coin); no step dearer than 3 days of the player's coins | game table via TheTowerSDK; discount labs |
 | Lab time | labs (per hour of research) | SDK lab catalog; Labs Speed, relic, Labs Coin Discount |
 | Module Shards | module slot levels, 5 at a time (per shard; coins shown); each type's held shards and next 1,000 (below) | SDK module tables + wiki level 1; Module Shard/Coin Cost labs (1% a level) |
 | Medals | bot stat and Bot+ levels only (per medal) | bots: 100 + 40 × (L − 1) a level (wiki bot Cost pages, every bot); Bot+: 100 + 50 × (L − 1), Echoing Shot 100 + 200 × (L − 1) |
@@ -58,15 +58,17 @@ What each currency buys (wiki Currencies page) and how it's ranked:
   the only medal pick in tournaments, where only Amplify Bot adds waves. An
   empty Bots list now says which bots count for which goal.
 - **Coin cap** (owner, 2026-11-16, `engine/coinIncome.ts`): no coin, lab or
-  module step is recommended that costs more than 30 days of the player's
-  coins — all coins of the runs of the last 7 days over the time from the
-  first one's start to the newest one's end (gaps included, tournaments too).
+  module step is recommended that costs more than 3 days of the player's
+  coins (first 30; the owner moved it to 3 the same day: coins do more spent
+  early than saved for weeks, and labs take coins too) — all coins of the
+  runs of the last 7 days over the time from the first one's start to the
+  newest one's end (gaps included, tournaments too).
   The Coins and Lab research sections say the cap. No runs: no cap.
 - **Module shards by type** (2026-10-28): each type's shards level only that
   type's slots (wiki Currency/Shards, Modules), so the Module Shards section
   opens with "Your module shards": per type, what the shards held add along
   that type's own path and what the next 1,000 would — the type to pick for
-  Event Shop trades and the Vault's Daily Mission Shard Type (Vault 1610).
+  the Vault's Daily Mission Shard Type (Vault 1610).
   The "Module slot levels" list below still ranks all four types together
   by gain per shard. On the owner's export (2026-10-28) the pick follows the
   goal: Cannon for damage (Core close behind), Generator for coins, Armor

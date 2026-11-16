@@ -1,16 +1,17 @@
 // ============================================================
 //  TowerForge Companion — Coin income
 //  Coins a day from the player's runs, and so the most one Optimizer
-//  step may cost: an upgrade that takes more than a month of the
+//  step may cost: an upgrade that takes more than 3 days of the
 //  player's coins isn't recommended (owner, 2026-11-16, from a player
 //  report: "if the costs are absurdly expensive then we should not
-//  recommend them"). The month is the owner's call, kept here.
+//  recommend them"). 3 days, owner's call: coins do more spent early
+//  than saved for weeks, and labs take coins too. First set at 30.
 //  Pure functions — no store imports.
 // ============================================================
 
 import type { BattleReport } from './battleReport';
 
-export const COIN_CAP_DAYS = 30;
+export const COIN_CAP_DAYS = 3;
 
 const WINDOW_MS = 7 * 24 * 3600_000;
 const DAY_MS = 24 * 3600_000;
