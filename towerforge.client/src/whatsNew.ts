@@ -19,6 +19,15 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
     {
+        version: '2.12.2',
+        date: '2026-11-17',
+        items: [
+            { text: 'Optimizer: medals go to bots only, and nothing costing more than 3 days of your coins is suggested.', tab: 'optimizer', link: 'Optimizer' },
+            { text: 'Assist Module Bonus labs now show up in the Optimizer and What If.' },
+            { text: 'Cells an hour come from your newest runs on the tier you farm now.' },
+        ],
+    },
+    {
         version: '2.12.0',
         date: '2026-11-14',
         items: [
