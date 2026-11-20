@@ -5,7 +5,7 @@
 // update, the export format probably changed.
 
 import { describe, expect, it } from 'vitest';
-import { defaultBattleIndex, isGameExport, isRealRun, parseGameExport } from './gameExport';
+import { defaultBattleIndex, EXPORT_PARTS, isGameExport, isRealRun, parseGameExport } from './gameExport';
 import { MAX_STORED_BATTLES, mergeBattles } from './battleReport';
 import { CARDS, LABS, UWS, WS_ENH, WS_STATS } from '../constants/gameData';
 import { GAME_CARDS, GAME_LABS, GAME_MODULES, MASTERY_LAB_CARDS, MASTERY_LAB_START, CARD_PRESET_SLOTS } from '../constants/gameExportMaps';
@@ -39,6 +39,49 @@ describe('currencies and tiers', () => {
         expect(imp.tierWaves).toEqual({ 1: 4000, 2: 1200, 3: 350, 4: 80 });
         expect(imp.completedTier).toBe(3);
         expect(imp.highestTier).toBe(4);
+    });
+
+    // Build 1286 (2026-11-20) renamed these to …_v2 and the shards stopped importing.
+    it('reads fields the game renamed with a version (…_v2)', () => {
+        const imp = parseGameExport(makeExport({
+            ModuleRerollCurrency_v2: 11e6, ModuleCannonShards_v2: 13748, ModuleArmorShards_v2: 12894,
+            ModuleGeneratorShards_v2: 10287, ModuleCoreShards_v2: 13340,
+            ModuleRerollCurrencyLifetime_v2: 135e6, ModuleCannonShardsLifetime_v2: 880333, ModuleArmorShardsLifetime_v2: 838879,
+            ModuleGeneratorShardsLifetime_v2: 866722, ModuleCoreShardsLifetime_v2: 861200,
+            TotalCoinsEarned: 1e20, TotalCellsEarned_v2: 7e8,
+            ExportedAt: '2026-11-20T13:47:02.639Z', RoundActiveBool: true, CurrentTier: 19, CurrentWave: 4649,
+            RerollCurrencyEarnedThisRound_v2: 36625,
+        }));
+        expect(imp.currencies).toMatchObject({
+            rerollShards: 11e6, cannonShards: 13748, armorShards: 12894, generatorShards: 10287, coreShards: 13340,
+            cannonShardsLifetime: 880333, coreShardsLifetime: 861200,
+        });
+        expect(imp.career?.modules?.rerollShards).toBe(135e6);
+        expect(imp.incomePoint?.earned.cells).toBe(7e8);
+        expect(imp.incomePoint?.earned.cannon).toBe(880333);
+        expect(imp.liveRun?.report.raw?.RerollShardsEarned).toBe(36625);
+    });
+
+    it('takes the newest version of a field, in any order and inside lists', () => {
+        const imp = parseGameExport(makeExport({
+            Gems_v3: 30, Gems: 10, Gems_v2: 20,
+            BattleHistory: [battle({ CoinsEarned: 1, CoinsEarned_v2: 2e15 })],
+        }));
+        expect(imp.currencies.gems).toBe(30);
+        expect(imp.battles[0].coinsEarned).toBe(2e15);
+    });
+
+    it('says which parts a 29.1.3+ file is missing fields for', () => {
+        const all = Object.fromEntries(EXPORT_PARTS.flatMap(p => p.fields).map(f => [f, 0]));
+        expect(parseGameExport(makeExport({ ...all, ExportVersion: 1 })).missing).toEqual([]);
+        const renamed: Record<string, unknown> = { ...all, ModuleCannonShardz: 5 };
+        for (const f of ['ModuleCannonShards', 'ModuleCoreShardsLifetime', 'RelicsUnlocked']) delete renamed[f];
+        expect(parseGameExport(makeExport({ ...renamed, ExportVersion: 1 })).missing).toEqual([
+            { part: 'module shards', fields: ['ModuleCannonShards', 'ModuleCoreShardsLifetime'] },
+            { part: 'relics', fields: ['RelicsUnlocked'] },
+        ]);
+        // A file from before 29.1.3 lacks many of them anyway: not checked.
+        expect(parseGameExport(makeExport()).missing).toEqual([]);
     });
 
     it('needs wave 300 to complete tier 15 and up', () => {

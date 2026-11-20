@@ -28,7 +28,7 @@ export const INCOME_CURRENCIES = [
     ['gems', 'Gems', 'TotalGemsEarned', 'gem'],
     ['stones', 'Stones', 'TotalStonesEarned', 'stone'],
     ['medals', 'Medals', 'TotalMedalsEarned', 'medal'],
-    ['cells', 'Cells', 'TotalCellsEarned_v2', null],
+    ['cells', 'Cells', 'TotalCellsEarned', null],   // TotalCellsEarned_v2 in the file (currentNames)
     ['keys', 'Keys', 'TotalKeysEarned', 'keys'],
     ['tokens', 'Tokens', 'TotalTokensEarned', 'tokens'],
     ['bits', 'Bits', 'TotalBitsEarned', 'bits'],

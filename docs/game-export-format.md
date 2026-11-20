@@ -52,6 +52,60 @@ wrapped ("Preset 1" → "Preset1", treated as a default name). A file named
 | `PlayTime` | 📊 | Total play time in seconds (63 on the test account). |
 | `GameStartedDate` | 📊 | Account creation date (UTC). |
 
+## When the game updates
+
+**Build 1286 (`DataVersion` 35), the owner's export of 2026-11-20**, against
+their 11-01 one (build 1253, `DataVersion` 31), both `ExportVersion` 1:
+
+- **Renamed with `_v2`:** the five module shard counts (`ModuleRerollCurrency`,
+  `ModuleCannonShards`, `ModuleArmorShards`, `ModuleGeneratorShards`,
+  `ModuleCoreShards`), their five `…Lifetime` totals, and the run's
+  `RerollCurrencyEarnedThisRound`. Same numbers under new names: the lifetime
+  totals carried straight on (Cannon 837,175 → 880,333, Armor 799,234 →
+  838,879, Generator 824,422 → 866,722, Core 820,619 → 861,200, Reroll
+  118.9M → 135.3M), and the held counts fit this cycle's earned − spent.
+  The site read none of them until this was found (shards on the currency
+  bar, Career's shard income, Run in Progress's reroll shards). TTG had done
+  the same with `TotalCellsEarned_v2` earlier. **The importer now reads every
+  field by its plain name, from its newest version, at any depth**
+  (`currentNames` in gameExport.ts), so a later `_v3` needs nothing.
+- **New fields, not read yet:** `PlayerID` (the account's ID: personal, never
+  kept), `EventRecords[]` (`EventNumber`, `Date`, `Medals`, `MedalsSpent`,
+  `RelicsUnlocked[]` — relic slots won in that event —, `EventName`, `UID`;
+  38 on the owner's), `EventBoostEventNumbers[]`, `LastEventNumber`,
+  `TotalMedalsCurrentEvent`, `TournamentNumber`, `TournamentJoined`,
+  `Playing` (all 0 / false with a T19 run going: whether they tell a
+  tournament run apart isn't known yet), `Cash` (the run's cash),
+  `ShieldTimer`, `NukeWavesUntilRefresh`, `DemonModeWavesUntilRefresh`,
+  `SecondWindWavesUntilRefresh`, `AdGemsClaimedToday`, `LastGemAdClaimedDate`,
+  `LastGemAdSmallClaimedDate`, `CoinsEarnedFromAdBonusThisRound`,
+  `WebstoreFreeGiftClaimedThisWeek`, `FavoriteLabs[]`, and `module_ticket`
+  in the cycle counters.
+- **Longer:** `RelicsUnlocked` 336 → 350 slots. The owner owns 9 slots past
+  the catalog's last (320): 321–324, 326–329, 335. TheTowerSDK 0.14.1
+  (newest on npm, 2026-11-06) still lists 321 relics, so they're counted as
+  unknown, as before, until a newer SDK or the in-game Relics screen names them.
+  The Vault's new ids (280, 330, 420) and group are ones `vaultData.ts` knows.
+
+**Every import now checks its own fields.** `EXPORT_PARTS` (gameExport.ts)
+lists, part by part, every top-level field the importer reads; every 29.1.3+
+file has them all (the owner's 10-19, 11-01 and 11-20 exports, one of them
+another, newer account), so one missing from such a file means TTG renamed
+or dropped it. The import message then names the part ("⚠ Not found in this
+file: module shards…") and keeps what the player had, and Umami counts
+`Import: fields missing` with the field names and the game build (no player
+data) once a visit, so it shows in the counts the day a game update lands
+(docs/analytics.md). Files from before 29.1.3 aren't checked.
+
+**After a game update**, compare an export from before with one from after:
+
+    npm run export-diff -- <older tool_export.json> <newer tool_export.json>
+
+(`towerforge.client/scripts/export-diff.mjs`). It prints only names, types
+and list lengths, never a value: fields gone, fields new, lists that changed
+length, and gone fields that came back with a version (already handled).
+Anything else gone is a field the importer has to be told about.
+
 ## Export format 1 (game 29.1.3)
 
 From TTG's change notes for 29.1.3 and their test export (build 1253,
@@ -72,7 +126,7 @@ What it showed is in the rows below ("owner's export").
 
 | Field | Status | Notes |
 |---|---|---|
-| `ExportVersion` | ✅ | 1. TTG bumps it when a field is renamed, removed or changes meaning — not for additions. Import warns when a file's version is above the one the site was written for (`SUPPORTED_EXPORT_VERSION` in gameExport.ts). |
+| `ExportVersion` | ✅ | 1. TTG said they'd bump it when a field is renamed, removed or changes meaning — not for additions. Import warns when a file's version is above the one the site was written for (`SUPPORTED_EXPORT_VERSION` in gameExport.ts). **It stayed 1 through the build 1286 renames (below)**, so it can't be relied on: the import also checks its own fields (`missingParts`). |
 | `ExportedAt` | ✅ | When the file was written (UTC). The import message says how long ago; the lab speed-up time left is as of this. |
 | `LeagueID` | ✅ (assumed) | The league you're in now (`HighestLeague` is the best reached). Read with the `HighestLeague` numbers, 0 Copper … 6 Mythic — the code's assumption. Owner's export: 6 (Mythic), the same number as the Mythic tournaments in its `TournamentRecords`. Kept as `profile.currentLeague`; the Tournament page starts on it. |
 | `TournamentRecords[]` | ✅ | Every tournament played: `TournamentNumber`, `Date` (00:00 UTC of the tournament day), `LeagueID`, `Wave`, `Rank`. Owner's export: 223 (from #34 in 2024). #309 (2026-10-17) W135 rank 19 matches the best tournament run in the battle history that day (W135). **Rank** is the placement in the 30-player bracket (1 = top): all 222 finished ones are 2–29, never above 30, and within a league a higher wave goes with a better rank (Mythic: correlation −0.78). Rank 0 = not placed yet: only the newest (#310, 2026-10-21, W1 while the history already had a W95 run that day) — filled in when the tournament ends (the code's reading). Kept across imports and synced (`tourneyRecords`); shown on Tournaments → History, read by Ask AI. **Tournament days**: the wiki's Tournaments page (read 2026-11-14) says one starts every Wednesday and Saturday at 00:00 UTC, and the records' dates agree (#309 Saturday 2026-10-17, #310 Wednesday 2026-10-21); Profile's next tournament and the tournament reminders use the player's own record weekdays first and that schedule without them (`engine/thisWeek.ts`). How long entry stays open isn't on the page: the reminder comes at most 8 hours after the start (the code's assumption that the day is still open). New bests and promotions in these records are Profile's moments (`engine/moments.ts`). |

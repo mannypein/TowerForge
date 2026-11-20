@@ -10,6 +10,7 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useGameStore } from './store/useGameStore';
 import type { TabName } from './types/gameTypes';
 import { isGameExport, parseGameExport, SUPPORTED_EXPORT_VERSION } from './engine/gameExport';
+import type { GameImport } from './engine/gameExport';
 import { trackEvent } from './analytics';
 import { TAB_PATHS, tabFromPath } from './routes';
 import { isPdfFile, jsonFromPdf, looksLikePdf } from './engine/pdfImport';
@@ -57,6 +58,17 @@ import { useLiveCreators } from './components/common/liveCreators';
 import CharityBanner from './components/common/CharityBanner';
 
 import './styles/app.css';
+
+// The game's field names a new export lacked (names and the game build only,
+// once a visit), so a game update that renames a field shows in the counts the
+// day it lands instead of when a player notices (engine/gameExport.ts missingParts).
+const reportedMissing = new Set<string>();
+function reportMissing(imp: GameImport) {
+    const fields = imp.missing.flatMap(m => m.fields).join(',');
+    if (!fields || reportedMissing.has(fields)) return;
+    reportedMissing.add(fields);
+    trackEvent('Import: fields missing', { fields: fields.slice(0, 400), build: imp.gameVersion });
+}
 
 // Pages most visits never open load on first use, keeping the main bundle small.
 const OptimizerTab = lazy(() => import('./components/tabs/OptimizerTab'));
@@ -405,12 +417,13 @@ export default function App() {
         if (isGameExport(json)) {
             const imp = parseGameExport(json);
             importWithMoments(imp);
+            reportMissing(imp);
             trackEvent(source === 'pdf' ? 'Import game data (PDF)' : source === 'link' ? 'Import game data (emulator)' : 'Import game data');
             if (source !== 'link') rememberFileImport();
             else rememberLinkImport();
             const lines = [
                 '✓ Imported from your game data:',
-                '• Currencies',
+                `• Currencies${imp.currencies.cannonShards !== undefined ? ' and module shards' : ''}`,
                 `• Tier progress${imp.highestTier ? ` (up to Tier ${imp.highestTier})` : ''}`,
                 ...(imp.userName ? [`• Player name${imp.league ? `, ${imp.league} league` : ''}${imp.currentLeague && imp.currentLeague !== imp.league ? ` (now in ${imp.currentLeague})` : ''}${imp.presetNames.some(n => n) ? ', preset names' : ''}`] : []),
                 `• ${imp.battles.length} recent battles — used to calibrate the Farming and eHP optimizer`,
@@ -445,6 +458,10 @@ export default function App() {
                     '',
                     'Not imported yet: bots — they come with the game’s 29.1.3 export, so what you entered there was left as it is.',
                 ]),
+                ...(imp.missing.length ? [
+                    '',
+                    `⚠ Not found in this file: ${imp.missing.map(m => m.part).join(', ')}. A game update may have renamed ${imp.missing.length === 1 ? 'it' : 'them'}, so TowerForge kept what you had there until the site catches up.`,
+                ] : []),
                 ...(imp.exportVersion !== null && imp.exportVersion > SUPPORTED_EXPORT_VERSION ? [
                     '',
                     `⚠ This file is a newer export format (version ${imp.exportVersion}) than TowerForge reads (version ${SUPPORTED_EXPORT_VERSION}). Some fields may have changed — check your numbers.`,
@@ -560,7 +577,11 @@ export default function App() {
                                 </button>
                             </span>
                             <AutoImport
-                                onImport={raw => importWithMoments(parseGameExport(raw))}
+                                onImport={raw => {
+                                    const imp = parseGameExport(raw);
+                                    importWithMoments(imp);
+                                    reportMissing(imp);
+                                }}
                                 onNeedsLink={() => setLinkModal({ problem: null })}
                             />
                             <button type="button" className="btn btn-gold" onClick={openImport}

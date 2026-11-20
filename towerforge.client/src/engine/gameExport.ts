@@ -81,6 +81,7 @@ export interface GameImport {
     tourneyRecords: TourneyRecord[] | null;   // TournamentRecords (29.1.3+); null when the file has none
     relics: RelicImport | null;
     vault: Record<string, number> | null;     // Vault.UpgradesLevel: vault id → level
+    missing: MissingPart[];            // parts a 29.1.3+ file lacked fields for (kept as they were)
 }
 
 // Bot and Bot+ levels per site preset (from the bot preset its global
@@ -510,6 +511,83 @@ export function isGameExport(raw: unknown): raw is Raw {
         && 'VersionNumber' in raw && 'DataVersion' in raw && 'Coins' in raw && 'Gems' in raw;
 }
 
+// TTG renames a field by adding a version to its name, without bumping
+// ExportVersion: TotalCellsEarned_v2 early on, then build 1286 (2026-11-20)
+// moved the five module shard counts, their lifetime totals and the run's
+// RerollCurrencyEarnedThisRound to …_v2, and the site lost shards until this.
+// The lifetime totals carried straight on across the rename (owner's exports
+// of 11-01 and 11-20: Cannon 837,175 → 880,333 and the same for the others),
+// so it's the same number under a new name. Every field is read by its plain
+// name, from its newest version, at any depth: a later _v3 needs no change.
+const VERSIONED = /^(.+)_v(\d+)$/;
+
+export function currentNames<T>(v: T): T {
+    if (Array.isArray(v)) return (v.length && typeof v[0] === 'object' ? v.map(currentNames) : v) as T;
+    if (!v || typeof v !== 'object') return v;
+    const out: Raw = {};
+    const version: Record<string, number> = {};
+    for (const [key, x] of Object.entries(v as Raw)) {
+        const m = VERSIONED.exec(key);
+        const [name, n] = m ? [m[1], Number(m[2])] : [key, 0];
+        if (name in version && version[name] > n) continue;
+        version[name] = n;
+        out[name] = currentNames(x);
+    }
+    return out as T;
+}
+
+// What each part of the import reads, by plain name. Every 29.1.3+ file
+// (ExportVersion) has all of them: the owner's exports of 10-19, 11-01 and
+// 11-20 (builds 1253 and 1286; one of them another, newer account). So one
+// that's gone from such a file means TTG renamed or dropped it, and the
+// import says which part kept the player's old numbers instead of quietly
+// keeping them. Older files lack many and aren't checked.
+export const EXPORT_PARTS: { part: string; fields: string[] }[] = [
+    { part: 'currencies', fields: ['Coins', 'Gems', 'Stones', 'Medals', 'Cells', 'Keys', 'Tokens', 'Bits'] },
+    { part: 'module shards', fields: ['ModuleRerollCurrency', 'ModuleCannonShards', 'ModuleArmorShards', 'ModuleGeneratorShards', 'ModuleCoreShards',
+        'ModuleRerollCurrencyLifetime', 'ModuleCannonShardsLifetime', 'ModuleArmorShardsLifetime', 'ModuleGeneratorShardsLifetime', 'ModuleCoreShardsLifetime'] },
+    { part: 'tier progress', fields: ['HighestWaveThisTier', 'RoundsStartedThisTier'] },
+    { part: 'battles', fields: ['BattleHistory'] },
+    { part: 'workshop', fields: ['UpgradeWorkshopLevel', 'UpgradeWorkshopDefenseLevel', 'UpgradeWorkshopUtilityLevel',
+        'PresetUpgradeWorkshopLevel', 'PresetUpgradeWorkshopDefenseLevel', 'PresetUpgradeWorkshopUtilityLevel', 'CurrentWorkshopPreset',
+        'UpgradeTierUnlocked', 'UpgradeDefenseTierUnlocked', 'UpgradeUtilityTierUnlocked', 'UpgradesLockedFreeUpgrades', 'WorkshopPresetName'] },
+    { part: 'presets', fields: ['GlobalPresets'] },
+    { part: 'enhancements', fields: ['EnhancementLevel', 'PresetEnhancementLevel', 'EnhancementTierUnlocked', 'EnhancementDefenseLevel',
+        'PresetEnhancementDefenseLevel', 'EnhancementDefenseTierUnlocked', 'EnhancementUtilityLevel', 'PresetEnhancementUtilityLevel', 'EnhancementUtilityTierUnlocked'] },
+    { part: 'ultimate weapons', fields: ['UltimateWeaponUnlocked', 'UltimateWeaponLevel', 'UltimateWeaponPlusUnlocked', 'UltimateWeaponPlusLevel'] },
+    { part: 'cards', fields: ['CardLevel', 'CardUnlocked', 'CardMasteryUnlocked', 'SlotPresetCardInt', 'SlotPresetCardAssignedBool', 'CardActive', 'CurrentPreset', 'SlotsUnlocked'] },
+    { part: 'banned perks', fields: ['BannedPerksIndex'] },
+    { part: 'labs', fields: ['ResearchLevel', 'ResearchPercentComplete', 'LabActiveBool', 'LabResearchInt', 'ResearchCompleteDate',
+        'LabSpeedUpSpeed', 'LabSpeedUpRemainingSeconds', 'LabsUnlocked'] },
+    { part: 'modules', fields: ['ModuleEquipped', 'AssistModuleSlots', 'ModuleInventory', 'ModulePresets', 'CurrentModulePreset', 'SlotLevels'] },
+    { part: 'bots', fields: ['FlameBotPresets', 'ThunderBotPresets', 'GoldenBotPresets', 'AmplifyBotPresets', 'BotBotPresets'] },
+    { part: 'Guardian', fields: ['GuardianUnlocked', 'GuardianChipLevel', 'GuardianSlotsUnlocked', 'GuardianChipSlot', 'GuardianPresets',
+        'CurrentGuardianPreset', 'GuardianChipUnlocked', 'GuardianSkinUnlocked'] },
+    { part: 'relics', fields: ['RelicsUnlocked'] },
+    { part: 'Vault', fields: ['Vault'] },
+    { part: 'tournaments', fields: ['TournamentRecords', 'HighestLeague', 'LeagueID'] },
+    { part: 'Dissonant Boosts', fields: ['DissonanceDamageBoost', 'DissonanceHealthBoost', 'DissonanceCoinBoost', 'DissonanceUltDamageBoost'] },
+    { part: 'Career', fields: ['TotalCoinsEarned', 'TotalGemsEarned', 'TotalStonesEarned', 'TotalMedalsEarned', 'TotalCellsEarned',
+        'TotalKeysEarned', 'TotalTokensEarned', 'TotalBitsEarned', 'CurrencyEarnedThisCycle', 'CurrencySpentThisCycle', 'CompletedLabs',
+        'GameStartedDate', 'PlayTime', 'HighestCoinsEarnedThisTier', 'HighestCellsEarnedThisTier', 'ResearchesComplete', 'CardsBoughtTotal',
+        'WrappedStats', 'SlotCoinsSpent', 'SlotShardsSpent', 'ModuleRarePity'] },
+    { part: 'run in progress', fields: ['RoundActiveBool', 'CurrentWave', 'CurrentTier', 'PerksPicked', 'PerksPickedCount',
+        'UpgradeLevel', 'UpgradeDefenseLevel', 'UpgradeUtilityLevel', 'EnemyAttackLevelSkips', 'EnemyHealthLevelSkips'] },
+];
+
+export interface MissingPart {
+    part: string;
+    fields: string[];
+}
+
+// The parts a 29.1.3+ file is missing fields for (plain names: after currentNames).
+export function missingParts(raw: Raw): MissingPart[] {
+    if (typeof raw.ExportVersion !== 'number') return [];
+    return EXPORT_PARTS
+        .map(({ part, fields }) => ({ part, fields: fields.filter(f => !(f in raw)) }))
+        .filter(p => p.fields.length > 0);
+}
+
 // Waves needed on tier t to unlock tier t + 1 (300 from tier 15 on, per the wiki).
 const wavesToUnlockNext = (tier: number) => (tier >= 15 ? 300 : 100);
 
@@ -605,7 +683,8 @@ function battleToReport(b: Raw): BattleReport {
     };
 }
 
-export function parseGameExport(raw: Raw): GameImport {
+export function parseGameExport(file: Raw): GameImport {
+    const raw = currentNames(file);
     const currencies: Currencies = {
         coins: num(raw.Coins),
         gems: num(raw.Gems),
@@ -692,6 +771,7 @@ export function parseGameExport(raw: Raw): GameImport {
         tourneyRecords: parseTourneyRecords(raw),
         relics: parseRelics(raw),
         vault,
+        missing: missingParts(raw),
     };
 }
 
