@@ -19,6 +19,13 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
     {
+        version: '2.12.3',
+        date: '2026-11-20',
+        items: [
+            { text: 'Module shards import again: the game’s latest update renamed them in the export. Import again to bring yours in.' },
+        ],
+    },
+    {
         version: '2.12.2',
         date: '2026-11-17',
         items: [
