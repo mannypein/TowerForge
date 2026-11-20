@@ -537,8 +537,8 @@ export function currentNames<T>(v: T): T {
 }
 
 // What each part of the import reads, by plain name. Every 29.1.3+ file
-// (ExportVersion) has all of them: the owner's exports of 10-19, 11-01 and
-// 11-20 (builds 1253 and 1286; one of them another, newer account). So one
+// (ExportVersion) has all of them: a new account's export of 10-19 and the
+// owner's of 11-01 and 11-20 (builds 1253 and 1286). So one
 // that's gone from such a file means TTG renamed or dropped it, and the
 // import says which part kept the player's old numbers instead of quietly
 // keeping them. Older files lack many and aren't checked.

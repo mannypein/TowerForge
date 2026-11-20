@@ -89,8 +89,8 @@ their 11-01 one (build 1253, `DataVersion` 31), both `ExportVersion` 1:
 
 **Every import now checks its own fields.** `EXPORT_PARTS` (gameExport.ts)
 lists, part by part, every top-level field the importer reads; every 29.1.3+
-file has them all (the owner's 10-19, 11-01 and 11-20 exports, one of them
-another, newer account), so one missing from such a file means TTG renamed
+file has them all (a new account's export of 10-19, one tier played, and the
+owner's of 11-01 and 11-20), so one missing from such a file means TTG renamed
 or dropped it. The import message then names the part ("⚠ Not found in this
 file: module shards…") and keeps what the player had, and Umami counts
 `Import: fields missing` with the field names and the game build (no player
