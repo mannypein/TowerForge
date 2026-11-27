@@ -1234,6 +1234,7 @@ function OptPanel({
                                     </span>
                                 )}
                             </div>
+                            <div className="opt-figures">
                             {c.hours !== undefined ? (
                                 <span className="opt-cost" title="Research time after your lab speed, and coins">
                                     {formatLabTime(c.hours)}<span className="opt-cost-type"> 🔬</span>
@@ -1258,6 +1259,7 @@ function OptPanel({
                             <span className="opt-gain" style={{ color: gainColor(c.scorePct) }}>
                                 {c.scorePct > 0 ? `+${c.scorePct.toFixed(3)}%` : '—'}
                             </span>
+                            </div>
                         </div>
                     ))}
 

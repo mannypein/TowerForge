@@ -3672,12 +3672,48 @@ button.gcard {
     color: var(--text-dim);
 }
 
+/* A row's cost and gain: two columns of their own on a wide screen. */
+.opt-figures {
+    display: contents;
+}
+
 /* Workshop and Labs rows: the badge only repeats the panel's name, so a
-   phone gives its room to the upgrade's name instead. */
+   phone gives its room to the upgrade's name instead. On a phone the gain
+   sits over the cost in one column, and the badge (UW, card, module…) is
+   only as wide as its word: side by side, rank, badge, cost and gain left
+   the name about 50px on the Stone list ("Spo / tlig / ht", 2026-11-26). */
 @media (max-width: 520px) {
     .opt-cat-badge.opt-badge-panel {
         display: none;
     }
+
+    .opt-cat-badge {
+        min-width: 0;
+        padding: 2px 5px;
+    }
+
+    .opt-rank {
+        width: auto;
+        min-width: 22px;
+    }
+
+    .opt-figures {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 2px;
+        flex-shrink: 0;
+        max-width: 40%;
+    }
+
+        .opt-figures > .opt-cost,
+        .opt-figures > .opt-gain {
+            min-width: 0;
+        }
+
+        .opt-figures > .opt-gain {
+            order: -1;
+        }
 }
 
 .opt-show-more {
